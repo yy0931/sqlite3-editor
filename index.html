@@ -13,16 +13,21 @@
             box-sizing: border-box;
         }
         body {
-            overflow: hidden;
+            overflow-x: hidden;
             background: #fafafa;
             margin-left: 10px;
             margin-right: 10px;
+        }
+        #tableSelect {
+            background-color: rgba(0, 0, 0, 0.678);
+            color: white;
         }
         .scroll {
             background: white;
             height: 50vh;
             overflow-y: scroll;
-            box-shadow: 0px 0px 10px #0000001c;
+            border: 1px solid rgba(0, 0, 0, 0.3);
+            margin-bottom: 40px;
         }
         #table {
             table-layout: fixed;
@@ -33,21 +38,15 @@
         #table thead {
             position: sticky;
             top: 0;
-            background-color: white;
-            box-shadow: 0px 0px 10px #0000001c;
-        }
-        #table thead {
-            position: sticky;
-            top: 0;
-            background-color: white;
-            box-shadow: 0px 0px 10px #0000001c;
+            background-color: rgba(0, 0, 0, 0.678);
+            color: white;
         }
         #table th {
             font-weight: normal;
         }
         #table td {
             overflow: hidden;
-            border-right: 1px solid gray;
+            border-right: 1px solid rgba(0, 0, 0, 0.3);
             padding-right: 10px;
             padding-left: 10px;
         }
@@ -64,11 +63,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        #updateEditor {
-            width: 100%;
-            height: 20vh;  /* TODO: grid or flexbox */
-            resize: none;
-        }
         #constraints {
             width: 1000px;
         }
@@ -77,22 +71,43 @@
             border: 0;
             outline: 0;
             background-color: transparent;
-            border-bottom: 1px solid gray;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.3);
             font-family: inherit;
         }
         h2 {
             font-weight: normal;
             margin-top: 5px;
             margin-bottom: 5px;
+            padding-top: 6px;
+            padding-bottom: 6px;
         }
-        input {
+        input:not([type]), input[type=text] {
             font-size: inherit;
             background: transparent;
             font-family: inherit;
             vertical-align: top;
             outline: 0;
             border: 0;
-            border-bottom: 1px solid gray;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+        }
+        input[type=checkbox] {
+            vertical-align: baseline;
+        }
+        input[type=button] {
+            padding-left: 1em;
+            padding-right: 1em;
+            background-color: inherit;
+        }
+        textarea {
+            outline: 0;
+            border: 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+        }
+        select {
+            color: inherit;
+        }
+        input {
+            color: inherit;
         }
     </style>
 </head>
@@ -101,13 +116,7 @@
     <div class="scroll">
         <table id="table"></table>
     </div>
-
-    <h2><pre><select id="editorStatement" autocomplete="off"><option value="INSERT">INSERT</option><option value="CREATE TABLE">CREATE TABLE</option><option value="UPDATE" disabled title="Click a cell to change cell value">UPDATE</option></select> <span id="editorTitle"></span></pre></h2>
-    <div id="updateEditorContainer">
-        <textarea id="updateEditor" autocomplete="off"></textarea>
-        AS <select id="updateEditorType" autocomplete="off"><option value="string">TEXT</option><option value="number">INTEGER or REAL</option><option value="null">NULL</option><option value="blob">BLOB</option></select>
-    </div>
-
-    <script src="./main.ts" type="module"></script>
+    <div id="editor"></div>
+    <script src="./main.tsx" type="module"></script>
 </body>
 </html>
