@@ -5,6 +5,8 @@
 		"strict": true,
 		"esModuleInterop": true,
 		"moduleResolution": "Node",
-		"noUncheckedIndexedAccess": true
+		"noUncheckedIndexedAccess": true,
+		"jsx": "react-jsx",
+		"jsxImportSource": "preact"
 	}
 }
