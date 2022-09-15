@@ -1,0 +1,10 @@
+{
+	"compilerOptions": {
+		"module": "ESNext",
+		"target": "ESNext",
+		"strict": true,
+		"esModuleInterop": true,
+		"moduleResolution": "Node",
+		"noUncheckedIndexedAccess": true
+	}
+}

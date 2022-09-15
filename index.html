@@ -1,0 +1,105 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            overflow: hidden;
+        }
+        .scroll {
+            height: 50vh;
+            overflow-y: scroll;
+        }
+        #table {
+            table-layout: fixed;
+            width: 100%;
+            position: relative;
+            border-collapse: collapse;
+        }
+        #table thead {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            box-shadow: 0px 0px 10px #0000001c;
+        }
+        #table thead {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            box-shadow: 0px 0px 10px #0000001c;
+        }
+        #table th {
+            font-weight: normal;
+        }
+        #table td {
+            overflow: hidden;
+            border-right: 1px solid gray;
+            padding-right: 10px;
+            padding-left: 10px;
+        }
+        #table td:hover {
+            background-color: rgba(160, 255, 255, 0.371);
+        }
+        #table td.editing {
+            background-color: rgba(160, 255, 255, 0.631);
+        }
+        #table th pre {
+            font-size: 125%;
+        }
+        #table pre {
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #editor {
+            width: 100%;
+            height: 20vh;  /* TODO: grid or flexbox */
+            resize: none;
+        }
+        #constraints {
+            vertical-align: top;
+            font-size: inherit;
+            outline: 0;
+            border: 0;
+            border-bottom: 1px solid gray;
+            font-family: inherit;
+            width: 1000px;
+        }
+        select {
+            font-size: inherit;
+            border: 0;
+            outline: 0;
+            background-color: transparent;
+            border-bottom: 1px solid gray;
+            font-family: inherit;
+        }
+        h2 {
+            font-weight: normal;
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h2><pre>SELECT * FROM <select id="tableSelect"></select> <input id="constraints" placeholder="WHERE &lt;column&gt; = &lt;value&gt; ORDER BY &lt;column&gt; ..." autocomplete="off"></pre></h2>
+    <div class="scroll">
+        <table id="table"></table>
+    </div>
+
+    <div id="editorContainer">
+        <h2><pre id="editorTitle"></pre></h2>
+        <textarea id="editor" autocomplete="off"></textarea>
+        AS <select id="type"><option value="string">TEXT</option><option value="number">INTEGER or REAL</option><option value="null">NULL</option><option value="blob">BLOB</option></select>
+    </div>
+
+    <script src="./main.ts" type="module"></script>
+</body>
+</html>
