@@ -136,7 +136,7 @@ export const Editor = (props: { refreshTable: () => void }) => {
                 {state.tableInfo.map(({ name }, i) => {
                     return <><div style={{ marginTop: "10px", marginBottom: "2px" }}>{name}</div><textarea autocomplete="off" style={{ width: "100%", height: "25px", resize: "vertical", display: "block", color: type2color(state.dataTypes[i]!) }} value={state.values[i]!} onChange={(ev) => { setState(produce(state, (d) => { d.values[i] = ev.currentTarget.value })) }} tabIndex={0}></textarea> AS <DataTypeInput value={state.dataTypes[i]!} onChange={(value) => { setState(produce(state, (d) => { d.dataTypes[i] = value })) }} /></>
                 })}
-                <input type="button" value="Commit" style={{ display: "block", marginTop: "15px", fontSize: "125%", color: "white", background: "rgba(0, 0, 0, 0.678)" }} onClick={() => {
+                <input type="button" value="Commit" style={{ display: "block", marginTop: "15px", fontSize: "125%", color: "white", background: "var(--accent-color)" }} onClick={() => {
                     sql(`INSERT ${query}`, state.values.map((value, i) => parseTextareaValue(value, state.dataTypes[i]!)), "w+")
                         .then(() => props.refreshTable())
                 }}></input>
@@ -150,7 +150,7 @@ export const Editor = (props: { refreshTable: () => void }) => {
             editor = <pre style={{ paddingTop: "15px" }}>
                 <TableColumnSchemaEditor schema={createTableColumnSchema} />
                 <textarea autocomplete="off" style={{ marginTop: "15px", width: "100%", height: "20vh", resize: "none" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onChange={(ev) => { setState({ ...state, tableConstraints: ev.currentTarget.value }) }}></textarea><br></br>
-                <input type="button" value="Commit" style={{ display: "block", marginTop: "15px", fontSize: "125%", color: "white", background: "rgba(0, 0, 0, 0.678)" }} onClick={() => {
+                <input type="button" value="Commit" style={{ display: "block", marginTop: "15px", fontSize: "125%", color: "white", background: "var(--accent-color)" }} onClick={() => {
                     sql(`CREATE TABLE ${escapeSQLIdentifier(state.tableName)} (${createTableColumnSchema.current}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], "w+")
                         .then(() => props.refreshTable())
                 }}></input>
@@ -178,7 +178,7 @@ export const Editor = (props: { refreshTable: () => void }) => {
     return <>
         <h2>
             <pre>
-                <select autocomplete="off" value={state.statement} style={{ color: "white", background: "rgba(0, 0, 0, 0.678)", paddingLeft: "15px", paddingRight: "15px" }} onChange={async (ev) => {
+                <select autocomplete="off" value={state.statement} style={{ color: "white", background: "var(--accent-color)", paddingLeft: "15px", paddingRight: "15px" }} onChange={async (ev) => {
                     try {
                         const nextStatement = ev.currentTarget.value as State["statement"]
                         switch (nextStatement) {

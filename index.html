@@ -7,6 +7,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
     <style>
+        :root {
+            --accent-color: rgba(15, 97, 160, 0.822);
+        }
         * {
             margin: 0;
             padding: 0;
@@ -19,7 +22,7 @@
             margin-right: 10px;
         }
         #tableSelect {
-            background-color: rgba(0, 0, 0, 0.678);
+            background-color: var(--accent-color);
             color: white;
         }
         .scroll {
@@ -38,11 +41,15 @@
         #table thead {
             position: sticky;
             top: 0;
-            background-color: rgba(0, 0, 0, 0.678);
+            background-color: var(--accent-color);
             color: white;
         }
         #table th {
             font-weight: normal;
+        }
+        #table th:hover {
+            background-color: rgba(160, 255, 255, 0.371);
+            cursor: pointer;
         }
         #table td {
             overflow: hidden;
@@ -52,6 +59,7 @@
         }
         #table td:hover {
             background-color: rgba(160, 255, 255, 0.371);
+            cursor: pointer;
         }
         #table td.editing {
             background-color: rgba(160, 255, 255, 0.631);
