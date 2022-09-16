@@ -1,4 +1,4 @@
-import { DataTypeInput, EditorDataType, parseTextareaValue } from "."
+import { Commit, DataTypeInput, EditorDataType, parseTextareaValue } from "./components"
 import { TableInfo, getTableInfo, escapeSQLIdentifier, type2color, sql } from "../main"
 import produce from "immer"
 
@@ -42,11 +42,12 @@ export const Editor = ({ state, refreshTable, setState }: { state: State, refres
     const query = `INTO ${escapeSQLIdentifier(state.tableName)} (${state.tableInfo.map(({ name }) => name).map(escapeSQLIdentifier).join(", ")}) VALUES (${state.tableInfo.map(() => "?").join(", ")})`
     return <pre style={{ paddingTop: "4px" }}>
         {state.tableInfo.map(({ name }, i) => {
-            return <><div style={{ marginTop: "10px", marginBottom: "2px" }}>{name}</div><textarea autocomplete="off" style={{ width: "100%", height: "25px", resize: "vertical", display: "block", color: type2color(state.dataTypes[i]!) }} value={state.values[i]!} onChange={(ev) => { setState(produce(state, (d) => { d.values[i] = ev.currentTarget.value })) }} tabIndex={0}></textarea> AS <DataTypeInput value={state.dataTypes[i]!} onChange={(value) => { setState(produce(state, (d) => { d.dataTypes[i] = value })) }} /></>
+            return <>
+                <div style={{ marginTop: "10px", marginBottom: "2px" }}>{name}</div><textarea autocomplete="off" style={{ width: "100%", height: "25px", resize: "vertical", display: "block", color: type2color(state.dataTypes[i]!) }} value={state.values[i]!} onChange={(ev) => { setState(produce(state, (d) => { d.values[i] = ev.currentTarget.value })) }} tabIndex={0}></textarea>
+                AS
+                <DataTypeInput value={state.dataTypes[i]!} onChange={(value) => { setState(produce(state, (d) => { d.dataTypes[i] = value })) }} />
+            </>
         })}
-        <input type="button" value="Commit" style={{ display: "block", marginTop: "15px", fontSize: "125%", color: "white", background: "var(--accent-color)" }} onClick={() => {
-            sql(`INSERT ${query}`, state.values.map((value, i) => parseTextareaValue(value, state.dataTypes[i]!)), "w+")
-                .then(() => refreshTable())
-        }}></input>
+        <Commit onClick={() => sql(`INSERT ${query}`, state.values.map((value, i) => parseTextareaValue(value, state.dataTypes[i]!)), "w+").then(() => refreshTable())} />
     </pre>
 }

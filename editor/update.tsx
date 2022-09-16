@@ -1,4 +1,4 @@
-import { DataTypeInput, EditorDataType, parseTextareaValue } from "."
+import { DataTypeInput, EditorDataType, parseTextareaValue } from "./components"
 import { DataTypes, listUniqueConstraints, getTableList, blob2hex, escapeSQLIdentifier, unsafeEscapeValue, sql, type2color } from "../main"
 import { useRef, Ref, useEffect } from "preact/hooks"
 import * as insert from "./insert"
@@ -38,8 +38,6 @@ export const init = (setState: (newState: State) => void) => {
             td,
         })
     }
-
-    return <></>
 }
 
 export const Title = ({ state, refreshTable, setState }: { state: State, refreshTable: () => void, setState: (newState: State) => void }) => {
@@ -63,6 +61,7 @@ export const Editor = ({ state, refreshTable, setState }: { state: State, refres
                 .catch(console.error)
             insert.open()
         }}></textarea>
-        AS <DataTypeInput value={state.type} onChange={(value) => { setState({ ...state, type: value }) }} />
+        AS
+        <DataTypeInput value={state.type} onChange={(value) => { setState({ ...state, type: value }) }} />
     </pre>
 }
