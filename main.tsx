@@ -1,6 +1,8 @@
 import { render, } from "preact"
 import { pack, unpack } from "msgpackr"
 import * as editor from "./editor"
+import * as update from "./editor/update"
+import * as insert from "./editor/insert"
 
 export type DataTypes = string | number | Uint8Array | null
 
@@ -42,7 +44,7 @@ export type TableInfo = { cid: number, dflt_value: number, name: string, notnull
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
 
 const renderTable = async (tableName: string, { wr: withoutRowId }: TableListItem, uniqueConstraints: UniqueConstraints, tableInfo: TableInfo) => {
-    await editor.insert()
+    await insert.open()
 
     const all = await sql(`SELECT ${withoutRowId ? "" : "rowid, "}* FROM ${escapeSQLIdentifier(tableName)} ` + document.querySelector<HTMLInputElement>("#constraints")!.value, [], "r") as Record<string, DataTypes>[]
 
@@ -79,7 +81,7 @@ const renderTable = async (tableName: string, { wr: withoutRowId }: TableListIte
                 td.append(pre)
                 tr.append(td)
                 td.addEventListener("click", () => {
-                    editor.update(name, record, td).catch(console.error)
+                    update.open(name, record, td).catch(console.error)
                 })
             }
         }
