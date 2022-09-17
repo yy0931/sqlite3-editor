@@ -41,11 +41,10 @@ export const buildDispatch: DispatchBuilder<State> = (setState) => open = async 
     })
 }
 
-export const Title: TitleComponent<State> = (props) => {
-    return <> {escapeSQLIdentifier(props.state.tableName)} SET {escapeSQLIdentifier(props.state.column)} = ? <select value={props.state.selectedConstraint} onChange={(ev) => { props.setState({ ...props.state, selectedConstraint: +ev.currentTarget.value }) }}>{
+export const Title: TitleComponent<State> = (props) =>
+    <> {escapeSQLIdentifier(props.state.tableName)} SET {escapeSQLIdentifier(props.state.column)} = ? <select value={props.state.selectedConstraint} onChange={(ev) => { props.setState({ ...props.state, selectedConstraint: +ev.currentTarget.value }) }}>{
         props.state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `WHERE ${column} = ${unsafeEscapeValue(props.state.record[column])}`).join(" ")}</option>)
     }</select></>
-}
 
 export const Editor: EditorComponent<State> = (props) => {
     const autoFocusRef = useRef(null) as Ref<HTMLTextAreaElement>
