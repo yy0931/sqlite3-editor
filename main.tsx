@@ -3,6 +3,7 @@ import { pack, unpack } from "msgpackr"
 import * as editor from "./editor"
 import * as update from "./editor/update"
 import * as insert from "./editor/insert"
+import deepEqual from "deep-equal"
 
 export type DataTypes = string | number | Uint8Array | null
 
@@ -15,6 +16,8 @@ export const sql = async (query: string, params: DataTypes[], mode: "r" | "w+") 
     }
     return unpack(new Uint8Array(await res.arrayBuffer()))
 }
+
+export const getTableName = () => document.querySelector<HTMLSelectElement>("#tableSelect")!.value
 
 /** https://stackoverflow.com/a/6701665/10710682, https://stackoverflow.com/a/51574648/10710682 */
 export const escapeSQLIdentifier = (ident: string) => {
@@ -106,21 +109,34 @@ export const listUniqueConstraints = async (tableName: string) => {
 }
 
 const main = async () => {
-    const tableList = await getTableList()
-    document.querySelector("#tableSelect")!.innerHTML = ""
-    for (const { name: tableName } of tableList) {
-        const option = document.createElement("option")
-        option.innerText = option.value = tableName
-        document.querySelector("#tableSelect")!.append(option)
+    let tableList = await getTableList()
+
+    const refreshTableList = () => {
+        document.querySelector("#tableSelect")!.innerHTML = ""
+        for (const { name: tableName } of tableList) {
+            const option = document.createElement("option")
+            option.innerText = option.value = tableName
+            document.querySelector("#tableSelect")!.append(option)
+        }
     }
-    render(<editor.Editor refreshTable={() => openTable()} />, document.querySelector("#editor")!)
+    refreshTableList()
+
+    render(<editor.Editor refreshTable={() => {
+        openTable()
+        getTableList().then((newTableList) => {
+            if (deepEqual(newTableList, tableList, { strict: true })) { return }
+            tableList = newTableList
+            refreshTableList()
+            openTable()
+        })
+    }} />, document.querySelector("#editor")!)
 
     const openTable = async () => {
-        const tableName = document.querySelector<HTMLSelectElement>("#tableSelect")!.value
+        const tableName = getTableName()
         await renderTable(tableName, tableList.find(({ name }) => name === tableName)!, await listUniqueConstraints(tableName), await getTableInfo(tableName))
     }
 
-    if (document.querySelector<HTMLSelectElement>("#tableSelect")!.value) { await openTable() }
+    if (getTableName()) { await openTable() }
     document.querySelector<HTMLSelectElement>("#tableSelect")!.addEventListener("change", () => { openTable() })
     document.querySelector<HTMLInputElement>("#constraints")!.addEventListener("change", () => { openTable() })
 }
