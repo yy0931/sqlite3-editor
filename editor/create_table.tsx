@@ -1,15 +1,19 @@
 import { useState, useRef } from "preact/hooks"
 import { useImmer } from "use-immer"
+import { DispatchBuilder, EditorComponent, TitleComponent } from "."
 import { escapeSQLIdentifier, sql } from "../main"
 import { Checkbox, Commit, Select } from "./components"
 
+export const statement = "CREATE TABLE"
+
 export type State = Readonly<{
-    statement: "CREATE TABLE"
+    statement: typeof statement
     tableName: string
     withoutRowId: boolean
     strict: boolean
     tableConstraints: string
 }>
+export declare const state: State
 
 export let open: () => Promise<void>
 
@@ -40,22 +44,19 @@ const TableColumnSchemaEditor = (props: { schema: preact.RefObject<string> }) =>
     })}</>
 }
 
-export const init = (setState: (newState: State) => void) => {
-    open = async () => { setState({ statement: "CREATE TABLE", strict: true, tableConstraints: "", tableName: "", withoutRowId: false }) }
-}
+export const buildDispatch: DispatchBuilder<State> = (setState) => open = async () => { setState({ statement: statement, strict: true, tableConstraints: "", tableName: "", withoutRowId: false }) }
 
-export const Title = ({ state, refreshTable, setState }: { state: State, refreshTable: () => void, setState: (newState: State) => void }) => {
-    return <> <input placeholder="table-name" value={state.tableName} onChange={(ev) => { setState({ ...state, tableName: ev.currentTarget.value }) }}></input>(...)
-        <Checkbox checked={state.withoutRowId} onChange={(checked) => { setState({ ...state, withoutRowId: checked }) }} style={{ marginLeft: "8px" }} text="WITHOUT ROWID" />
-        <Checkbox checked={state.strict} onChange={(checked) => { setState({ ...state, strict: checked }) }} text="STRICT" />
+export const Title: TitleComponent<State> = (props) =>
+    <> <input placeholder="table-name" value={state.tableName} onChange={(ev) => { props.setState({ ...state, tableName: ev.currentTarget.value }) }}></input>(...)
+        <Checkbox checked={state.withoutRowId} onChange={(checked) => { props.setState({ ...state, withoutRowId: checked }) }} style={{ marginLeft: "8px" }} text="WITHOUT ROWID" />
+        <Checkbox checked={state.strict} onChange={(checked) => { props.setState({ ...state, strict: checked }) }} text="STRICT" />
     </>
-}
 
-export const Editor = ({ state, refreshTable, setState }: { state: State, refreshTable: () => void, setState: (newState: State) => void }) => {
+export const Editor: EditorComponent<State> = (props) => {
     const createTableColumnSchema = useRef<string>("")
     return <pre style={{ paddingTop: "15px" }}>
         <TableColumnSchemaEditor schema={createTableColumnSchema} />
-        <textarea autocomplete="off" style={{ marginTop: "15px", width: "100%", height: "20vh", resize: "none" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onChange={(ev) => { setState({ ...state, tableConstraints: ev.currentTarget.value }) }}></textarea><br></br>
-        <Commit onClick={() => sql(`CREATE TABLE ${escapeSQLIdentifier(state.tableName)} (${createTableColumnSchema.current}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], "w+").then(() => refreshTable())} />
+        <textarea autocomplete="off" style={{ marginTop: "15px", width: "100%", height: "20vh", resize: "none" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onChange={(ev) => { props.setState({ ...state, tableConstraints: ev.currentTarget.value }) }}></textarea><br></br>
+        <Commit onClick={() => props.commit(`CREATE TABLE ${escapeSQLIdentifier(state.tableName)} (${createTableColumnSchema.current}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [])} />
     </pre>
 }
