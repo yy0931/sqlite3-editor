@@ -13,10 +13,8 @@ export let open: () => Promise<void>
 export const buildDispatch: DispatchBuilder<State> = (setState) => open = async () =>
     setState({ statement, tableName: getTableName() })
 
-export const Title: TitleComponent<State> = (props) => {
-    return <> {escapeSQLIdentifier(props.state.tableName)}</>
-}
+export const Title: TitleComponent<State> = (props) =>
+    <> {escapeSQLIdentifier(props.state.tableName)}</>
 
-export const Editor: EditorComponent<State> = (props) => {
-    return <pre style={{ paddingTop: "4px" }}><Commit onClick={() => props.commit(`DROP TABLE ${escapeSQLIdentifier(props.state.tableName)}`, [])} /></pre>
-}
+export const Editor: EditorComponent<State> = (props) =>
+    <pre style={{ paddingTop: "4px" }}><Commit onClick={() => props.commit(`DROP TABLE ${escapeSQLIdentifier(props.state.tableName)}`, [])} /></pre>

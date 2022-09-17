@@ -12,6 +12,7 @@ import { Select } from "./components"
 import { DataTypes, sql } from "../main"
 
 const editors = [insert, createTable, dropTable, update]
+
 export type State = (typeof editors[number])["state"]
 
 export const Editor = (props: { refreshTable: () => void }) => {
