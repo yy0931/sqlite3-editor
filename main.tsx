@@ -1,23 +1,11 @@
 import { render, } from "preact"
-import { pack, unpack } from "msgpackr"
 import * as editor from "./editor"
 import * as update from "./editor/update"
 import * as insert from "./editor/insert"
 import deepEqual from "deep-equal"
-import { useState, useEffect, useMemo } from "preact/hooks"
+import { useState, useEffect, useMemo, useReducer, useRef, Ref } from "preact/hooks"
 import { Select } from "./editor/components"
-
-export type DataTypes = string | number | Uint8Array | null
-
-type TableListItem = { schema: string, name: string, type: string, ncol: number, wr: number, strict: number }
-
-export const sql = async (query: string, params: DataTypes[], mode: "r" | "w+"): Promise<Record<string, DataTypes>[]> => {
-    const res = await fetch(`http://localhost:8080/`, { method: "POST", body: pack({ query, params, mode }), headers: { "Content-Type": "application/octet-stream" } })
-    if (!res.ok) {
-        throw new Error(await res.text())
-    }
-    return unpack(new Uint8Array(await res.arrayBuffer()))
-}
+import SQLite3Client, { DataTypes, TableInfo, TableListItem } from "./sql"
 
 /** https://stackoverflow.com/a/6701665/10710682, https://stackoverflow.com/a/51574648/10710682 */
 export const escapeSQLIdentifier = (ident: string) => {
@@ -42,124 +30,150 @@ export const type2color = (type: string) => {
     }
 }
 
-export type TableInfo = { cid: number, dflt_value: number, name: string, notnull: number, type: string, pk: number }[]
+const renderTable = async (tableName: string, tableInfo: TableInfo, all: Record<string, DataTypes>[], sql: SQLite3Client, limitStart: number, limitEnd: number) => {
+    document.body.classList.add("rendering")
+    try {
+        const autoIncrement = await sql.hasTableAutoincrement(tableName)
 
-export type UniqueConstraints = { primary: boolean, columns: string[] }[]
+        document.querySelector<HTMLTableElement>("#table")!.innerHTML = ""
 
-const renderTable = async (tableName: string, { wr: withoutRowId }: TableListItem, tableInfo: TableInfo, constraints: string) => {
-    const autoIncrement = await hasTableAutoincrement(tableName)
-
-    const all = await sql(`SELECT ${withoutRowId ? "" : /* `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case. */"rowid AS rowid, "}* FROM ${escapeSQLIdentifier(tableName)} ` + constraints, [], "r") as Record<string, DataTypes>[]
-
-    document.querySelector<HTMLTableElement>("#table")!.innerHTML = ""
-
-    // thead
-    {
-        const thead = document.createElement("thead")
-        const tr = document.createElement("tr")
-        thead.append(tr)
-        for (const { name, notnull, pk, type } of tableInfo) {
-            const th = document.createElement("th")
-            const code = document.createElement("code")
-            code.innerText = name
-            const typeText = document.createElement("span")
-            typeText.classList.add("type")
-            typeText.innerText = (type ? (" " + type) : "") + (pk ? (autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")
-            code.append(typeText)
-            th.append(code)
-            tr.append(th)
-        }
-        document.querySelector<HTMLTableElement>("#table")!.append(thead)
-    }
-
-    // tbody
-    {
-        const tbody = document.createElement("tbody")
-        for (const record of all) {
+        // thead
+        {
+            const thead = document.createElement("thead")
             const tr = document.createElement("tr")
-            tbody.append(tr)
-            for (const { name } of tableInfo) {
-                const value = record[name]
-                if (value === undefined) { throw new Error() }
-                const td = document.createElement("td")
-                const pre = document.createElement("pre")
-                pre.style.color = type2color(typeof value)
-                pre.innerText = value instanceof Uint8Array ? `x'${blob2hex(value)}'` : JSON.stringify(value)
-                td.append(pre)
-                tr.append(td)
-                td.addEventListener("click", () => {
-                    update.open(tableName, name, record, td).catch(console.error)
-                })
+            thead.append(tr)
+            for (const { name, notnull, pk, type } of tableInfo) {
+                const th = document.createElement("th")
+                const code = document.createElement("code")
+                code.innerText = name
+                const typeText = document.createElement("span")
+                typeText.classList.add("type")
+                typeText.innerText = (type ? (" " + type) : "") + (pk ? (autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")
+                code.append(typeText)
+                th.append(code)
+                tr.append(th)
             }
+            document.querySelector<HTMLTableElement>("#table")!.append(thead)
         }
-        document.querySelector<HTMLTableElement>("#table")!.append(tbody)
+
+        // tbody
+        {
+            const tbody = document.createElement("tbody")
+            for (const record of all.slice(limitStart, limitEnd)) {
+                const tr = document.createElement("tr")
+                tbody.append(tr)
+                for (const { name } of tableInfo) {
+                    const value = record[name]
+                    if (value === undefined) { throw new Error() }
+                    const td = document.createElement("td")
+                    const pre = document.createElement("pre")
+                    pre.style.color = type2color(typeof value)
+                    pre.innerText = value instanceof Uint8Array ? `x'${blob2hex(value)}'` : JSON.stringify(value)
+                    td.append(pre)
+                    tr.append(td)
+                    td.addEventListener("click", () => {
+                        update.open(tableName, name, record, td).catch(console.error)
+                    })
+                }
+            }
+            document.querySelector<HTMLTableElement>("#table")!.append(tbody)
+        }
+    } finally {
+        document.body.classList.remove("rendering")
     }
 }
 
-export const getTableInfo = async (tableName: string) =>
-    sql(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r") as Promise<TableInfo>
-
-export const getTableList = async () => sql("PRAGMA table_list", [], "r") as Promise<TableListItem[]>
-
-export const listUniqueConstraints = async (tableName: string) => {
-    const uniqueConstraints: { primary: boolean, columns: string[] }[] = []
-    for (const column of await getTableInfo(tableName)) {
-        if (column.pk) {
-            uniqueConstraints.push({ primary: true, columns: [column.name] })
+const ProgressBar = () => {
+    const ref = useRef() as Ref<HTMLDivElement>
+    let x = 0
+    const width = 200
+    const t = Date.now()
+    useEffect(() => {
+        if (ref.current === null) { return }
+        let canceled = false
+        const loop = () => {
+            if (canceled) { return }
+            ref.current!.style.left = `${x}px`
+            x = (Date.now() - t) % (window.innerWidth + width) - width
+            requestAnimationFrame(loop)
         }
-    }
-    for (const index of await sql(`PRAGMA index_list(${escapeSQLIdentifier(tableName)})`, [], "r") as { seq: number, name: string, unique: 0 | 1, origin: "c" | "u" | "pk", partial: 0 | 1 }[]) {
-        if (index.partial) { continue }
-        if (!index.unique) { continue }
-        const indexInfo = await sql(`PRAGMA index_info(${escapeSQLIdentifier(index.name)})`, [], "r") as { seqno: number, cid: number, name: string }[]
-        uniqueConstraints.push({ primary: index.origin === "pk", columns: indexInfo.map(({ name }) => name) })
-    }
-    return uniqueConstraints
+        loop()
+        return () => { canceled = true }
+    }, [])
+    return <div className="progressbar" ref={ref} style={{ display: "inline-block", userSelect: "none", pointerEvents: "none", position: "absolute", zIndex: 100, width: width + "px", height: "5px", top: 0, background: "var(--accent-color)" }}></div>
 }
 
-/** https://stackoverflow.com/questions/20979239/how-to-tell-if-a-sqlite-column-is-autoincrement */
-export const hasTableAutoincrement = async (tableName: string) =>
-    !!((await sql(`SELECT COUNT(*) AS count FROM sqlite_sequence WHERE name = ?`, [tableName], "r"))[0]?.count)
-
-const App = (props: { tableList: TableListItem[] }) => {
+const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
     const [tableList, setTableList] = useState(props.tableList)
 
     const [viewerStatement, setViewerStatement] = useState<"SELECT" | "PRAGMA table_list">("SELECT")
     const [viewerTableName, setViewerTableName] = useState(tableList[0]?.name) // undefined if there are no tables
     const [viewerConstraints, setViewerConstraints] = useState("")
+    const [errorMessage, setErrorMessage] = useState("")
+    const [pageSize, setPageSize] = useReducer<number, number>((_, value) => Math.max(1, value), 1000)
+    const [records, setRecords] = useState<Record<string, DataTypes>[] | null>(null)
+    const pageMax = Math.ceil((records?.length ?? 0) / pageSize)
+    const [page, setPage] = useReducer<number, number>((_, value) => Math.max(1, Math.min(pageMax, value)), 0)
 
-    const renderTable_ = async () => {
+    props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
+
+    useEffect(() => {
         if (viewerTableName === undefined) { return }
-        await insert.open(viewerTableName) // TODO: Change to insert or create table only if the current statement is UPDATE
-        await renderTable(viewerTableName, tableList.find(({ name }) => name === viewerTableName)!, await getTableInfo(viewerTableName), viewerConstraints)
+        insert.open(viewerTableName)  // TODO: Change to insert or create table only if the current statement is UPDATE
+    }, [viewerTableName])
+
+    useEffect(() => {
+        (async () => {
+            if (viewerTableName === undefined || records === null) { return }
+            // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
+            await renderTable(viewerTableName, await props.sql.getTableInfo(viewerTableName), records, props.sql, pageSize * (page - 1), pageSize * page)
+        })().catch(console.error)
+    }, [records, page, pageSize])
+
+    useEffect(() => { setPage(page) }, [records, pageSize])
+
+    const query = async () => {
+        if (viewerTableName === undefined) { return }
+        setRecords(await props.sql.query(`SELECT ${tableList.find(({ name }) => name === viewerTableName)!.wr ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ` + viewerConstraints, [], "r"))
     }
 
     useEffect(() => {
-        renderTable_().catch(console.error)
+        query().catch(console.error)
     }, [viewerStatement, viewerTableName, viewerConstraints, tableList])
 
     return <>
+        <ProgressBar />
         {viewerTableName !== undefined && <h2>
-            <pre><Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, "PRAGMA table_list": {} }} style={{ color: "white", background: "var(--accent-color)" }} /> * FROM
+            <pre><Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, "PRAGMA table_list": {} }} className="primary" /> * FROM
                 {" "}
-                <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} style={{ color: "white", background: "var(--accent-color)" }} />
+                <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
                 {" "}
-                <input value={viewerConstraints} onChange={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} />
+                <input value={viewerConstraints} onChange={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /><br />
             </pre>
         </h2>}
         {useMemo(() => <div class="scroll">
             <table id="table"></table>
         </div>, [])}
+        <div style={{ marginBottom: "30px", paddingTop: "3px", paddingBottom: "3px" }} className="primary">
+            <span><span style={{ cursor: "pointer", paddingLeft: "8px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page - 1)}>‹</span><input value={page} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onChange={(ev) => setPage(+ev.currentTarget.value)} /> / {pageMax} <span style={{ cursor: "pointer", paddingLeft: "4px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page + 1)}>›</span></span>
+            <span style={{ marginLeft: "40px" }}><input value={pageSize} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onBlur={(ev) => setPageSize(+ev.currentTarget.value)} /> records</span>
+        </div>
+        {errorMessage && <p style={{ background: "rgb(14, 72, 117)", color: "white", padding: "10px" }}>
+            <pre style={{ whiteSpace: "pre-wrap" }}>{errorMessage}</pre>
+            <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => setErrorMessage("")} />
+        </p>}
         <editor.Editor tableName={viewerTableName} onWrite={() => {
-            renderTable_().catch(console.error)
-            getTableList().then((newTableList) => {
+            query().catch(console.error)
+            props.sql.getTableList().then((newTableList) => {
                 if (deepEqual(newTableList, tableList, { strict: true })) { return }
                 setTableList(newTableList)
             }).catch(console.error)
-        }} />
+        }} sql={props.sql} />
     </>
 }
 
 (async () => {
-    render(<App tableList={await getTableList()} />, document.body)
+    const sql = new SQLite3Client()
+    sql.addErrorMessage = (value) => document.write(value)
+    render(<App tableList={await sql.getTableList()} sql={sql} />, document.body)
 })().catch(console.error)

@@ -46,7 +46,7 @@ const TableColumnSchemaEditor = (props: { schema: preact.RefObject<string> }) =>
     })}</>
 }
 
-export const buildDispatch: DispatchBuilder<State> = (setState) => open = async () => { setState({ statement: statement, strict: true, tableConstraints: "", tableName: "", withoutRowId: false }) }
+export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = async () => { setState({ statement: statement, strict: true, tableConstraints: "", tableName: "", withoutRowId: false }) }
 
 export const Title: TitleComponent<State> = (props) =>
     <> <input placeholder="table-name" value={props.state.tableName} onChange={(ev) => { props.setState({ ...props.state, tableName: ev.currentTarget.value }) }}></input>(...)

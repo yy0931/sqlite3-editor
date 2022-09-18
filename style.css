@@ -1,0 +1,130 @@
+:root {
+    --accent-color: rgb(35, 107, 162);
+    --accent-color-hover: rgb(47, 127, 189);
+}
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+body {
+    overflow-x: hidden;
+    background: #fafafa;
+    margin-left: 10px;
+    margin-right: 10px;
+    font-family: monospace;
+}
+.scroll {
+    background: white;
+    height: 50vh;
+    overflow-y: scroll;
+    border: 1px solid rgba(0, 0, 0, 0.3);
+}
+#table {
+    table-layout: fixed;
+    width: 100%;
+    position: relative;
+    border-collapse: collapse;
+}
+.progressbar {
+    opacity: 0;
+    transition: opacity 0.5s /* ease-in */cubic-bezier(1.000, 0.060, 0.955, -0.120);;
+}
+.querying .progressbar, .rendering .progressbar {
+    opacity: 1;
+}
+#table thead {
+    position: sticky;
+    top: 0;
+    background-color: var(--accent-color);
+    color: white;
+}
+#table th {
+    font-weight: normal;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+#table th:hover {
+    background-color: var(--accent-color-hover);
+    cursor: pointer;
+}
+#table td {
+    overflow: hidden;
+    border-right: 1px solid rgba(0, 0, 0, 0.3);
+    padding-right: 10px;
+    padding-left: 10px;
+}
+#table td:hover {
+    background-color: rgba(160, 255, 255, 0.371);
+    cursor: pointer;
+}
+#table td.editing {
+    background-color: rgba(160, 255, 255, 0.631);
+}
+#table th pre {
+    font-size: 125%;
+}
+#table pre {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+select {
+    font-size: inherit;
+    border: 0;
+    outline: 0;
+    background-color: transparent;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+    font-family: inherit;
+}
+h2 {
+    font-weight: normal;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+input:not([type]), input[type=text] {
+    font-size: inherit;
+    background: transparent;
+    font-family: inherit;
+    vertical-align: top;
+    outline: 0;
+    border: 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+}
+input[type=checkbox] {
+    vertical-align: baseline;
+}
+input[type=button] {
+    padding-left: 1em;
+    padding-right: 1em;
+    background-color: inherit;
+}
+textarea {
+    outline: 0;
+    border: 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+}
+select {
+    color: inherit;
+}
+input {
+    color: inherit;
+}
+.type {
+    font-style: italic;
+    color: #dfdfdf;
+}
+code {
+    word-break: break-word;
+}
+.primary, input.primary {
+    background-color: var(--accent-color);
+    color: white;
+}
+input[type="button"].primary {
+    border-color: var(--accent-color);
+}
+input.primary:hover, select.primary:hover {
+    background-color: var(--accent-color-hover);
+}

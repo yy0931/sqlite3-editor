@@ -10,7 +10,7 @@ export type State = Readonly<{
 export declare const state: State
 
 export let open: (tableName?: string) => Promise<void>
-export const buildDispatch: DispatchBuilder<State> = (setState) => open = async (tableName) => {
+export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = async (tableName) => {
     if (tableName === undefined) { return }
     setState({ statement, tableName })
 }

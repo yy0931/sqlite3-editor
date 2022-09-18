@@ -1,7 +1,8 @@
 import { Commit, DataTypeInput, EditorDataType, parseTextareaValue } from "./components"
-import { TableInfo, getTableInfo, escapeSQLIdentifier, type2color } from "../main"
+import { escapeSQLIdentifier, type2color } from "../main"
 import produce from "immer"
 import type { DispatchBuilder, EditorComponent, TitleComponent } from "."
+import { TableInfo } from "../sql"
 
 export const statement = "INSERT"
 export type State = Readonly<{
@@ -14,9 +15,9 @@ export type State = Readonly<{
 export declare const state: State
 
 export let open: (tableName?: string) => Promise<void>
-export const buildDispatch: DispatchBuilder<State> = (setState) => open = async (tableName) => {
+export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = async (tableName) => {
     if (tableName === undefined) { return }
-    const tableInfo = await getTableInfo(tableName)
+    const tableInfo = await sql.getTableInfo(tableName)
     setState({
         statement, tableName, tableInfo, values: tableInfo.map(() => ""), dataTypes: tableInfo.map(({ type }) => {
             type = type.toLowerCase()
