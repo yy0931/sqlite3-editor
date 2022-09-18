@@ -30,7 +30,7 @@ export const type2color = (type: string) => {
     }
 }
 
-const renderTable = async (tableName: string, tableInfo: TableInfo, all: Record<string, DataTypes>[], sql: SQLite3Client, limitStart: number, limitEnd: number) => {
+const renderTable = async (tableName: string, tableInfo: TableInfo, records: Record<string, DataTypes>[], sql: SQLite3Client) => {
     document.body.classList.add("rendering")
     try {
         const autoIncrement = await sql.hasTableAutoincrement(tableName)
@@ -59,7 +59,7 @@ const renderTable = async (tableName: string, tableInfo: TableInfo, all: Record<
         // tbody
         {
             const tbody = document.createElement("tbody")
-            for (const record of all.slice(limitStart, limitEnd)) {
+            for (const record of records) {
                 const tr = document.createElement("tr")
                 tbody.append(tr)
                 for (const { name } of tableInfo) {
@@ -111,8 +111,8 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
     const [viewerConstraints, setViewerConstraints] = useState("")
     const [errorMessage, setErrorMessage] = useState("")
     const [pageSize, setPageSize] = useReducer<number, number>((_, value) => Math.max(1, value), 1000)
-    const [records, setRecords] = useState<Record<string, DataTypes>[] | null>(null)
-    const pageMax = Math.ceil((records?.length ?? 0) / pageSize)
+    const [numRecords, setRecordCount] = useState(0)
+    const pageMax = Math.ceil(numRecords / pageSize)
     const [page, setPage] = useReducer<number, number>((_, value) => Math.max(1, Math.min(pageMax, value)), 0)
 
     props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
@@ -122,24 +122,21 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
         insert.open(viewerTableName)  // TODO: Change to insert or create table only if the current statement is UPDATE
     }, [viewerTableName])
 
-    useEffect(() => {
-        (async () => {
-            if (viewerTableName === undefined || records === null) { return }
-            // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
-            await renderTable(viewerTableName, await props.sql.getTableInfo(viewerTableName), records, props.sql, pageSize * (page - 1), pageSize * page)
-        })().catch(console.error)
-    }, [records, page, pageSize])
-
-    useEffect(() => { setPage(page) }, [records, pageSize])
-
-    const query = async () => {
+    const queryAndRenderTable = async () => {
         if (viewerTableName === undefined) { return }
-        setRecords(await props.sql.query(`SELECT ${tableList.find(({ name }) => name === viewerTableName)!.wr ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ` + viewerConstraints, [], "r"))
+        // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
+        const records = await props.sql.query(`SELECT ${tableList.find(({ name }) => name === viewerTableName)!.wr ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize], "r")
+        const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count
+        await renderTable(viewerTableName, await props.sql.getTableInfo(viewerTableName), records, props.sql)
+        if (typeof newRecordCount !== "number") { throw new Error(newRecordCount + "") }
+        setRecordCount(newRecordCount)
     }
 
+    useEffect(() => { setPage(page) }, [numRecords, pageSize])
+
     useEffect(() => {
-        query().catch(console.error)
-    }, [viewerStatement, viewerTableName, viewerConstraints, tableList])
+        queryAndRenderTable().catch(console.error)
+    }, [viewerStatement, viewerTableName, viewerConstraints, tableList, page, pageSize])
 
     return <>
         <ProgressBar />
@@ -163,7 +160,7 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
             <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => setErrorMessage("")} />
         </p>}
         <editor.Editor tableName={viewerTableName} onWrite={() => {
-            query().catch(console.error)
+            queryAndRenderTable().catch(console.error)
             props.sql.getTableList().then((newTableList) => {
                 if (deepEqual(newTableList, tableList, { strict: true })) { return }
                 setTableList(newTableList)
