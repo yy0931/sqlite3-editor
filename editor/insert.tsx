@@ -1,5 +1,5 @@
 import { Commit, DataTypeInput, EditorDataType, parseTextareaValue } from "./components"
-import { TableInfo, getTableInfo, escapeSQLIdentifier, type2color, getTableName } from "../main"
+import { TableInfo, getTableInfo, escapeSQLIdentifier, type2color } from "../main"
 import produce from "immer"
 import type { DispatchBuilder, EditorComponent, TitleComponent } from "."
 
@@ -13,9 +13,9 @@ export type State = Readonly<{
 }>
 export declare const state: State
 
-export let open: () => Promise<void>
-export const buildDispatch: DispatchBuilder<State> = (setState) => open = async () => {
-    const tableName = getTableName()
+export let open: (tableName?: string) => Promise<void>
+export const buildDispatch: DispatchBuilder<State> = (setState) => open = async (tableName) => {
+    if (tableName === undefined) { return }
     const tableInfo = await getTableInfo(tableName)
     setState({
         statement, tableName, tableInfo, values: tableInfo.map(() => ""), dataTypes: tableInfo.map(({ type }) => {
