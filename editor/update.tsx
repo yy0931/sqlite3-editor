@@ -1,7 +1,7 @@
 import { DataTypeInput, EditorDataType, parseTextareaValue } from "./components"
-import { DataTypes, listUniqueConstraints, getTableList, blob2hex, escapeSQLIdentifier, unsafeEscapeValue, type2color, getTableName } from "../main"
+import { DataTypes, listUniqueConstraints, getTableList, blob2hex, escapeSQLIdentifier, unsafeEscapeValue, type2color } from "../main"
 import { useRef, Ref, useEffect } from "preact/hooks"
-import * as insert from "./insert"
+import * as createTable from "./create_table"
 import { DispatchBuilder, EditorComponent, TitleComponent } from "."
 
 export const statement = "UPDATE"
@@ -18,10 +18,9 @@ export type State = Readonly<{
 }>
 export declare const state: State
 
-export let open: (column?: string, record?: Record<string, DataTypes>, td?: HTMLElement) => Promise<void>
-export const buildDispatch: DispatchBuilder<State> = (setState) => open = async (column, record, td) => {
-    if (column === undefined || record === undefined || td === undefined) { return }
-    const tableName = getTableName()
+export let open: (tableName?: string, column?: string, record?: Record<string, DataTypes>, td?: HTMLElement) => Promise<void>
+export const buildDispatch: DispatchBuilder<State> = (setState) => open = async (tableName, column, record, td) => {
+    if (tableName === undefined || column === undefined || record === undefined || td === undefined) { return }
     const value = record[column]
     const uniqueConstraints = await listUniqueConstraints(tableName)
     const withoutRowId = !!(await getTableList()).find(({ name }) => name === tableName)!.wr
@@ -57,7 +56,7 @@ export const Editor: EditorComponent<State> = (props) => {
             if (props.state.textareaValue === ev.currentTarget.value) { return }
             const columns = props.state.constraintChoices[props.state.selectedConstraint]!
             props.commit(`UPDATE ${escapeSQLIdentifier(props.state.tableName)} SET ${escapeSQLIdentifier(props.state.column)} = ? ` + columns.map((column) => `WHERE ${column} = ?`).join(" "), [parseTextareaValue(ev.currentTarget.value, props.state.type), ...columns.map((column) => props.state.record[column] as DataTypes)])
-            insert.open()
+            createTable.open()
         }}></textarea>
         AS
         <DataTypeInput value={props.state.type} onChange={(value) => { props.setState({ ...props.state, type: value }) }} />

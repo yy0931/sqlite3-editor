@@ -21,10 +21,6 @@
             margin-left: 10px;
             margin-right: 10px;
         }
-        #tableSelect {
-            background-color: var(--accent-color);
-            color: white;
-        }
         .scroll {
             background: white;
             height: 50vh;
@@ -71,9 +67,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        #constraints {
-            width: 1000px;
-        }
         select {
             font-size: inherit;
             border: 0;
@@ -117,14 +110,16 @@
         input {
             color: inherit;
         }
+        .type {
+            font-style: italic;
+            color: #bff6ff;
+        }
+        code {
+            word-break: break-word;
+        }
     </style>
 </head>
 <body>
-    <h2><pre>SELECT * FROM <select id="tableSelect" autocomplete="off"></select> <input id="constraints" placeholder="WHERE &lt;column&gt; = &lt;value&gt; ORDER BY &lt;column&gt; ..." autocomplete="off"></pre></h2>
-    <div class="scroll">
-        <table id="table"></table>
-    </div>
-    <div id="editor"></div>
     <script src="./main.tsx" type="module"></script>
 </body>
 </html>

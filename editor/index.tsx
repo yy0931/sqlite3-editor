@@ -15,9 +15,9 @@ const editors = [insert, createTable, dropTable, update]
 
 export type State = (typeof editors[number])["state"]
 
-export const Editor = (props: { refreshTable: () => void }) => {
-    const [state, setState] = useState<State | null>(null)
-    const commit = useCallback((query: string, params: DataTypes[]) => sql(query, params, "w+").then(() => props.refreshTable()).catch(console.error), [props.refreshTable])
+export const Editor = (props: { tableName?: string, onWrite: () => void }) => {
+    const [state, setState] = useState<State>({ statement: "CREATE TABLE", strict: true, tableConstraints: "", tableName: "", withoutRowId: false })
+    const commit = useCallback((query: string, params: DataTypes[]) => sql(query, params, "w+").then(() => props.onWrite()).catch(console.error), [props.onWrite])
 
     document.querySelectorAll(".editing").forEach((el) => el.classList.remove("editing"))
     if (state?.statement === "UPDATE") {
@@ -26,14 +26,12 @@ export const Editor = (props: { refreshTable: () => void }) => {
 
     for (const { buildDispatch } of editors) { buildDispatch(setState) }
 
-    if (state === null) { return <></> }
-
     return <>
         <h2>
             <pre>
                 <Select value={state.statement} style={{ color: "white", background: "var(--accent-color)", paddingLeft: "15px", paddingRight: "15px" }} onChange={async (value) => {
                     try {
-                        editors.find(({ statement }) => statement === value)?.open()
+                        editors.find(({ statement }) => statement === value)?.open(props.tableName)
                     } catch (err) {
                         console.error(err)
                     }

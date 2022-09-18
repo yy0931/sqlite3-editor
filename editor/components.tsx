@@ -1,5 +1,6 @@
 import { DataTypes } from "../main"
 import type { JSXInternal } from "preact/src/jsx"
+import { useRef, Ref, useLayoutEffect } from "preact/hooks"
 
 export type EditorDataType = "string" | "number" | "null" | "blob"
 
@@ -18,10 +19,25 @@ export const parseTextareaValue = (value: string, type: EditorDataType): DataTyp
     }
 }
 
-export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, title?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number }) =>
-    <select autocomplete="off" value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style }} onChange={(ev) => props.onChange(ev.currentTarget.value as T)} tabIndex={props.tabIndex}>{
-        (Object.keys(props.options) as T[]).map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].title}>{props.options[value].text ?? value}</option>)
-    }</select>
+export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, title?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number }) => {
+    const ref1 = useRef() as Ref<HTMLSelectElement>
+    const ref2 = useRef() as Ref<HTMLSelectElement>
+    useLayoutEffect(() => {
+        // Auto resizing https://stackoverflow.com/questions/20091481/auto-resizing-the-select-element-according-to-selected-options-width
+        if (!ref1.current || !ref2.current) { return }
+        ref1.current.style.width = ref2.current.offsetWidth + "px"
+    })
+    return <>
+        <select autocomplete="off" value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style }} ref={ref1} onChange={(ev) => props.onChange(ev.currentTarget.value as T)} tabIndex={props.tabIndex}>{
+            (Object.keys(props.options) as T[]).map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].title}>{props.options[value].text ?? value}</option>)
+        }</select>
+        <span style={{ userSelect: "none", display: "inline-block", pointerEvents: "none", width: 0, height: 0, overflow: "hidden" }}>
+            <select autocomplete="off" value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style, visibility: "hidden" }} ref={ref2} onChange={(ev) => props.onChange(ev.currentTarget.value as T)}>
+                <option value={props.value} tabIndex={-1}>{props.options[props.value].text ?? props.value}</option>
+            </select>
+        </span>
+    </>
+}
 
 export const Commit = (props: { onClick: () => void }) =>
     <input type="button" value="Commit" style={{ display: "block", marginTop: "15px", fontSize: "125%", color: "white", background: "var(--accent-color)" }} onClick={props.onClick}></input>
