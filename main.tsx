@@ -30,10 +30,13 @@ export const type2color = (type: string) => {
     }
 }
 
-const renderTable = async (tableName: string, tableInfo: TableInfo, records: Record<string, DataTypes>[], sql: SQLite3Client) => {
+const renderTable = async (tableName: string | null, tableInfo: TableInfo | null, records: Record<string, DataTypes>[], sql: SQLite3Client) => {
     document.body.classList.add("rendering")
     try {
-        const autoIncrement = await sql.hasTableAutoincrement(tableName)
+        const autoIncrement = tableName === null ? false : await sql.hasTableAutoincrement(tableName)
+        if (tableInfo === null) {
+            tableInfo = Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0, pk: 0, type: "", cid: 0, dflt_value: 0 }))
+        }
 
         document.querySelector<HTMLTableElement>("#table")!.innerHTML = ""
 
@@ -71,9 +74,12 @@ const renderTable = async (tableName: string, tableInfo: TableInfo, records: Rec
                     pre.innerText = value instanceof Uint8Array ? `x'${blob2hex(value)}'` : JSON.stringify(value)
                     td.append(pre)
                     tr.append(td)
-                    td.addEventListener("click", () => {
-                        update.open(tableName, name, record, td).catch(console.error)
-                    })
+                    if (tableName !== null) {
+                        td.classList.add("clickable")
+                        td.addEventListener("click", () => {
+                            update.open(tableName, name, record, td).catch(console.error)
+                        })
+                    }
                 }
             }
             document.querySelector<HTMLTableElement>("#table")!.append(tbody)
@@ -127,11 +133,15 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
         const withoutRowId = tableList.find(({ name }) => name === viewerTableName)?.wr
         if (withoutRowId === undefined) { return }
         // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
-        const records = await props.sql.query(`SELECT ${withoutRowId ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize], "r")
-        const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count
-        await renderTable(viewerTableName, await props.sql.getTableInfo(viewerTableName), records, props.sql)
-        if (typeof newRecordCount !== "number") { throw new Error(newRecordCount + "") }
-        setRecordCount(newRecordCount)
+        if (viewerStatement === "SELECT") {
+            const records = await props.sql.query(`SELECT ${withoutRowId ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize], "r")
+            const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count
+            if (typeof newRecordCount !== "number") { throw new Error(newRecordCount + "") }
+            setRecordCount(newRecordCount)
+            await renderTable(viewerTableName, await props.sql.getTableInfo(viewerTableName), records, props.sql)
+        } else {
+            await renderTable(null, null, await props.sql.query(viewerStatement, [], "r"), props.sql)
+        }
     }
 
     useEffect(() => { setPage(page) }, [numRecords, pageSize])
@@ -143,11 +153,12 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
     return <>
         <ProgressBar />
         {viewerTableName !== undefined && <h2>
-            <pre><Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, "PRAGMA table_list": {} }} className="primary" /> * FROM
-                {" "}
-                <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
-                {" "}
-                <input value={viewerConstraints} onChange={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /><br />
+            <pre><Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, "PRAGMA table_list": {} }} className="primary" />
+                {viewerStatement === "SELECT" && <> * FROM
+                    {" "}
+                    <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
+                    {" "}
+                    <input value={viewerConstraints} onChange={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /><br /></>}
             </pre>
         </h2>}
         {useMemo(() => <div class="scroll">
