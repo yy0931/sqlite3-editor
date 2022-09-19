@@ -124,8 +124,10 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
 
     const queryAndRenderTable = async () => {
         if (viewerTableName === undefined) { return }
+        const withoutRowId = tableList.find(({ name }) => name === viewerTableName)?.wr
+        if (withoutRowId === undefined) { return }
         // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
-        const records = await props.sql.query(`SELECT ${tableList.find(({ name }) => name === viewerTableName)!.wr ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize], "r")
+        const records = await props.sql.query(`SELECT ${withoutRowId ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize], "r")
         const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count
         await renderTable(viewerTableName, await props.sql.getTableInfo(viewerTableName), records, props.sql)
         if (typeof newRecordCount !== "number") { throw new Error(newRecordCount + "") }
@@ -159,10 +161,18 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
             <pre style={{ whiteSpace: "pre-wrap" }}>{errorMessage}</pre>
             <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => setErrorMessage("")} />
         </p>}
-        <editor.Editor tableName={viewerTableName} onWrite={() => {
-            queryAndRenderTable().catch(console.error)
+        <editor.Editor tableName={viewerTableName} onWrite={(opts) => {
+            if (!opts.refreshTableList || opts.selectTable) {
+                queryAndRenderTable().catch(console.error)
+            }
             props.sql.getTableList().then((newTableList) => {
                 if (deepEqual(newTableList, tableList, { strict: true })) { return }
+                const newViewerTableName = opts.selectTable ?? viewerTableName
+                if (newTableList.some((table) => table.name === newViewerTableName)) {
+                    setViewerTableName(newViewerTableName)
+                } else {
+                    setViewerTableName(newTableList[0]?.name)
+                }
                 setTableList(newTableList)
             }).catch(console.error)
         }} sql={props.sql} />

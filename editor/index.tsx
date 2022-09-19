@@ -15,9 +15,11 @@ const editors = [insert, createTable, dropTable, update]
 
 export type State = (typeof editors[number])["state"]
 
-export const Editor = (props: { tableName?: string, onWrite: () => void, sql: SQLite3Client }) => {
+type OnWriteOptions = { refreshTableList?: true, selectTable?: string }
+
+export const Editor = (props: { tableName?: string, onWrite: (opts: OnWriteOptions) => void, sql: SQLite3Client }) => {
     const [state, setState] = useState<State>({ statement: "CREATE TABLE", strict: true, tableConstraints: "", tableName: "", withoutRowId: false })
-    const commit = useCallback((query: string, params: DataTypes[]) => props.sql.query(query, params, "w+").then(() => props.onWrite()).catch(console.error), [props.onWrite])
+    const commit = useCallback((query: string, params: DataTypes[], opts: OnWriteOptions) => props.sql.query(query, params, "w+").then(() => props.onWrite(opts)).catch(console.error), [props.onWrite])
 
     document.querySelectorAll(".editing").forEach((el) => el.classList.remove("editing"))
     if (state?.statement === "UPDATE") {
@@ -65,4 +67,4 @@ export const Editor = (props: { tableName?: string, onWrite: () => void, sql: SQ
 
 export type DispatchBuilder<T> = (setState: (newState: T) => void, sql: SQLite3Client) => void
 export type TitleComponent<T> = (props: { state: T, setState: (newState: T) => void }) => JSXInternal.Element
-export type EditorComponent<T> = (props: { state: T, setState: (newState: T) => void, commit: (query: string, params: DataTypes[]) => void }) => JSXInternal.Element
+export type EditorComponent<T> = (props: { state: T, setState: (newState: T) => void, commit: (query: string, params: DataTypes[], opts: OnWriteOptions) => void }) => JSXInternal.Element

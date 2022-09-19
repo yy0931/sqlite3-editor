@@ -27,6 +27,7 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
         if (!ref1.current || !ref2.current) { return }
         ref1.current.style.width = ref2.current.offsetWidth + "px"
     })
+    if (props.options[props.value] === undefined) { console.log(props.options, props.value) }
     return <>
         <select autocomplete="off" value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style }} className={props.className} ref={ref1} onChange={(ev) => props.onChange(ev.currentTarget.value as T)} tabIndex={props.tabIndex}>{
             (Object.keys(props.options) as T[]).map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].title}>{props.options[value].text ?? value}</option>)
