@@ -54,7 +54,7 @@ body {
     padding-right: 10px;
     padding-left: 10px;
 }
-#table td:hover {
+#table td.clickable:hover {
     background-color: rgba(160, 255, 255, 0.371);
     cursor: pointer;
 }
