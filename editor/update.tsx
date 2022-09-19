@@ -58,7 +58,7 @@ export const Editor: EditorComponent<State> = (props) => {
             const columns = props.state.constraintChoices[props.state.selectedConstraint]!
             props.commit(`UPDATE ${escapeSQLIdentifier(props.state.tableName)} SET ${escapeSQLIdentifier(props.state.column)} = ? ` + columns.map((column) => `WHERE ${column} = ?`).join(" "), [parseTextareaValue(ev.currentTarget.value, props.state.type), ...columns.map((column) => props.state.record[column] as DataTypes)])
             createTable.open()
-        }}></textarea>
+        }}></textarea><br />
         AS
         <DataTypeInput value={props.state.type} onChange={(value) => { props.setState({ ...props.state, type: value }) }} />
     </pre>
