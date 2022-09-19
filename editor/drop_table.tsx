@@ -19,4 +19,4 @@ export const Title: TitleComponent<State> = (props) =>
     <> {escapeSQLIdentifier(props.state.tableName)}</>
 
 export const Editor: EditorComponent<State> = (props) =>
-    <pre style={{ paddingTop: "4px" }}><Commit onClick={() => props.commit(`DROP TABLE ${escapeSQLIdentifier(props.state.tableName)}`, [])} /></pre>
+    <pre style={{ paddingTop: "4px" }}><Commit onClick={() => props.commit(`DROP TABLE ${escapeSQLIdentifier(props.state.tableName)}`, [], { refreshTableList: true })} /></pre>
