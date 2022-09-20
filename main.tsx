@@ -2,6 +2,7 @@ import { render, } from "preact"
 import * as editor from "./editor"
 import * as update from "./editor/update"
 import * as insert from "./editor/insert"
+import * as delete_ from "./editor/delete_"
 import deepEqual from "deep-equal"
 import { useState, useEffect, useMemo, useReducer, useRef, Ref } from "preact/hooks"
 import { Select } from "./editor/components"
@@ -30,7 +31,7 @@ export const type2color = (type: string) => {
     }
 }
 
-const renderTable = async (tableName: string | null, tableInfo: TableInfo | null, records: Record<string, DataTypes>[], sql: SQLite3Client) => {
+const renderTable = async (tableName: string | null, tableInfo: TableInfo | null, records: Record<string, DataTypes>[], sql: SQLite3Client, rowStart: number) => {
     document.body.classList.add("rendering")
     try {
         const autoIncrement = tableName === null ? false : await sql.hasTableAutoincrement(tableName)
@@ -45,6 +46,10 @@ const renderTable = async (tableName: string | null, tableInfo: TableInfo | null
             const thead = document.createElement("thead")
             const tr = document.createElement("tr")
             thead.append(tr)
+            {
+                const th = document.createElement("th")
+                tr.append(th)
+            }
             for (const { name, notnull, pk, type } of tableInfo) {
                 const th = document.createElement("th")
                 const code = document.createElement("code")
@@ -62,9 +67,20 @@ const renderTable = async (tableName: string | null, tableInfo: TableInfo | null
         // tbody
         {
             const tbody = document.createElement("tbody")
-            for (const record of records) {
+            for (const [i, record] of records.entries()) {
                 const tr = document.createElement("tr")
                 tbody.append(tr)
+                {
+                    const td = document.createElement("td")
+                    td.innerText = `${rowStart + i + 1}`
+                    tr.append(td)
+                    if (tableName !== null) {
+                        td.classList.add("clickable")
+                        td.addEventListener("click", () => {
+                            delete_.open(tableName, record, tr).catch(console.error)
+                        })
+                    }
+                }
                 for (const { name } of tableInfo) {
                     const value = record[name]
                     if (value === undefined) { throw new Error() }
@@ -138,9 +154,9 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
             const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count
             if (typeof newRecordCount !== "number") { throw new Error(newRecordCount + "") }
             setRecordCount(newRecordCount)
-            await renderTable(viewerTableName, await props.sql.getTableInfo(viewerTableName), records, props.sql)
+            await renderTable(viewerTableName, await props.sql.getTableInfo(viewerTableName), records, props.sql, (page - 1) * pageSize)
         } else {
-            await renderTable(null, null, await props.sql.query(viewerStatement, [], "r"), props.sql)
+            await renderTable(null, null, await props.sql.query(viewerStatement, [], "r"), props.sql, 1)
         }
     }
 
@@ -158,7 +174,7 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
                     {" "}
                     <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
                     {" "}
-                    <input value={viewerConstraints} onChange={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /><br /></>}
+                    <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /><br /></>}
             </pre>
         </h2>}
         {useMemo(() => <div class="scroll">

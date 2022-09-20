@@ -41,8 +41,8 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
 }
 
 export const Title: TitleComponent<State> = (props) =>
-    <> {escapeSQLIdentifier(props.state.tableName)} SET {escapeSQLIdentifier(props.state.column)} = ? <select value={props.state.selectedConstraint} onChange={(ev) => { props.setState({ ...props.state, selectedConstraint: +ev.currentTarget.value }) }}>{
-        props.state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `WHERE ${column} = ${unsafeEscapeValue(props.state.record[column])}`).join(" ")}</option>)
+    <> {escapeSQLIdentifier(props.state.tableName)} SET {escapeSQLIdentifier(props.state.column)} = ? WHERE <select value={props.state.selectedConstraint} onChange={(ev) => { props.setState({ ...props.state, selectedConstraint: +ev.currentTarget.value }) }}>{
+        props.state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(props.state.record[column])}`).join(" AND ")}</option>)
     }</select></>
 
 export const Editor: EditorComponent<State> = (props) => {
@@ -56,7 +56,7 @@ export const Editor: EditorComponent<State> = (props) => {
             // <textarea> replaces \r\n with \n
             if (props.state.textareaValue.replaceAll(/\r/g, "") === ev.currentTarget.value.replaceAll(/\r/g, "")) { return }
             const columns = props.state.constraintChoices[props.state.selectedConstraint]!
-            props.commit(`UPDATE ${escapeSQLIdentifier(props.state.tableName)} SET ${escapeSQLIdentifier(props.state.column)} = ? ` + columns.map((column) => `WHERE ${column} = ?`).join(" "), [parseTextareaValue(ev.currentTarget.value, props.state.type), ...columns.map((column) => props.state.record[column] as DataTypes)], {})
+            props.commit(`UPDATE ${escapeSQLIdentifier(props.state.tableName)} SET ${escapeSQLIdentifier(props.state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(ev.currentTarget.value, props.state.type), ...columns.map((column) => props.state.record[column] as DataTypes)], {})
             createTable.open()
         }}></textarea><br />
         AS
