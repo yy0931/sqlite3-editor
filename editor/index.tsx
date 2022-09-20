@@ -32,45 +32,30 @@ export const Editor = (props: { tableName?: string, onWrite: (opts: OnWriteOptio
 
     for (const { buildDispatch } of editors) { buildDispatch(setState, props.sql) }
 
-    return <>
-        <h2>
-            <pre>
-                <Select value={state.statement} style={{ paddingLeft: "15px", paddingRight: "15px" }} className="primary" onChange={async (value) => {
-                    try {
-                        editors.find(({ statement }) => statement === value)?.open(props.tableName)
-                    } catch (err) {
-                        console.error(err)
-                    }
-                }} options={{
-                    INSERT: {},
-                    "CREATE TABLE": {},
-                    "DROP TABLE": {},
-                    "ALTER TABLE": {},
-                    UPDATE: { disabled: true, title: "Click a cell" },
-                    DELETE: { disabled: true, title: "Click a row number" }
-                }} />
-                <span>{(() => {
-                    const editor = editors.find(({ statement }) => statement === state.statement)
-                    if (!editor) { throw new Error() }
-                    return <editor.Title
-                        // @ts-ignore
-                        state={state}
-                        setState={setState} />
-                })()}</span>
-            </pre>
-        </h2>
-        {(() => {
-            const editor = editors.find(({ statement }) => statement === state.statement)
-            if (!editor) { throw new Error() }
-            return <editor.Editor
-                // @ts-ignore
-                state={state}
-                setState={setState}
-                commit={commit} />
-        })()}
-    </>
+    const statementSelect = <Select value={state.statement} style={{ paddingLeft: "15px", paddingRight: "15px" }} className="primary" onChange={async (value) => {
+        try {
+            editors.find(({ statement }) => statement === value)?.open(props.tableName)
+        } catch (err) {
+            console.error(err)
+        }
+    }} options={{
+        INSERT: {},
+        "CREATE TABLE": {},
+        "DROP TABLE": {},
+        "ALTER TABLE": {},
+        UPDATE: { disabled: true, title: "Click a cell" },
+        DELETE: { disabled: true, title: "Click a row number" }
+    }} />
+
+    const editor = editors.find(({ statement }) => statement === state.statement)
+    if (!editor) { throw new Error() }
+    return <editor.Editor
+        statementSelect={statementSelect}
+        // @ts-ignore
+        state={state}
+        setState={setState}
+        commit={commit} />
 }
 
 export type DispatchBuilder<T> = (setState: (newState: T) => void, sql: SQLite3Client) => void
-export type TitleComponent<T> = (props: { state: T, setState: (newState: T) => void }) => JSXInternal.Element
-export type EditorComponent<T> = (props: { state: T, setState: (newState: T) => void, commit: (query: string, params: DataTypes[], opts: OnWriteOptions) => void }) => JSXInternal.Element
+export type EditorComponent<T> = (props: { statementSelect: JSXInternal.Element, state: T, setState: (newState: T) => void, commit: (query: string, params: DataTypes[], opts: OnWriteOptions) => void }) => JSXInternal.Element
