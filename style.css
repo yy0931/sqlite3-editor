@@ -21,7 +21,6 @@ body {
     border: 1px solid rgba(0, 0, 0, 0.3);
 }
 #table {
-    table-layout: fixed;
     width: 100%;
     position: relative;
     border-collapse: collapse;
@@ -38,6 +37,7 @@ body {
     top: 0;
     background-color: var(--accent-color);
     color: white;
+    outline: rgb(181, 181, 181) 1px solid;
 }
 #table th {
     font-weight: normal;
@@ -54,12 +54,26 @@ body {
     padding-right: 10px;
     padding-left: 10px;
 }
+#table td:nth-child(1) {
+    max-width: 100%;
+    white-space: nowrap;
+    padding-left: 0;
+    padding-right: 5px;
+    text-align: right;
+    color: white;
+    background-color: var(--accent-color);
+}
+#table td:nth-child(1).clickable:hover {
+    background-color: var(--accent-color-hover);
+    cursor: pointer;
+}
 #table td.clickable:hover {
     background-color: rgba(160, 255, 255, 0.371);
     cursor: pointer;
 }
-#table td.editing {
+#table td.editing, #table tr.editing {
     background-color: rgba(160, 255, 255, 0.631);
+    outline: 1px solid rgb(142, 197, 226);
 }
 #table th pre {
     font-size: 125%;

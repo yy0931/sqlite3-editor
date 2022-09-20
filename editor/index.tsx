@@ -8,10 +8,11 @@ import * as insert from "./insert"
 import * as createTable from "./create_table"
 import * as dropTable from "./drop_table"
 import * as update from "./update"
+import * as delete_ from "./delete_"
 import { Select } from "./components"
 import SQLite3Client, { DataTypes } from "../sql"
 
-const editors = [insert, createTable, dropTable, update]
+const editors = [insert, createTable, dropTable, update, delete_]
 
 export type State = (typeof editors[number])["state"]
 
@@ -24,6 +25,8 @@ export const Editor = (props: { tableName?: string, onWrite: (opts: OnWriteOptio
     document.querySelectorAll(".editing").forEach((el) => el.classList.remove("editing"))
     if (state?.statement === "UPDATE") {
         state.td.classList.add("editing")
+    } else if (state.statement === "DELETE") {
+        state.tr.classList.add("editing")
     }
 
     for (const { buildDispatch } of editors) { buildDispatch(setState, props.sql) }
@@ -41,7 +44,8 @@ export const Editor = (props: { tableName?: string, onWrite: (opts: OnWriteOptio
                     INSERT: {},
                     "CREATE TABLE": {},
                     "DROP TABLE": {},
-                    UPDATE: { disabled: true, title: "Click a cell to change a cell value" },
+                    UPDATE: { disabled: true, title: "Click a cell" },
+                    DELETE: { disabled: true, title: "Click a row number" }
                 }} />
                 <span id="editorTitle">{(() => {
                     const editor = editors.find(({ statement }) => statement === state.statement)
