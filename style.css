@@ -44,7 +44,7 @@ body {
     padding-top: 3px;
     padding-bottom: 3px;
 }
-#table th:hover {
+#table th.clickable:hover {
     background-color: var(--accent-color-hover);
     cursor: pointer;
 }

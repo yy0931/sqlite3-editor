@@ -60,6 +60,12 @@ const renderTable = async (tableName: string | null, tableInfo: TableInfo | null
                 code.append(typeText)
                 th.append(code)
                 tr.append(th)
+                if (tableName !== null) {
+                    th.classList.add("clickable")
+                    th.addEventListener("click", () => {
+                        // TODO:
+                    })
+                }
             }
             document.querySelector<HTMLTableElement>("#table")!.append(thead)
         }
