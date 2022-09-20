@@ -1,7 +1,7 @@
 import { Commit, DataTypeInput, EditorDataType, parseTextareaValue } from "./components"
 import { escapeSQLIdentifier, type2color } from "../main"
 import produce from "immer"
-import type { DispatchBuilder, EditorComponent, TitleComponent } from "."
+import type { DispatchBuilder, EditorComponent } from "."
 import { TableInfo } from "../sql"
 
 export const statement = "INSERT"
@@ -34,14 +34,12 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
     })
 }
 
-export const Title: TitleComponent<State> = (props) => {
-    const query = `INTO ${escapeSQLIdentifier(props.state.tableName)} (${props.state.tableInfo.map(({ name }) => name).map(escapeSQLIdentifier).join(", ")}) VALUES (${props.state.tableInfo.map(() => "?").join(", ")})`
-    return <> {query}</>
-}
-
 export const Editor: EditorComponent<State> = (props) => {
     const query = `INTO ${escapeSQLIdentifier(props.state.tableName)} (${props.state.tableInfo.map(({ name }) => name).map(escapeSQLIdentifier).join(", ")}) VALUES (${props.state.tableInfo.map(() => "?").join(", ")})`
-    return <pre style={{ paddingTop: "4px" }}>
+    return <pre>
+        <h2>
+            {props.statementSelect}{" "}{query}
+        </h2>
         {props.state.tableInfo.map(({ name }, i) => {
             return <>
                 <div style={{ marginTop: "10px", marginBottom: "2px" }}>{name}</div><textarea autocomplete="off" style={{ width: "100%", height: "25px", resize: "vertical", display: "block", color: type2color(props.state.dataTypes[i]!) }} value={props.state.values[i]!} onChange={(ev) => { props.setState(produce(props.state, (d) => { d.values[i] = ev.currentTarget.value })) }} tabIndex={0}></textarea>

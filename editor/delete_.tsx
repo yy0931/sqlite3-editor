@@ -1,5 +1,5 @@
 import { escapeSQLIdentifier, unsafeEscapeValue } from "../main"
-import { DispatchBuilder, EditorComponent, TitleComponent } from "."
+import { DispatchBuilder, EditorComponent } from "."
 import { DataTypes } from "../sql"
 import { Commit } from "./components"
 
@@ -31,14 +31,14 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
     })
 }
 
-export const Title: TitleComponent<State> = (props) =>
-    <> FROM {escapeSQLIdentifier(props.state.tableName)} WHERE <select value={props.state.selectedConstraint} onChange={(ev) => { props.setState({ ...props.state, selectedConstraint: +ev.currentTarget.value }) }}>{
-        props.state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(props.state.record[column])}`).join(" AND ")}</option>)
-    }</select></>
-
 export const Editor: EditorComponent<State> = (props) => {
     const columns = props.state.constraintChoices[props.state.selectedConstraint]!
     return <pre>
+        <h2>
+            {props.statementSelect}{" "}FROM {escapeSQLIdentifier(props.state.tableName)} WHERE <select value={props.state.selectedConstraint} onChange={(ev) => { props.setState({ ...props.state, selectedConstraint: +ev.currentTarget.value }) }}>{
+                props.state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(props.state.record[column])}`).join(" AND ")}</option>)
+            }</select>
+        </h2>
         <Commit onClick={() => props.commit(`DELETE FROM ${escapeSQLIdentifier(props.state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => props.state.record[column] as DataTypes)], {})} />
     </pre>
 }

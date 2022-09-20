@@ -195,11 +195,17 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
             <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => setErrorMessage("")} />
         </p>}
         <editor.Editor tableName={viewerTableName} onWrite={(opts) => {
-            if (!opts.refreshTableList || opts.selectTable) {
+            const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
+            if (!skipTableRefresh) {
                 queryAndRenderTable().catch(console.error)
             }
             props.sql.getTableList().then((newTableList) => {
-                if (deepEqual(newTableList, tableList, { strict: true })) { return }
+                if (deepEqual(newTableList, tableList, { strict: true })) {
+                    if (skipTableRefresh) {
+                        queryAndRenderTable().catch(console.error)
+                    }
+                    return
+                }
                 const newViewerTableName = opts.selectTable ?? viewerTableName
                 if (newTableList.some((table) => table.name === newViewerTableName)) {
                     setViewerTableName(newViewerTableName)
