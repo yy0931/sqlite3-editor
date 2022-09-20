@@ -1,6 +1,7 @@
 import type { JSXInternal } from "preact/src/jsx"
 import { useRef, Ref, useLayoutEffect } from "preact/hooks"
 import { DataTypes } from "../sql"
+import { escapeSQLIdentifier } from "../main"
 
 export type EditorDataType = "string" | "number" | "null" | "blob"
 
@@ -45,3 +46,26 @@ export const Commit = (props: { onClick: () => void }) =>
 
 export const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: boolean, onChange: (value: boolean) => void, text: string }) =>
     <label style={{ marginRight: "8px", ...props.style }}><input type="checkbox" checked={props.checked} onChange={(ev) => props.onChange(ev.currentTarget.checked)}></input> {props.text}</label>
+
+export type ColumnDef = {
+    name: string
+    affinity: "TEXT" | "NUMERIC" | "INTEGER" | "REAL" | "BLOB" | "ANY"
+    primary: boolean
+    autoIncrement: boolean
+    unique: boolean
+    notNull: boolean
+}
+
+export const ColumnDefEditor = (props: { value: ColumnDef, onChange: (columnDef: ColumnDef) => void }) => {
+    return <>
+        <input placeholder="column-name" style={{ marginRight: "8px" }} value={props.value.name} onInput={(ev) => { props.onChange({ ...props.value, name: ev.currentTarget.value }) }}></input>
+        <Select style={{ marginRight: "8px" }} value={props.value.affinity} onChange={(value) => props.onChange({ ...props.value, affinity: value })} options={{ "TEXT": {}, "NUMERIC": {}, "INTEGER": {}, "REAL": {}, "BLOB": {}, "ANY": {} }} />
+        <Checkbox checked={props.value.primary} onChange={(checked) => props.onChange({ ...props.value, primary: checked })} text="PRIMARY KEY" />
+        <Checkbox checked={props.value.autoIncrement} onChange={(checked) => props.onChange({ ...props.value, autoIncrement: checked })} text="AUTOINCREMENT" />
+        <Checkbox checked={props.value.unique} onChange={(checked) => props.onChange({ ...props.value, unique: checked })} text="UNIQUE" />
+        <Checkbox checked={props.value.notNull} onChange={(checked) => props.onChange({ ...props.value, notNull: checked })} text="NOT NULL" />
+    </>
+}
+
+export const printColumnDef = (def: ColumnDef) =>
+    `${escapeSQLIdentifier(def.name)} ${def.affinity}${def.primary ? " PRIMARY KEY" : ""}${def.autoIncrement ? " AUTOINCREMENT" : ""}${def.unique ? " UNIQUE" : ""}${def.notNull ? " NOT NULL" : ""}`
