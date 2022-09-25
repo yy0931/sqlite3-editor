@@ -3,6 +3,7 @@ import * as editor from "./editor"
 import * as update from "./editor/update"
 import * as insert from "./editor/insert"
 import * as delete_ from "./editor/delete_"
+import * as alter_table from "./editor/alter_table"
 import deepEqual from "deep-equal"
 import { useState, useEffect, useMemo, useReducer, useRef, Ref } from "preact/hooks"
 import { Select } from "./editor/components"
@@ -63,7 +64,7 @@ const renderTable = async (tableName: string | null, tableInfo: TableInfo | null
                 if (tableName !== null) {
                     th.classList.add("clickable")
                     th.addEventListener("click", () => {
-                        // TODO:
+                        alter_table.open(tableName, name)
                     })
                 }
             }
