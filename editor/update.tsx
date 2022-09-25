@@ -23,6 +23,11 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
     if (tableName === undefined || column === undefined || record === undefined || td === undefined) { return }
     const value = record[column]
     const uniqueConstraints = await sql.listUniqueConstraints(tableName)
+    const constraintChoices = ("rowid" in record ? [["rowid"]] : [])
+        .concat(uniqueConstraints.sort((a, b) => +b.primary - +a.primary)
+            .map(({ columns }) => columns)
+            .filter((columns) => columns.every((column) => record[column] !== null)))
+    if (constraintChoices.length === 0) { return }
     setState({
         statement,
         tableName,
@@ -30,10 +35,7 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
         record,
         textareaValue: value instanceof Uint8Array ? blob2hex(value) : (value + ""),
         type: value === null ? "null" : value instanceof Uint8Array ? "blob" : typeof value === "number" ? "number" : "string",
-        constraintChoices: ("rowid" in record ? [["rowid"]] : [])
-            .concat(uniqueConstraints.sort((a, b) => +b.primary - +a.primary)
-                .map(({ columns }) => columns)
-                .filter((columns) => columns.every((column) => record[column] !== null))),
+        constraintChoices,
         td,
     })
 }

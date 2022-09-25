@@ -1,4 +1,4 @@
-import { useState, useCallback } from "preact/hooks"
+import { useState, useCallback, useEffect } from "preact/hooks"
 import * as immer from "immer"
 import type { JSXInternal } from "preact/src/jsx"
 
@@ -7,21 +7,43 @@ immer.enableMapSet()
 import * as insert from "./insert"
 import * as createTable from "./create_table"
 import * as dropTable from "./drop_table"
+import * as dropView from "./drop_view"
 import * as update from "./update"
 import * as delete_ from "./delete_"
 import * as alterTable from "./alter_table"
+import * as custom from "./custom"
 import { Select } from "./components"
-import SQLite3Client, { DataTypes } from "../sql"
+import SQLite3Client, { DataTypes, TableListItem } from "../sql"
 
-const editors = [insert, createTable, dropTable, update, delete_, alterTable]
+const editors = [insert, createTable, dropTable, dropView, update, delete_, alterTable, custom]
 
 export type State = (typeof editors[number])["state"]
 
 type OnWriteOptions = { refreshTableList?: true, selectTable?: string }
 
-export const Editor = (props: { tableName?: string, onWrite: (opts: OnWriteOptions) => void, sql: SQLite3Client }) => {
+export const Editor = (props: { tableName?: string, tableList: TableListItem[], onWrite: (opts: OnWriteOptions) => void, sql: SQLite3Client }) => {
     const [state, setState] = useState<State>({ statement: "CREATE TABLE", strict: true, tableConstraints: "", tableName: "", withoutRowId: false })
     const commit = useCallback((query: string, params: DataTypes[], opts: OnWriteOptions) => props.sql.query(query, params, "w+").then(() => props.onWrite(opts)).catch(console.error), [props.onWrite])
+
+    useEffect(() => {
+        if (props.tableName === undefined) {
+            createTable.open()
+            return
+        }
+        switch (state.statement) {
+            case "INSERT": case "DROP TABLE": case "DROP VIEW": case "ALTER TABLE": case "DELETE":
+                editors.find(({ statement }) => statement === state.statement)?.open(props.tableName)
+                break
+            case "UPDATE":
+                insert.open(props.tableName)
+                break
+            case "CREATE TABLE": case "custom":
+                break
+            default: {
+                const _: never = state
+            }
+        }
+    }, [props.tableName])
 
     document.querySelectorAll(".editing").forEach((el) => el.classList.remove("editing"))
     if (state?.statement === "UPDATE") {
@@ -32,6 +54,8 @@ export const Editor = (props: { tableName?: string, onWrite: (opts: OnWriteOptio
 
     for (const { buildDispatch } of editors) { buildDispatch(setState, props.sql) }
 
+    const { type } = props.tableList.find(({ name }) => name === props.tableName) ?? {}
+
     const statementSelect = <Select value={state.statement} style={{ paddingLeft: "15px", paddingRight: "15px" }} className="primary" onChange={async (value) => {
         try {
             editors.find(({ statement }) => statement === value)?.open(props.tableName)
@@ -41,10 +65,12 @@ export const Editor = (props: { tableName?: string, onWrite: (opts: OnWriteOptio
     }} options={{
         INSERT: {},
         "CREATE TABLE": {},
-        "DROP TABLE": {},
-        "ALTER TABLE": {},
+        "DROP TABLE": { disabled: type !== "table" },
+        "DROP VIEW": { disabled: type !== "view" },
+        "ALTER TABLE": { disabled: type !== "table" },
         UPDATE: { disabled: true, title: "Click a cell" },
-        DELETE: { disabled: true, title: "Click a row number" }
+        DELETE: { disabled: true, title: "Click a row number" },
+        custom: {},
     }} />
 
     const editor = editors.find(({ statement }) => statement === state.statement)

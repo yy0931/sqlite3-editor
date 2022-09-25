@@ -146,18 +146,14 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
 
     props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
 
-    useEffect(() => {
-        if (viewerTableName === undefined) { return }
-        insert.open(viewerTableName)  // TODO: Change to insert or create table only if the current statement is UPDATE
-    }, [viewerTableName])
-
     const queryAndRenderTable = async () => {
         if (viewerTableName === undefined) { return }
-        const withoutRowId = tableList.find(({ name }) => name === viewerTableName)?.wr
-        if (withoutRowId === undefined) { return }
+        const { wr, type } = tableList.find(({ name }) => name === viewerTableName) ?? {}
+        if (wr === undefined || type === undefined) { return }
+
         // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
         if (viewerStatement === "SELECT") {
-            const records = await props.sql.query(`SELECT ${withoutRowId ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize], "r")
+            const records = await props.sql.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize], "r")
             const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count
             if (typeof newRecordCount !== "number") { throw new Error(newRecordCount + "") }
             setRecordCount(newRecordCount)
@@ -195,7 +191,7 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
             <pre style={{ whiteSpace: "pre-wrap" }}>{errorMessage}</pre>
             <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => setErrorMessage("")} />
         </p>}
-        <editor.Editor tableName={viewerTableName} onWrite={(opts) => {
+        <editor.Editor tableName={viewerTableName} tableList={tableList} onWrite={(opts) => {
             const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
             if (!skipTableRefresh) {
                 queryAndRenderTable().catch(console.error)

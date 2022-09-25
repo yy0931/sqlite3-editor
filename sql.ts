@@ -4,7 +4,7 @@ import { escapeSQLIdentifier } from "./main"
 export type TableInfo = { cid: number, dflt_value: number, name: string, notnull: number, type: string, pk: number }[]
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
 export type DataTypes = string | number | Uint8Array | null
-export type TableListItem = { schema: string, name: string, type: string, ncol: number, wr: number, strict: number }
+export type TableListItem = { schema: string, name: string, type: "table" | "view" | "shadow" | "virtual", ncol: number, wr: number, strict: number }
 
 const querying = new Set()
 export default class SQLite3Client {
