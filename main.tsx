@@ -1,7 +1,6 @@
 import { render, } from "preact"
 import * as editor from "./editor"
 import * as update from "./editor/update"
-import * as insert from "./editor/insert"
 import * as delete_ from "./editor/delete_"
 import * as alter_table from "./editor/alter_table"
 import deepEqual from "deep-equal"
@@ -129,7 +128,7 @@ const ProgressBar = () => {
         loop()
         return () => { canceled = true }
     }, [])
-    return <div className="progressbar" ref={ref} style={{ display: "inline-block", userSelect: "none", pointerEvents: "none", position: "absolute", zIndex: 100, width: width + "px", height: "5px", top: 0, background: "var(--accent-color)" }}></div>
+    return <div className="progressbar" ref={ref} style={{ display: "inline-block", userSelect: "none", pointerEvents: "none", position: "absolute", zIndex: 100, width: width + "px", height: "5px", top: 0, background: "var(--button-primary-background)" }}></div>
 }
 
 const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
@@ -172,23 +171,22 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
     return <>
         <ProgressBar />
         {viewerTableName !== undefined && <h2>
-            <pre><Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, "PRAGMA table_list": {} }} className="primary" />
-                {viewerStatement === "SELECT" && <> * FROM
-                    {" "}
-                    <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
-                    {" "}
-                    <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /><br /></>}
-            </pre>
+            <Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, "PRAGMA table_list": {} }} className="primary" />
+            {viewerStatement === "SELECT" && <> * FROM
+                {" "}
+                <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
+                {" "}
+                <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /><br /></>}
         </h2>}
-        {useMemo(() => <div class="scroll">
+        {useMemo(() => <div style={{ marginLeft: "10px", marginRight: "10px", padding: 0, background: "white", height: "50vh", overflowY: "scroll" }}>
             <table id="table"></table>
         </div>, [])}
-        <div style={{ marginBottom: "30px", paddingTop: "3px", paddingBottom: "3px" }} className="primary">
+        <div style={{ marginBottom: "30px", paddingTop: "3px" }} className="primary">
             <span><span style={{ cursor: "pointer", paddingLeft: "8px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page - 1)}>‹</span><input value={page} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onChange={(ev) => setPage(+ev.currentTarget.value)} /> / {pageMax} <span style={{ cursor: "pointer", paddingLeft: "4px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page + 1)}>›</span></span>
             <span style={{ marginLeft: "40px" }}><input value={pageSize} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onBlur={(ev) => setPageSize(+ev.currentTarget.value)} /> records</span>
         </div>
         {errorMessage && <p style={{ background: "rgb(14, 72, 117)", color: "white", padding: "10px" }}>
-            <pre style={{ whiteSpace: "pre-wrap" }}>{errorMessage}</pre>
+            <pre>{errorMessage}</pre>
             <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => setErrorMessage("")} />
         </p>}
         <editor.Editor tableName={viewerTableName} tableList={tableList} onWrite={(opts) => {

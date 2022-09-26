@@ -1,0 +1,236 @@
+:root {
+    /* https://github.com/microsoft/vscode-webview-ui-toolkit/blob/864372518fbb538c281ea5a503e08d3e4b8d0c2e/src/design-tokens.ts */
+    --button-primary-background: var(--vscode-button-background, #0e639c);
+    --button-primary-foreground: var(--vscode-button-foreground, #ffffff);
+    --button-primary-hover-background: var(--vscode-button-hoverBackground, #1177bb);
+
+    --dropdown-background: var(--vscode-dropdown-background, #767676);
+    --dropdown-foreground: var(--vscode-dropdown-foreground, #f0f0f0);
+
+    --input-background: var(--vscode-input-background, #ffffff);
+    --input-foreground: var(--vscode-input-foreground, #3a3a3a);
+    --input-placeholder-foreground: var(--vscode-input-placeholderForeground, #7a7a7a);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    overflow-x: hidden;
+    background: #f0f0f0;
+    font-family: monospace;
+}
+
+code {
+    word-break: break-word;
+}
+
+pre {
+    white-space: pre-wrap;
+}
+
+h2 {
+    font-weight: normal;
+    margin-bottom: 5px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    font-size: inherit;
+    border-top: 2px solid rgba(128, 128, 128, 0.147);
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+h2+div {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+ul {
+    list-style: none;
+}
+
+li+li {
+    margin-top: 5px;
+}
+
+select {
+    font-size: inherit;
+    border: 0;
+    outline: 0;
+    font-family: inherit;
+    background-color: var(--dropdown-background);
+    color: var(--dropdown-foreground);
+    padding-top: 0.15em;
+    padding-bottom: 0.15em;
+    cursor: pointer;
+
+    &.primary {
+        background-color: var(--button-primary-background);
+        color: var(--button-primary-foreground);
+    }
+
+    &.primary:hover {
+        background-color: var(--button-primary-hover-background);
+    }
+
+    &:focus {
+        outline: 2px solid rgb(142, 197, 226);
+    }
+}
+
+input[type=button],
+button {
+    border: 0;
+    outline: 0;
+    padding-left: 1em;
+    padding-right: 1em;
+    background-color: var(--button-primary-background);
+    color: var(--button-primary-foreground);
+    padding-top: 0.2em;
+    padding-bottom: 0.2em;
+    font-family: inherit;
+
+    &:hover {
+        background-color: var(--button-primary-hover-background);
+    }
+
+    &:focus {
+        outline: 2px solid rgb(142, 197, 226);
+    }
+}
+
+input:not([type]),
+input[type=text] {
+    border: 0;
+    outline: 0;
+    background-color: var(--input-background);
+    color: var(--input-foreground);
+    padding-top: 0.15em;
+    padding-bottom: 0.15em;
+    font-family: inherit;
+    font-size: inherit;
+    padding-left: 0.5em;
+
+    &:focus {
+        outline: 2px solid rgb(142, 197, 226);
+    }
+}
+
+textarea {
+    border: 0;
+    outline: 0;
+    background-color: var(--input-background);
+    color: var(--input-foreground);
+    padding: 0.5em;
+    width: 100%;
+    resize: vertical;
+    display: block;
+    min-height: 2em;
+    max-height: 30em;
+
+    &:focus {
+        outline: 2px solid rgb(142, 197, 226);
+    }
+}
+
+::placeholder {
+    color: var(--input-placeholder-foreground);
+}
+
+.progressbar {
+    opacity: 0;
+    transition: opacity 0.5s
+        /* ease-in */
+        cubic-bezier(1.000, 0.060, 0.955, -0.120);
+    ;
+
+    .querying &,
+    .rendering & {
+        opacity: 1;
+    }
+}
+
+.type {
+    font-style: italic;
+    opacity: 0.7;
+}
+
+#table {
+    position: relative;
+    border-collapse: collapse;
+    table-layout: fixed;
+
+    thead {
+        position: sticky;
+        top: 0;
+        background-color: var(--button-primary-background);
+        color: white;
+        outline: rgb(181, 181, 181) 1px solid;
+    }
+
+    th {
+        font-weight: normal;
+        padding-top: 3px;
+        padding-bottom: 3px;
+        padding-left: 1em;
+        padding-right: 1em;
+
+        code {
+            word-break: break-word;
+            min-width: 10em;
+            display: inline-block;
+        }
+    }
+
+    th.clickable:hover {
+        background-color: var(--button-primary-hover-background);
+        cursor: pointer;
+    }
+
+    td {
+        overflow: hidden;
+        border-right: 1px solid rgba(0, 0, 0, 0.3);
+        padding-right: 10px;
+        padding-left: 10px;
+
+        pre {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 50em;
+        }
+    }
+
+    td:nth-child(1) {
+        white-space: nowrap;
+        padding-left: 15px;
+        padding-right: 5px;
+        text-align: right;
+        color: white;
+        background-color: var(--button-primary-background);
+    }
+
+    td:nth-child(1).clickable:hover {
+        background-color: var(--button-primary-hover-background);
+        cursor: pointer;
+    }
+
+    td.clickable:hover:not(.editing):not(:nth-child(1)) {
+        background-color: rgba(207, 255, 255, 0.371);
+        cursor: pointer;
+    }
+
+    td.editing,
+    tr.editing {
+        background-color: rgba(66, 159, 202, 0.384);
+        outline: 1px solid rgb(142, 197, 226);
+        cursor: default;
+    }
+
+    th pre {
+        font-size: 125%;
+    }
+}

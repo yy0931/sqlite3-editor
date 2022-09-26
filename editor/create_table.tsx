@@ -24,30 +24,32 @@ const MultiColumnDefEditor = (props: { value: ColumnDef[], onChange: (value: Col
         renderedColumnDefs.push({ name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false })
     }
 
-    return <>{renderedColumnDefs.map((columnDef, i) =>
-        <div style={{ marginBottom: "10px" }} key={i}>
-            <ColumnDefEditor value={columnDef} onChange={(value) => {
+    return <ul>{renderedColumnDefs.map((columnDef, i) =>
+        <li key={i}>
+            <ColumnDefEditor disabledExceptColumnName={columnDef.name === ""} value={columnDef} onChange={(value) => {
                 props.onChange(produce(renderedColumnDefs, (d) => {
                     d[i] = value
                     if (d.at(-1)?.name === "") { d.pop() }
                 }))
             }} />
-        </div>
-    )}</>
+        </li>
+    )}</ul>
 }
 
 export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = async () => { setState({ statement: statement, strict: true, tableConstraints: "", tableName: "", withoutRowId: false }) }
 
 export const Editor: EditorComponent<State> = (props) => {
     const [columnDefs, setColumnDefs] = useState<ColumnDef[]>([])
-    return <pre>
+    return <>
         <h2>
             {props.statementSelect}{" "}<input placeholder="table-name" value={props.state.tableName} onChange={(ev) => { props.setState({ ...props.state, tableName: ev.currentTarget.value }) }}></input>(...)
             <Checkbox checked={props.state.withoutRowId} onChange={(checked) => { props.setState({ ...props.state, withoutRowId: checked }) }} style={{ marginLeft: "8px" }} text="WITHOUT ROWID" />
             <Checkbox checked={props.state.strict} onChange={(checked) => { props.setState({ ...props.state, strict: checked }) }} text="STRICT" />
         </h2>
-        <MultiColumnDefEditor value={columnDefs} onChange={setColumnDefs} />
-        <textarea autocomplete="off" style={{ marginTop: "15px", width: "100%", height: "20vh", resize: "none" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={props.state.tableConstraints} onChange={(ev) => { props.setState({ ...props.state, tableConstraints: ev.currentTarget.value }) }}></textarea><br></br>
-        <Commit onClick={() => props.commit(`CREATE TABLE ${escapeSQLIdentifier(props.state.tableName)} (${columnDefs.map(printColumnDef).join(", ")}${props.state.tableConstraints.trim() !== "" ? (props.state.tableConstraints.trim().startsWith(",") ? props.state.tableConstraints : ", " + props.state.tableConstraints) : ""})${props.state.strict ? " STRICT" : ""}${props.state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: props.state.tableName })} />
-    </pre>
+        <div>
+            <MultiColumnDefEditor value={columnDefs} onChange={setColumnDefs} />
+            <textarea autocomplete="off" style={{ marginTop: "10px", height: "20vh" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={props.state.tableConstraints} onChange={(ev) => { props.setState({ ...props.state, tableConstraints: ev.currentTarget.value }) }}></textarea><br></br>
+            <Commit style={{ marginTop: "10px" }} onClick={() => props.commit(`CREATE TABLE ${escapeSQLIdentifier(props.state.tableName)} (${columnDefs.map(printColumnDef).join(", ")}${props.state.tableConstraints.trim() !== "" ? (props.state.tableConstraints.trim().startsWith(",") ? props.state.tableConstraints : ", " + props.state.tableConstraints) : ""})${props.state.strict ? " STRICT" : ""}${props.state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: props.state.tableName })} />
+        </div>
+    </>
 }
