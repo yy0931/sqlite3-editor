@@ -15,9 +15,11 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
 
 export const Editor: EditorComponent<State> = (props) => {
     const [query, setQuery] = useState("")
-    return <pre>
+    return <>
         <h2>{props.statementSelect}</h2>
-        <textarea autocomplete="off" style={{ marginTop: "15px", width: "100%", height: "20vh", resize: "none" }} placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={query} onChange={(ev) => { setQuery(ev.currentTarget.value) }}></textarea>
-        <Commit onClick={() => props.commit(query, [], { refreshTableList: true })} />
-    </pre>
+        <div>
+            <textarea autocomplete="off" style={{ marginTop: "15px", height: "20vh" }} placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={query} onChange={(ev) => { setQuery(ev.currentTarget.value) }}></textarea>
+            <Commit onClick={() => props.commit(query, [], { refreshTableList: true })} />
+        </div>
+    </>
 }

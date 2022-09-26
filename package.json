@@ -17,6 +17,7 @@
     "@types/deep-equal": "^1.0.1",
     "@types/express": "^4.17.14",
     "@types/sqlite3": "^3.1.8",
+    "sass": "^1.54.9",
     "ts-node": "^10.9.1",
     "vite": "^3.1.0"
   },

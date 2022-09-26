@@ -36,17 +36,26 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
 
 export const Editor: EditorComponent<State> = (props) => {
     const query = `INTO ${escapeSQLIdentifier(props.state.tableName)} (${props.state.tableInfo.map(({ name }) => name).map(escapeSQLIdentifier).join(", ")}) VALUES (${props.state.tableInfo.map(() => "?").join(", ")})`
-    return <pre>
+    return <>
         <h2>
             {props.statementSelect}{" "}{query}
         </h2>
-        {props.state.tableInfo.map(({ name }, i) => {
-            return <>
-                <div style={{ marginTop: "10px", marginBottom: "2px" }}>{name}</div><textarea autocomplete="off" style={{ width: "100%", height: "25px", resize: "vertical", display: "block", color: type2color(props.state.dataTypes[i]!) }} value={props.state.values[i]!} onChange={(ev) => { props.setState(produce(props.state, (d) => { d.values[i] = ev.currentTarget.value })) }} tabIndex={0}></textarea>
-                AS
-                <DataTypeInput value={props.state.dataTypes[i]!} onChange={(value) => { props.setState(produce(props.state, (d) => { d.dataTypes[i] = value })) }} />
-            </>
-        })}
-        <Commit onClick={() => props.commit(`INSERT ${query}`, props.state.values.map((value, i) => parseTextareaValue(value, props.state.dataTypes[i]!)), {})} />
-    </pre>
+        <div>
+            <ul>
+                {props.state.tableInfo.map(({ name }, i) => {
+                    return <li>
+                        <div style={{ marginRight: "1em" }}>{name}</div>
+                        <textarea
+                            autocomplete="off" rows={1} style={{ width: "100%", resize: "vertical", display: "block", color: type2color(props.state.dataTypes[i]!) }}
+                            value={props.state.dataTypes[i]! === "null" ? "null" : props.state.values[i]!}
+                            onChange={(ev) => { props.setState(produce(props.state, (d) => { d.values[i] = ev.currentTarget.value })) }}
+                            disabled={props.state.dataTypes[i]! === "null"}
+                            tabIndex={0}></textarea>
+                        {"AS "}<DataTypeInput value={props.state.dataTypes[i]!} onChange={(value) => { props.setState(produce(props.state, (d) => { d.dataTypes[i] = value })) }} />
+                    </li>
+                })}
+            </ul>
+            <Commit onClick={() => props.commit(`INSERT ${query}`, props.state.values.map((value, i) => parseTextareaValue(value, props.state.dataTypes[i]!)), {})} />
+        </div>
+    </>
 }

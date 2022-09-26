@@ -16,9 +16,11 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
 }
 
 export const Editor: EditorComponent<State> = (props) =>
-    <pre>
+    <>
         <h2>
             {props.statementSelect}{" "}{escapeSQLIdentifier(props.state.tableName)}
         </h2>
-        <Commit onClick={() => props.commit(`DROP TABLE ${escapeSQLIdentifier(props.state.tableName)}`, [], { refreshTableList: true })} />
-    </pre>
+        <div>
+            <Commit onClick={() => props.commit(`DROP TABLE ${escapeSQLIdentifier(props.state.tableName)}`, [], { refreshTableList: true })} />
+        </div>
+    </>
