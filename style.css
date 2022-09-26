@@ -106,6 +106,9 @@ input:not([type]), input[type=text] {
     border: 0;
     border-bottom: 1px solid rgba(0, 0, 0, 0.3);
 }
+input:not([type]):focus, input[type=text]:focus, select:focus {
+    border-bottom: 1px solid var(--accent-color);
+}
 input[type=checkbox] {
     vertical-align: baseline;
 }
