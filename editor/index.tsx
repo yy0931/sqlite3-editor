@@ -63,13 +63,13 @@ export const Editor = (props: { tableName?: string, tableList: TableListItem[], 
             console.error(err)
         }
     }} options={{
-        INSERT: {},
+        INSERT: { disabled: type !== "table" && type !== "virtual", disabledReason: "Select a table or a virtual table." },
         "CREATE TABLE": {},
-        "DROP TABLE": { disabled: type !== "table" },
-        "DROP VIEW": { disabled: type !== "view" },
-        "ALTER TABLE": { disabled: type !== "table" && type !== "virtual" },
-        UPDATE: { disabled: true, title: "Click a cell" },
-        DELETE: { disabled: true, title: "Click a row number" },
+        "DROP TABLE": { disabled: type !== "table", disabledReason: "Select a table." },
+        "DROP VIEW": { disabled: type !== "view", disabledReason: "Select a view." },
+        "ALTER TABLE": { disabled: type !== "table" && type !== "virtual", disabledReason: "Select a table or a virtual table." },
+        UPDATE: { disabled: true, disabledReason: "Click a cell." },
+        DELETE: { disabled: true, disabledReason: "Click a row number." },
         custom: {},
     }} />
 

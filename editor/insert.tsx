@@ -55,7 +55,7 @@ export const Editor: EditorComponent<State> = (props) => {
                     </li>
                 })}
             </ul>
-            <Commit onClick={() => props.commit(`INSERT ${query}`, props.state.values.map((value, i) => parseTextareaValue(value, props.state.dataTypes[i]!)), {})} />
+            <Commit style={{ marginTop: "10px" }} onClick={() => props.commit(`INSERT ${query}`, props.state.values.map((value, i) => parseTextareaValue(value, props.state.dataTypes[i]!)), {})} />
         </div>
     </>
 }

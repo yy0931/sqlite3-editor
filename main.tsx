@@ -31,84 +31,46 @@ export const type2color = (type: string) => {
     }
 }
 
-const renderTable = async (tableName: string | null, tableInfo: TableInfo | null, records: Record<string, DataTypes>[], sql: SQLite3Client, rowStart: number) => {
-    document.body.classList.add("rendering")
-    try {
-        const autoIncrement = tableName === null ? false : await sql.hasTableAutoincrement(tableName)
-        if (tableInfo === null) {
-            tableInfo = Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0, pk: 0, type: "", cid: 0, dflt_value: 0 }))
-        }
+type TableProps = { tableName: string | null, tableInfo: TableInfo | null, records: Record<string, DataTypes>[], rowStart: number, autoIncrement: boolean }
 
-        document.querySelector<HTMLTableElement>("#table")!.innerHTML = ""
-
-        // thead
-        {
-            const thead = document.createElement("thead")
-            const tr = document.createElement("tr")
-            thead.append(tr)
-            {
-                const th = document.createElement("th")
-                tr.append(th)
-            }
-            for (const { name, notnull, pk, type } of tableInfo) {
-                const th = document.createElement("th")
-                const code = document.createElement("code")
-                code.innerText = name
-                const typeText = document.createElement("span")
-                typeText.classList.add("type")
-                typeText.innerText = (type ? (" " + type) : "") + (pk ? (autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")
-                code.append(typeText)
-                th.append(code)
-                tr.append(th)
-                if (tableName !== null) {
-                    th.classList.add("clickable")
-                    th.addEventListener("click", () => {
-                        alter_table.open(tableName, name)
-                    })
-                }
-            }
-            document.querySelector<HTMLTableElement>("#table")!.append(thead)
-        }
-
-        // tbody
-        {
-            const tbody = document.createElement("tbody")
-            for (const [i, record] of records.entries()) {
-                const tr = document.createElement("tr")
-                tbody.append(tr)
-                {
-                    const td = document.createElement("td")
-                    td.innerText = `${rowStart + i + 1}`
-                    tr.append(td)
-                    if (tableName !== null) {
-                        td.classList.add("clickable")
-                        td.addEventListener("click", () => {
-                            delete_.open(tableName, record, tr).catch(console.error)
-                        })
-                    }
-                }
-                for (const { name } of tableInfo) {
-                    const value = record[name]
-                    if (value === undefined) { throw new Error() }
-                    const td = document.createElement("td")
-                    const pre = document.createElement("pre")
-                    pre.style.color = type2color(typeof value)
-                    pre.innerText = value instanceof Uint8Array ? `x'${blob2hex(value)}'` : JSON.stringify(value)
-                    td.append(pre)
-                    tr.append(td)
-                    if (tableName !== null) {
-                        td.classList.add("clickable")
-                        td.addEventListener("click", () => {
-                            update.open(tableName, name, record, td).catch(console.error)
-                        })
-                    }
-                }
-            }
-            document.querySelector<HTMLTableElement>("#table")!.append(tbody)
-        }
-    } finally {
-        document.body.classList.remove("rendering")
+const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: TableProps) => {
+    if (tableInfo === null) {
+        tableInfo = Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0, pk: 0, type: "", cid: 0, dflt_value: 0 }))
     }
+
+    // thead
+    return <table className="viewer">
+        <thead>
+            <tr>
+                <th></th>
+                {tableInfo.map(({ name, notnull, pk, type }) => <th
+                    className={tableName !== null ? "clickable" : ""}
+                    onClick={() => { if (tableName !== null) { alter_table.open(tableName, name) } }}>
+                    <code>
+                        {name}
+                        <span className="type">{(type ? (" " + type) : "") + (pk ? (autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
+                    </code>
+                </th>)}
+            </tr>
+        </thead>
+        <tbody>
+            {records.map((record, i) => <tr>
+                <td
+                    className={tableName !== null ? "clickable" : ""}
+                    onClick={(ev) => { if (tableName !== null) { delete_.open(tableName, record, ev.currentTarget.parentElement as HTMLTableRowElement).catch(console.error) } }}>{rowStart + i + 1}</td>
+                {tableInfo!.map(({ name }) => {
+                    const value = record[name]
+                    return <td
+                        className={tableName !== null ? "clickable" : ""}
+                        onClick={(ev) => { if (tableName !== null) { update.open(tableName, name, record, ev.currentTarget).catch(console.error) } }}>
+                        <pre style={{ color: type2color(typeof value) }}>
+                            {value instanceof Uint8Array ? `x'${blob2hex(value)}'` : JSON.stringify(value)}
+                        </pre>
+                    </td>
+                })}
+            </tr>)}
+        </tbody>
+    </table>
 }
 
 const ProgressBar = () => {
@@ -121,8 +83,10 @@ const ProgressBar = () => {
         let canceled = false
         const loop = () => {
             if (canceled) { return }
-            ref.current!.style.left = `${x}px`
-            x = (Date.now() - t) % (window.innerWidth + width) - width
+            if (document.body.classList.contains("querying")) {
+                ref.current!.style.left = `${x}px`
+                x = (Date.now() - t) % (window.innerWidth + width) - width
+            }
             requestAnimationFrame(loop)
         }
         loop()
@@ -142,6 +106,7 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
     const [numRecords, setRecordCount] = useState(0)
     const pageMax = Math.ceil(numRecords / pageSize)
     const [page, setPage] = useReducer<number, number>((_, value) => Math.max(1, Math.min(pageMax, value)), 0)
+    const [tableProps, setTableProps] = useState<TableProps | null>(null)
 
     props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
 
@@ -156,9 +121,21 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
             const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count
             if (typeof newRecordCount !== "number") { throw new Error(newRecordCount + "") }
             setRecordCount(newRecordCount)
-            await renderTable(viewerTableName, await props.sql.getTableInfo(viewerTableName), records, props.sql, (page - 1) * pageSize)
+            setTableProps({
+                tableName: viewerTableName,
+                autoIncrement: viewerTableName === null ? false : await props.sql.hasTableAutoincrement(viewerTableName),
+                records,
+                rowStart: (page - 1) * pageSize,
+                tableInfo: await props.sql.getTableInfo(viewerTableName),
+            })
         } else {
-            await renderTable(null, null, await props.sql.query(viewerStatement, [], "r"), props.sql, 1)
+            setTableProps({
+                tableName: null,
+                autoIncrement: false,
+                records: await props.sql.query(viewerStatement, [], "r"),
+                rowStart: 0,
+                tableInfo: null,
+            })
         }
     }
 
@@ -176,11 +153,11 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
                 {" "}
                 <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
                 {" "}
-                <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /><br /></>}
+                <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /></>}
         </h2>}
-        {useMemo(() => <div style={{ marginLeft: "10px", marginRight: "10px", padding: 0, background: "white", height: "50vh", overflowY: "scroll" }}>
-            <table id="table"></table>
-        </div>, [])}
+        <div style={{ marginLeft: "10px", marginRight: "10px", padding: 0, background: "white", height: "50vh", overflowY: "scroll" }}>
+            {tableProps && <Table {...tableProps} />}
+        </div>
         <div style={{ marginBottom: "30px", paddingTop: "3px" }} className="primary">
             <span><span style={{ cursor: "pointer", paddingLeft: "8px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page - 1)}>‹</span><input value={page} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onChange={(ev) => setPage(+ev.currentTarget.value)} /> / {pageMax} <span style={{ cursor: "pointer", paddingLeft: "4px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page + 1)}>›</span></span>
             <span style={{ marginLeft: "40px" }}><input value={pageSize} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onBlur={(ev) => setPageSize(+ev.currentTarget.value)} /> records</span>
@@ -189,7 +166,7 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
             <pre>{errorMessage}</pre>
             <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => setErrorMessage("")} />
         </p>}
-        <editor.Editor tableName={viewerTableName} tableList={tableList} onWrite={(opts) => {
+        <editor.Editor tableName={viewerStatement === "SELECT" ? viewerTableName : undefined} tableList={tableList} onWrite={(opts) => {
             const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
             if (!skipTableRefresh) {
                 queryAndRenderTable().catch(console.error)
