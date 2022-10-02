@@ -106,7 +106,12 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
     const [pageSize, setPageSize] = useReducer<number, number>((_, value) => Math.max(1, value), 1000)
     const [numRecords, setRecordCount] = useState(0)
     const pageMax = Math.ceil(numRecords / pageSize)
-    const [page, setPage] = useReducer<number, number>((_, value) => Math.max(1, Math.min(pageMax, value)), 0)
+    const [_, rerender] = useState({})
+    const [page, setPage] = useReducer<number, number>((_, value) => {
+        const clippedValue = Math.max(1, Math.min(pageMax, value))
+        if (value !== clippedValue) { rerender({}) }  // Update the input box when value !== clippedValue === oldValue
+        return clippedValue
+    }, 0)
     const [tableProps, setTableProps] = useState<TableProps | null>(null)
 
     props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
