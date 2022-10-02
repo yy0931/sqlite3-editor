@@ -95,10 +95,11 @@ const ProgressBar = () => {
     return <div className="progressbar" ref={ref} style={{ display: "inline-block", userSelect: "none", pointerEvents: "none", position: "absolute", zIndex: 100, width: width + "px", height: "5px", top: 0, background: "var(--button-primary-background)" }}></div>
 }
 
-const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
+const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQLite3Client }) => {
     const [tableList, setTableList] = useState(props.tableList)
 
-    const [viewerStatement, setViewerStatement] = useState<"SELECT" | "PRAGMA table_list">("SELECT")
+    const [viewerStatement, setViewerStatement] = useState<"SELECT" | "PRAGMA">("SELECT")
+    const [pragma, setPragma] = useState("analysis_limit")
     const [viewerTableName, setViewerTableName] = useState(tableList[0]?.name) // undefined if there are no tables
     const [viewerConstraints, setViewerConstraints] = useState("")
     const [errorMessage, setErrorMessage] = useState("")
@@ -132,7 +133,7 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
             setTableProps({
                 tableName: null,
                 autoIncrement: false,
-                records: await props.sql.query(viewerStatement, [], "r"),
+                records: await props.sql.query(`${viewerStatement} ${pragma}`, [], "r"),
                 rowStart: 0,
                 tableInfo: null,
             })
@@ -143,17 +144,18 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
 
     useEffect(() => {
         queryAndRenderTable().catch(console.error)
-    }, [viewerStatement, viewerTableName, viewerConstraints, tableList, page, pageSize])
+    }, [viewerStatement, pragma, viewerTableName, viewerConstraints, tableList, page, pageSize])
 
     return <>
         <ProgressBar />
         {viewerTableName !== undefined && <h2>
-            <Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, "PRAGMA table_list": {} }} className="primary" />
+            <Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
             {viewerStatement === "SELECT" && <> * FROM
                 {" "}
                 <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
                 {" "}
                 <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /></>}
+            {viewerStatement === "PRAGMA" && <Select value={pragma} onChange={setPragma} options={Object.fromEntries(props.pragmaList.map((k) => [k, {}]))} />}
         </h2>}
         <div style={{ marginLeft: "10px", marginRight: "10px", padding: 0, background: "white", height: "50vh", overflowY: "scroll" }}>
             {tableProps && <Table {...tableProps} />}
@@ -193,5 +195,8 @@ const App = (props: { tableList: TableListItem[], sql: SQLite3Client }) => {
 (async () => {
     const sql = new SQLite3Client()
     sql.addErrorMessage = (value) => document.write(value)
-    render(<App tableList={await sql.getTableList()} sql={sql} />, document.body)
+    render(<App
+        tableList={await sql.getTableList()}
+        pragmaList={(await sql.query("PRAGMA pragma_list", [], "r")).map(({ name }) => name as string)}
+        sql={sql} />, document.body)
 })().catch(console.error)
