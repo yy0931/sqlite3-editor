@@ -1,4 +1,4 @@
-import { DataTypeInput, EditorDataType, parseTextareaValue } from "./components"
+import { Commit, DataTypeInput, EditorDataType, parseTextareaValue } from "./components"
 import { blob2hex, escapeSQLIdentifier, unsafeEscapeValue, type2color } from "../main"
 import { useRef, Ref, useEffect, useState } from "preact/hooks"
 import * as createTable from "./create_table"
@@ -54,15 +54,21 @@ export const Editor: EditorComponent<State> = (props) => {
             }</select>
         </h2>
         <div>
-            <textarea ref={autoFocusRef} autocomplete="off" style={{ height: "20vh", color: type2color(props.state.type) }} value={props.state.textareaValue} onBlur={(ev) => {
-                // <textarea> replaces \r\n with \n
-                if (props.state.textareaValue.replaceAll(/\r/g, "") === ev.currentTarget.value.replaceAll(/\r/g, "")) { return }
-                const columns = props.state.constraintChoices[selectedConstraint]!
-                props.commit(`UPDATE ${escapeSQLIdentifier(props.state.tableName)} SET ${escapeSQLIdentifier(props.state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(ev.currentTarget.value, props.state.type), ...columns.map((column) => props.state.record[column] as DataTypes)], {})
-                createTable.open()
-            }}></textarea><br />
+            <textarea
+                ref={autoFocusRef}
+                autocomplete="off"
+                style={{ height: "20vh", color: type2color(props.state.type) }}
+                value={props.state.type === "null" ? "null" : props.state.textareaValue}
+                onChange={(ev) => props.setState({ ...props.state, textareaValue: ev.currentTarget.value })}
+                disabled={props.state.type === "null"}></textarea>
             {"AS "}
             <DataTypeInput value={props.state.type} onChange={(value) => { props.setState({ ...props.state, type: value }) }} />
+            <Commit style={{ marginTop: "10px" }} onClick={() => {
+                // <textarea> replaces \r\n with \n
+                const columns = props.state.constraintChoices[selectedConstraint]!
+                props.commit(`UPDATE ${escapeSQLIdentifier(props.state.tableName)} SET ${escapeSQLIdentifier(props.state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(props.state.textareaValue, props.state.type), ...columns.map((column) => props.state.record[column] as DataTypes)], {})
+                createTable.open()
+            }} />
         </div>
     </>
 }

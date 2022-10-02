@@ -20,7 +20,7 @@ export const parseTextareaValue = (value: string, type: EditorDataType): DataTyp
     }
 }
 
-export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, title?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, className?: string }) => {
+export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, className?: string }) => {
     const ref1 = useRef() as Ref<HTMLSelectElement>
     const ref2 = useRef() as Ref<HTMLSelectElement>
     useLayoutEffect(() => {
@@ -31,7 +31,7 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
     if (props.options[props.value] === undefined) { console.log(props.options, props.value) }
     return <>
         <select autocomplete="off" value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style }} className={props.className} ref={ref1} onChange={(ev) => props.onChange(ev.currentTarget.value as T)} tabIndex={props.tabIndex}>{
-            (Object.keys(props.options) as T[]).map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].title}>{props.options[value].text ?? value}</option>)
+            (Object.keys(props.options) as T[]).map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].disabled ? props.options[value].disabledReason : undefined}>{props.options[value].text ?? value}</option>)
         }</select>
         <span style={{ userSelect: "none", display: "inline-block", pointerEvents: "none", width: 0, height: 0, overflow: "hidden" }}>
             <select autocomplete="off" value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style, visibility: "hidden" }} className={props.className} ref={ref2} onChange={(ev) => props.onChange(ev.currentTarget.value as T)}>
@@ -56,10 +56,10 @@ export type ColumnDef = {
     notNull: boolean
 }
 
-export const ColumnDefEditor = (props: { disabledExceptColumnName: boolean, value: ColumnDef, onChange: (columnDef: ColumnDef) => void }) => {
+export const ColumnDefEditor = (props: { columnNameOnly?: boolean, value: ColumnDef, onChange: (columnDef: ColumnDef) => void }) => {
     return <>
         <input tabIndex={0} placeholder="column-name" style={{ marginRight: "8px" }} value={props.value.name} onInput={(ev) => { props.onChange({ ...props.value, name: ev.currentTarget.value }) }}></input>
-        {!props.disabledExceptColumnName && <>
+        {!props.columnNameOnly && <>
             <Select tabIndex={0} style={{ marginRight: "8px" }} value={props.value.affinity} onChange={(value) => props.onChange({ ...props.value, affinity: value })} options={{ "TEXT": {}, "NUMERIC": {}, "INTEGER": {}, "REAL": {}, "BLOB": {}, "ANY": {} }} />
             <Checkbox tabIndex={-1} checked={props.value.primary} onChange={(checked) => props.onChange({ ...props.value, primary: checked })} text="PRIMARY KEY" />
             <Checkbox tabIndex={-1} checked={props.value.autoIncrement} onChange={(checked) => props.onChange({ ...props.value, autoIncrement: checked })} text="AUTOINCREMENT" />

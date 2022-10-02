@@ -26,7 +26,7 @@ const MultiColumnDefEditor = (props: { value: ColumnDef[], onChange: (value: Col
 
     return <ul>{renderedColumnDefs.map((columnDef, i) =>
         <li key={i}>
-            <ColumnDefEditor disabledExceptColumnName={columnDef.name === ""} value={columnDef} onChange={(value) => {
+            <ColumnDefEditor columnNameOnly={columnDef.name === ""} value={columnDef} onChange={(value) => {
                 props.onChange(produce(renderedColumnDefs, (d) => {
                     d[i] = value
                     if (d.at(-1)?.name === "") { d.pop() }
@@ -48,7 +48,7 @@ export const Editor: EditorComponent<State> = (props) => {
         </h2>
         <div>
             <MultiColumnDefEditor value={columnDefs} onChange={setColumnDefs} />
-            <textarea autocomplete="off" style={{ marginTop: "10px", height: "20vh" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={props.state.tableConstraints} onChange={(ev) => { props.setState({ ...props.state, tableConstraints: ev.currentTarget.value }) }}></textarea><br></br>
+            <textarea autocomplete="off" style={{ marginTop: "10px", height: "20vh" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={props.state.tableConstraints} onChange={(ev) => { props.setState({ ...props.state, tableConstraints: ev.currentTarget.value }) }}></textarea>
             <Commit style={{ marginTop: "10px" }} onClick={() => props.commit(`CREATE TABLE ${escapeSQLIdentifier(props.state.tableName)} (${columnDefs.map(printColumnDef).join(", ")}${props.state.tableConstraints.trim() !== "" ? (props.state.tableConstraints.trim().startsWith(",") ? props.state.tableConstraints : ", " + props.state.tableConstraints) : ""})${props.state.strict ? " STRICT" : ""}${props.state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: props.state.tableName })} />
         </div>
     </>
