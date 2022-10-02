@@ -92,6 +92,7 @@ button {
     padding-top: 0.2em;
     padding-bottom: 0.2em;
     font-family: inherit;
+    cursor: pointer;
 
     &:hover {
         background-color: var(--button-primary-hover-background);
