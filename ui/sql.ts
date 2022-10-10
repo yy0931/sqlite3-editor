@@ -6,17 +6,56 @@ export type UniqueConstraints = { primary: boolean, columns: string[] }[]
 export type DataTypes = string | number | Uint8Array | null
 export type TableListItem = { schema: string, name: string, type: "table" | "view" | "shadow" | "virtual", ncol: number, wr: number, strict: number }
 
+type VSCodeAPI = { postMessage(data: unknown): void }
+
+declare global {
+    interface Window {
+        acquireVsCodeApi?: () => VSCodeAPI
+    }
+}
+
+const vscode = window.acquireVsCodeApi?.()
+
 const querying = new Set()
 export default class SQLite3Client {
     addErrorMessage: ((value: string) => void) | undefined
-    async query(query: string, params: DataTypes[], mode: "r" | "w+"): Promise<Record<string, DataTypes>[]> {
-        let res: Response
+
+    async #postVSCode(body: unknown) {
+        if (vscode === undefined) { return }
+        const id = {}
+        querying.add(id)
+        document.body.classList.add("querying")
+        return new Promise<Record<string, DataTypes>[]>((resolve, reject) => {
+            const requestId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
+            vscode.postMessage({ requestId, body: pack(body) })
+            const callback = ({ data }: { data: { requestId: number } & ({ err: string } | { body: Uint8Array }) }) => {
+                if (data.requestId !== requestId) { return }
+                window.removeEventListener("message", callback)
+                console.log(data)
+                if ("err" in data) {
+                    this.addErrorMessage?.(data.err)
+                    reject(new Error(data.err))
+                    return
+                }
+                resolve(unpack(data.body))
+            }
+            window.addEventListener("message", callback)
+        }).finally(() => {
+            querying.delete(id)
+            if (querying.size === 0) {
+                document.body.classList.remove("querying")
+            }
+        })
+    }
+
+    async #postHTTP(body: unknown) {
         const id = {}
         querying.add(id)
         document.body.classList.add("querying")
         try {
+            let res: Response
             try {
-                res = await fetch(`http://localhost:8080/`, { method: "POST", body: pack({ query, params, mode }), headers: { "Content-Type": "application/octet-stream" } })
+                res = await fetch(`/query`, { method: "POST", body: pack(body), headers: { "Content-Type": "application/octet-stream" } })
             } catch (err: any) {
                 this.addErrorMessage?.("message" in err ? err.message : "" + err)
                 throw err
@@ -34,6 +73,9 @@ export default class SQLite3Client {
             }
         }
     }
+
+    query = (query: string, params: DataTypes[], mode: "r" | "w+"): Promise<Record<string, DataTypes>[]> =>
+        vscode ? this.#postVSCode({ query, params, mode }) : this.#postHTTP({ query, params, mode })
 
     /** https://stackoverflow.com/a/1604121/10710682 */
     hasTable = async (tableName: string) =>

@@ -19,7 +19,7 @@ export const Editor: EditorComponent<State> = (props) => {
         <h2>{props.statementSelect}</h2>
         <div>
             <textarea autocomplete="off" style={{ marginTop: "15px", height: "20vh" }} placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={query} onChange={(ev) => { setQuery(ev.currentTarget.value) }}></textarea>
-            <Commit onClick={() => props.commit(query, [], { refreshTableList: true })} />
+            <Commit style={{ marginBottom: "10px" }} onClick={() => props.commit(query, [], { refreshTableList: true })} />
         </div>
     </>
 }

@@ -63,7 +63,7 @@ export const Editor: EditorComponent<State> = (props) => {
                 disabled={props.state.type === "null"}></textarea>
             {"AS "}
             <DataTypeInput value={props.state.type} onChange={(value) => { props.setState({ ...props.state, type: value }) }} />
-            <Commit style={{ marginTop: "10px" }} onClick={() => {
+            <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
                 // <textarea> replaces \r\n with \n
                 const columns = props.state.constraintChoices[selectedConstraint]!
                 props.commit(`UPDATE ${escapeSQLIdentifier(props.state.tableName)} SET ${escapeSQLIdentifier(props.state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(props.state.textareaValue, props.state.type), ...columns.map((column) => props.state.record[column] as DataTypes)], {})

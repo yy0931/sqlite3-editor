@@ -49,7 +49,7 @@ export const Editor: EditorComponent<State> = (props) => {
         <div>
             <MultiColumnDefEditor value={columnDefs} onChange={setColumnDefs} />
             <textarea autocomplete="off" style={{ marginTop: "10px", height: "20vh" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={props.state.tableConstraints} onChange={(ev) => { props.setState({ ...props.state, tableConstraints: ev.currentTarget.value }) }}></textarea>
-            <Commit style={{ marginTop: "10px" }} onClick={() => props.commit(`CREATE TABLE ${escapeSQLIdentifier(props.state.tableName)} (${columnDefs.map(printColumnDef).join(", ")}${props.state.tableConstraints.trim() !== "" ? (props.state.tableConstraints.trim().startsWith(",") ? props.state.tableConstraints : ", " + props.state.tableConstraints) : ""})${props.state.strict ? " STRICT" : ""}${props.state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: props.state.tableName })} />
+            <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => props.commit(`CREATE TABLE ${escapeSQLIdentifier(props.state.tableName)} (${columnDefs.map(printColumnDef).join(", ")}${props.state.tableConstraints.trim() !== "" ? (props.state.tableConstraints.trim().startsWith(",") ? props.state.tableConstraints : ", " + props.state.tableConstraints) : ""})${props.state.strict ? " STRICT" : ""}${props.state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: props.state.tableName })} />
         </div>
     </>
 }

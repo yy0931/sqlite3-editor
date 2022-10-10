@@ -3,8 +3,8 @@ import * as editor from "./editor"
 import * as update from "./editor/update"
 import * as delete_ from "./editor/delete_"
 import * as alter_table from "./editor/alter_table"
-import deepEqual from "deep-equal"
-import { useState, useEffect, useMemo, useReducer, useRef, Ref } from "preact/hooks"
+import deepEqual from "fast-deep-equal"
+import { useState, useEffect, useReducer, useRef, Ref } from "preact/hooks"
 import { Select } from "./editor/components"
 import SQLite3Client, { DataTypes, TableInfo, TableListItem } from "./sql"
 
@@ -179,7 +179,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
                 queryAndRenderTable().catch(console.error)
             }
             props.sql.getTableList().then((newTableList) => {
-                if (deepEqual(newTableList, tableList, { strict: true })) {
+                if (deepEqual(newTableList, tableList)) {
                     if (skipTableRefresh) {
                         queryAndRenderTable().catch(console.error)
                     }

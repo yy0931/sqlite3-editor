@@ -21,6 +21,6 @@ export const Editor: EditorComponent<State> = (props) =>
             {props.statementSelect}{" "}{escapeSQLIdentifier(props.state.tableName)}
         </h2>
         <div>
-            <Commit onClick={() => props.commit(`DROP TABLE ${escapeSQLIdentifier(props.state.tableName)}`, [], { refreshTableList: true })} />
+            <Commit style={{ marginBottom: "10px" }} onClick={() => props.commit(`DROP TABLE ${escapeSQLIdentifier(props.state.tableName)}`, [], { refreshTableList: true })} />
         </div>
     </>
