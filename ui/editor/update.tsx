@@ -1,7 +1,7 @@
 import { Commit, DataTypeInput, EditorDataType, parseTextareaValue } from "./components"
 import { blob2hex, escapeSQLIdentifier, unsafeEscapeValue, type2color } from "../main"
 import { useRef, Ref, useEffect, useState } from "preact/hooks"
-import * as createTable from "./create_table"
+import * as insert from "./insert"
 import { DispatchBuilder, EditorComponent } from "."
 import { DataTypes } from "../sql"
 
@@ -59,15 +59,16 @@ export const Editor: EditorComponent<State> = (props) => {
                 autocomplete="off"
                 style={{ height: "20vh", color: type2color(props.state.type) }}
                 value={props.state.type === "null" ? "null" : props.state.textareaValue}
-                onChange={(ev) => props.setState({ ...props.state, textareaValue: ev.currentTarget.value })}
+                onInput={(ev) => props.setState({ ...props.state, textareaValue: ev.currentTarget.value })}
                 disabled={props.state.type === "null"}></textarea>
             {"AS "}
             <DataTypeInput value={props.state.type} onChange={(value) => { props.setState({ ...props.state, type: value }) }} />
             <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
                 // <textarea> replaces \r\n with \n
                 const columns = props.state.constraintChoices[selectedConstraint]!
-                props.commit(`UPDATE ${escapeSQLIdentifier(props.state.tableName)} SET ${escapeSQLIdentifier(props.state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(props.state.textareaValue, props.state.type), ...columns.map((column) => props.state.record[column] as DataTypes)], {})
-                createTable.open()
+                props.commit(`UPDATE ${escapeSQLIdentifier(props.state.tableName)} SET ${escapeSQLIdentifier(props.state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(props.state.textareaValue, props.state.type), ...columns.map((column) => props.state.record[column] as DataTypes)], {}).then(() => {
+                    insert.open(props.state.tableName)
+                })
             }} />
         </div>
     </>

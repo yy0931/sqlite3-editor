@@ -1,5 +1,5 @@
 import type { JSXInternal } from "preact/src/jsx"
-import { useRef, Ref, useLayoutEffect } from "preact/hooks"
+import { useRef, Ref, useLayoutEffect, useEffect } from "preact/hooks"
 import { DataTypes } from "../sql"
 import { escapeSQLIdentifier } from "../main"
 
@@ -41,8 +41,19 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
     </>
 }
 
-export const Commit = (props: { onClick: () => void, style?: JSXInternal.CSSProperties }) =>
-    <input type="button" value="Commit" style={{ display: "block", ...props.style }} className={"primary"} onClick={props.onClick}></input>
+export const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInternal.CSSProperties }) => {
+    useEffect(() => {
+        const handler = (ev: KeyboardEvent) => {
+            if (ev.ctrlKey && ev.code === "KeyS") {
+                props.onClick()
+                ev.preventDefault()
+            }
+        }
+        window.addEventListener("keydown", handler)
+        return () => { window.removeEventListener("keydown", handler) }
+    }, [props.onClick])
+    return <input disabled={props.disabled} type="button" value="Commit" style={{ display: "block", ...props.style }} className={"primary"} onClick={props.onClick} title="Ctrl+S"></input>
+}
 
 export const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: boolean, onChange: (value: boolean) => void, text: string, tabIndex?: number }) =>
     <label style={{ marginRight: "8px", ...props.style }}><input type="checkbox" checked={props.checked} onChange={(ev) => props.onChange(ev.currentTarget.checked)} tabIndex={props.tabIndex}></input> {props.text}</label>

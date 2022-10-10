@@ -48,14 +48,18 @@ export const Editor: EditorComponent<State> = (props) => {
                         <textarea
                             autocomplete="off" rows={1} style={{ width: "100%", resize: "vertical", display: "block", color: type2color(props.state.dataTypes[i]!) }}
                             value={props.state.dataTypes[i]! === "null" ? "null" : props.state.values[i]!}
-                            onChange={(ev) => { props.setState(produce(props.state, (d) => { d.values[i] = ev.currentTarget.value })) }}
+                            onInput={(ev) => { props.setState(produce(props.state, (d) => { d.values[i] = ev.currentTarget.value })) }}
                             disabled={props.state.dataTypes[i]! === "null"}
                             tabIndex={0}></textarea>
                         {"AS "}<DataTypeInput value={props.state.dataTypes[i]!} onChange={(value) => { props.setState(produce(props.state, (d) => { d.dataTypes[i] = value })) }} />
                     </li>
                 })}
             </ul>
-            <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => props.commit(`INSERT ${query}`, props.state.values.map((value, i) => parseTextareaValue(value, props.state.dataTypes[i]!)), {})} />
+            <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
+                props.commit(`INSERT ${query}`, props.state.values.map((value, i) => parseTextareaValue(value, props.state.dataTypes[i]!)), {}).then(() => {
+                    open(props.state.tableName)
+                })
+            }} />
         </div>
     </>
 }

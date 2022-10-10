@@ -2,6 +2,7 @@ import { escapeSQLIdentifier, unsafeEscapeValue } from "../main"
 import { DispatchBuilder, EditorComponent } from "."
 import { DataTypes } from "../sql"
 import { Commit } from "./components"
+import * as insert from "./insert"
 
 export const statement = "DELETE"
 export type State = Readonly<{
@@ -35,12 +36,16 @@ export const Editor: EditorComponent<State> = (props) => {
     const columns = props.state.constraintChoices[props.state.selectedConstraint]!
     return <>
         <h2>
-            {props.statementSelect}{" "}FROM {escapeSQLIdentifier(props.state.tableName)} WHERE <select value={props.state.selectedConstraint} onChange={(ev) => { props.setState({ ...props.state, selectedConstraint: +ev.currentTarget.value }) }}>{
+            {props.statementSelect}{" "}FROM {escapeSQLIdentifier(props.state.tableName)} WHERE <select value={props.state.selectedConstraint} onInput={(ev) => { props.setState({ ...props.state, selectedConstraint: +ev.currentTarget.value }) }}>{
                 props.state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(props.state.record[column])}`).join(" AND ")}</option>)
             }</select>
         </h2>
         <div>
-            <Commit style={{ marginBottom: "10px" }} onClick={() => props.commit(`DELETE FROM ${escapeSQLIdentifier(props.state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => props.state.record[column] as DataTypes)], {})} />
+            <Commit style={{ marginBottom: "10px" }} onClick={() => {
+                props.commit(`DELETE FROM ${escapeSQLIdentifier(props.state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => props.state.record[column] as DataTypes)], {}).then(() => {
+                    insert.open(props.state.tableName)
+                })
+            }} />
         </div>
     </>
 }
