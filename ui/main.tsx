@@ -64,7 +64,10 @@ const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: Table
                         className={tableName !== null ? "clickable" : ""}
                         onClick={(ev) => { if (tableName !== null) { update.open(tableName, name, record, ev.currentTarget).catch(console.error) } }}>
                         <pre style={{ color: type2color(typeof value) }}>
-                            {value instanceof Uint8Array ? `x'${blob2hex(value)}'` : JSON.stringify(value)}
+                            {value instanceof Uint8Array ? `x'${blob2hex(value)}'` :
+                                value === null ? "NULL" :
+                                    typeof value === "string" ? unsafeEscapeValue(value) :
+                                        JSON.stringify(value)}
                         </pre>
                     </td>
                 })}
