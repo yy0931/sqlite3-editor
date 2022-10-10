@@ -39,7 +39,7 @@ const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: Table
     }
 
     // thead
-    return <table className="viewer">
+    return <table className="viewer" style={{ background: "white" }}>
         <thead>
             <tr>
                 <th></th>
@@ -165,8 +165,10 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
                 <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /></>}
             {viewerStatement === "PRAGMA" && <Select value={pragma} onChange={setPragma} options={Object.fromEntries(props.pragmaList.map((k) => [k, {}]))} />}
         </h2>}
-        <div style={{ marginLeft: "10px", marginRight: "10px", padding: 0, background: "white", height: "50vh", overflowY: "scroll" }}>
-            {tableProps && <Table {...tableProps} />}
+        <div>
+            <div style={{ marginLeft: "10px", marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", maxWidth: "100%", display: "inline-block" }}>
+                {tableProps && <Table {...tableProps} />}
+            </div>
         </div>
         <div style={{ marginBottom: "30px", paddingTop: "3px" }} className="primary">
             <span><span style={{ cursor: "pointer", paddingLeft: "8px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page - 1)}>‹</span><input value={page} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onChange={(ev) => setPage(+ev.currentTarget.value)} /> / {pageMax} <span style={{ cursor: "pointer", paddingLeft: "4px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page + 1)}>›</span></span>
