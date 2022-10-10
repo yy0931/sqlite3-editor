@@ -34,13 +34,19 @@ export const Editor: EditorComponent<State> = (props) => {
                 "DROP COLUMN": {},
                 "ADD COLUMN": {},
             }} />{" "}
-            {props.state.statement2 === "RENAME TO" && <input placeholder="table-name" value={newTableName} onChange={(ev) => setNewTableName(ev.currentTarget.value)} />}
-            {(props.state.statement2 === "RENAME COLUMN" || props.state.statement2 === "DROP COLUMN") && <input placeholder="column-name" value={props.state.oldColumnName} onChange={(ev) => props.setState({ ...state, oldColumnName: ev.currentTarget.value })} />}
-            {props.state.statement2 === "RENAME COLUMN" && <>{" TO "}<input placeholder="column-name" value={newColumnName} onChange={(ev) => setNewColumnName(ev.currentTarget.value)} /></>}
+            {props.state.statement2 === "RENAME TO" && <input placeholder="table-name" value={newTableName} onInput={(ev) => setNewTableName(ev.currentTarget.value)} />}
+            {(props.state.statement2 === "RENAME COLUMN" || props.state.statement2 === "DROP COLUMN") && <input placeholder="column-name" value={props.state.oldColumnName} onInput={(ev) => props.setState({ ...props.state, oldColumnName: ev.currentTarget.value })} />}
+            {props.state.statement2 === "RENAME COLUMN" && <>{" TO "}<input placeholder="column-name" value={newColumnName} onInput={(ev) => setNewColumnName(ev.currentTarget.value)} /></>}
         </h2>
         <div>
             {props.state.statement2 === "ADD COLUMN" && <ColumnDefEditor value={columnDef} onChange={setColumnDef} />}
-            <Commit style={{ marginBottom: "10px" }} onClick={() => {
+            <Commit disabled={
+                props.state.statement2 === "RENAME TO" ? newTableName === "" :
+                    props.state.statement2 === "RENAME COLUMN" ? props.state.oldColumnName === "" || newColumnName === "" :
+                        props.state.statement2 === "DROP COLUMN" ? props.state.oldColumnName === "" :
+                            props.state.statement2 === "ADD COLUMN" ? columnDef.name === "" :
+                                false
+            } style={{ marginBottom: "10px" }} onClick={() => {
                 let query = `ALTER TABLE ${escapeSQLIdentifier(props.state.tableName)} ${props.state.statement2} `
                 switch (props.state.statement2) {
                     case "RENAME TO": query += escapeSQLIdentifier(newTableName); break
@@ -48,7 +54,11 @@ export const Editor: EditorComponent<State> = (props) => {
                     case "DROP COLUMN": query += escapeSQLIdentifier(props.state.oldColumnName); break
                     case "ADD COLUMN": query += `${printColumnDef(columnDef)}`; break
                 }
-                props.commit(query, [], { refreshTableList: true, selectTable: props.state.statement2 === "RENAME TO" ? newTableName : undefined })
+                props.commit(query, [], { refreshTableList: true, selectTable: props.state.statement2 === "RENAME TO" ? newTableName : undefined }).then(() => {
+                    props.setState({ ...props.state, oldColumnName: "" })
+                    setNewTableName("")
+                    setNewColumnName("")
+                })
             }} />
         </div>
     </>

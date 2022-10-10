@@ -23,7 +23,7 @@ type OnWriteOptions = { refreshTableList?: true, selectTable?: string }
 
 export const Editor = (props: { tableName?: string, tableList: TableListItem[], onWrite: (opts: OnWriteOptions) => void, sql: SQLite3Client }) => {
     const [state, setState] = useState<State>({ statement: "CREATE TABLE", strict: true, tableConstraints: "", tableName: "", withoutRowId: false })
-    const commit = useCallback((query: string, params: DataTypes[], opts: OnWriteOptions) => props.sql.query(query, params, "w+").then(() => props.onWrite(opts)).catch(console.error), [props.onWrite])
+    const commit = useCallback((query: string, params: DataTypes[], opts: OnWriteOptions) => props.sql.query(query, params, "w+").then(() => props.onWrite(opts)), [props.onWrite])
 
     useEffect(() => {
         if (props.tableName === undefined) {
@@ -84,4 +84,4 @@ export const Editor = (props: { tableName?: string, tableList: TableListItem[], 
 }
 
 export type DispatchBuilder<T> = (setState: (newState: T) => void, sql: SQLite3Client) => void
-export type EditorComponent<T> = (props: { statementSelect: JSXInternal.Element, state: T, setState: (newState: T) => void, commit: (query: string, params: DataTypes[], opts: OnWriteOptions) => void }) => JSXInternal.Element
+export type EditorComponent<T> = (props: { statementSelect: JSXInternal.Element, state: T, setState: (newState: T) => void, commit: (query: string, params: DataTypes[], opts: OnWriteOptions) => Promise<void> }) => JSXInternal.Element

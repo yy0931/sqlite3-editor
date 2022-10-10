@@ -104,6 +104,12 @@ button {
     &:focus {
         outline: 2px solid rgb(142, 197, 226);
     }
+
+    &:disabled {
+        background-color: #c1bbbb;
+        color: #737373;
+        cursor: not-allowed;
+    }
 }
 
 input:not([type]),

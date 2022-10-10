@@ -26,10 +26,10 @@ const MultiColumnDefEditor = (props: { value: ColumnDef[], onChange: (value: Col
 
     return <ul>{renderedColumnDefs.map((columnDef, i) =>
         <li key={i}>
-            <ColumnDefEditor columnNameOnly={columnDef.name === ""} value={columnDef} onChange={(value) => {
+            <ColumnDefEditor columnNameOnly={i === renderedColumnDefs.length - 1 && columnDef.name === ""} value={columnDef} onChange={(value) => {
                 props.onChange(produce(renderedColumnDefs, (d) => {
                     d[i] = value
-                    if (d.at(-1)?.name === "") { d.pop() }
+                    while (d.at(-1)?.name === "") { d.pop() }
                 }))
             }} />
         </li>
@@ -42,14 +42,19 @@ export const Editor: EditorComponent<State> = (props) => {
     const [columnDefs, setColumnDefs] = useState<ColumnDef[]>([])
     return <>
         <h2>
-            {props.statementSelect}{" "}<input placeholder="table-name" value={props.state.tableName} onChange={(ev) => { props.setState({ ...props.state, tableName: ev.currentTarget.value }) }}></input>(...)
+            {props.statementSelect}{" "}<input placeholder="table-name" value={props.state.tableName} onInput={(ev) => { props.setState({ ...props.state, tableName: ev.currentTarget.value }) }}></input>(...)
             <Checkbox checked={props.state.withoutRowId} onChange={(checked) => { props.setState({ ...props.state, withoutRowId: checked }) }} style={{ marginLeft: "8px" }} text="WITHOUT ROWID" />
             <Checkbox checked={props.state.strict} onChange={(checked) => { props.setState({ ...props.state, strict: checked }) }} text="STRICT" />
         </h2>
         <div>
             <MultiColumnDefEditor value={columnDefs} onChange={setColumnDefs} />
-            <textarea autocomplete="off" style={{ marginTop: "10px", height: "20vh" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={props.state.tableConstraints} onChange={(ev) => { props.setState({ ...props.state, tableConstraints: ev.currentTarget.value }) }}></textarea>
-            <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => props.commit(`CREATE TABLE ${escapeSQLIdentifier(props.state.tableName)} (${columnDefs.map(printColumnDef).join(", ")}${props.state.tableConstraints.trim() !== "" ? (props.state.tableConstraints.trim().startsWith(",") ? props.state.tableConstraints : ", " + props.state.tableConstraints) : ""})${props.state.strict ? " STRICT" : ""}${props.state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: props.state.tableName })} />
+            <textarea autocomplete="off" style={{ marginTop: "10px", height: "20vh" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={props.state.tableConstraints} onInput={(ev) => { props.setState({ ...props.state, tableConstraints: ev.currentTarget.value }) }}></textarea>
+            <Commit disabled={props.state.tableName === "" || columnDefs.length === 0} style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
+                props.commit(`CREATE TABLE ${escapeSQLIdentifier(props.state.tableName)} (${columnDefs.map(printColumnDef).join(", ")}${props.state.tableConstraints.trim() !== "" ? (props.state.tableConstraints.trim().startsWith(",") ? props.state.tableConstraints : ", " + props.state.tableConstraints) : ""})${props.state.strict ? " STRICT" : ""}${props.state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: props.state.tableName }).then(() => {
+                    open()
+                    setColumnDefs([])
+                })
+            }} />
         </div>
     </>
 }
