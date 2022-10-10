@@ -40,7 +40,7 @@ export const Editor: EditorComponent<State> = (props) => {
             }</select>
         </h2>
         <div>
-            <Commit onClick={() => props.commit(`DELETE FROM ${escapeSQLIdentifier(props.state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => props.state.record[column] as DataTypes)], {})} />
+            <Commit style={{ marginBottom: "10px" }} onClick={() => props.commit(`DELETE FROM ${escapeSQLIdentifier(props.state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => props.state.record[column] as DataTypes)], {})} />
         </div>
     </>
 }

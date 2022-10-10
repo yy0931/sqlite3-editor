@@ -1,15 +1,15 @@
 :root {
     /* https://github.com/microsoft/vscode-webview-ui-toolkit/blob/864372518fbb538c281ea5a503e08d3e4b8d0c2e/src/design-tokens.ts */
-    --button-primary-background: var(--vscode-button-background, #0e639c);
-    --button-primary-foreground: var(--vscode-button-foreground, #ffffff);
-    --button-primary-hover-background: var(--vscode-button-hoverBackground, #1177bb);
+    --button-primary-background: #0e639c;
+    --button-primary-foreground: #ffffff;
+    --button-primary-hover-background: #1177bb;
 
-    --dropdown-background: var(--vscode-dropdown-background, #767676);
-    --dropdown-foreground: var(--vscode-dropdown-foreground, #f0f0f0);
+    --dropdown-background: #767676;
+    --dropdown-foreground: #f0f0f0;
 
-    --input-background: var(--vscode-input-background, #ffffff);
-    --input-foreground: var(--vscode-input-foreground, #3a3a3a);
-    --input-placeholder-foreground: var(--vscode-input-placeholderForeground, #7a7a7a);
+    --input-background: #ffffff;
+    --input-foreground: #3a3a3a;
+    --input-placeholder-foreground: #7a7a7a;
 }
 
 * {
@@ -22,10 +22,13 @@ body {
     overflow-x: hidden;
     background: #f0f0f0;
     font-family: monospace;
+    color: black;
 }
 
 code {
     word-break: break-word;
+    color: inherit;
+    font-family: inherit;
 }
 
 pre {

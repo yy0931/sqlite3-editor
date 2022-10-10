@@ -40,7 +40,7 @@ export const Editor: EditorComponent<State> = (props) => {
         </h2>
         <div>
             {props.state.statement2 === "ADD COLUMN" && <ColumnDefEditor value={columnDef} onChange={setColumnDef} />}
-            <Commit onClick={() => {
+            <Commit style={{ marginBottom: "10px" }} onClick={() => {
                 let query = `ALTER TABLE ${escapeSQLIdentifier(props.state.tableName)} ${props.state.statement2} `
                 switch (props.state.statement2) {
                     case "RENAME TO": query += escapeSQLIdentifier(newTableName); break

@@ -1,0 +1,4 @@
+*.vsix
+.vscode
+build.sh
+.gitignore

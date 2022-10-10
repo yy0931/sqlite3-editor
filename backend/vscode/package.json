@@ -1,0 +1,51 @@
+{
+  "name": "sqlite3-editor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "extension.js",
+  "scripts": {
+    "build": "./build.sh",
+    "vscode:prepublish": "npm run build"
+  },
+  "engines": {
+    "vscode": "1.71.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCustomEditor:sqlite3-editor.editor"
+  ],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "sqlite3-editor.editor",
+        "displayName": "SQLite3 Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.db"
+          }
+        ],
+        "priority": "default"
+      }
+    ]
+  },
+  "keywords": [],
+  "author": "",
+  "license": "",
+  "capabilities": {
+    "virtualWorkspaces": false,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "devDependencies": {
+    "@types/sqlite3": "^3.1.8",
+    "@types/vscode": "^1.71.0",
+    "esbuild": "^0.15.7"
+  },
+  "dependencies": {
+    "msgpackr": "^1.6.3",
+    "sqlite3": "^5.1.1"
+  }
+}
