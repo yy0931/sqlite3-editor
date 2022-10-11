@@ -186,17 +186,21 @@ table.viewer {
         padding-bottom: 3px;
         padding-left: 1em;
         padding-right: 1em;
+        user-select: none;
 
         code {
             word-break: break-word;
-            min-width: 10em;
             display: inline-block;
         }
     }
 
-    th.clickable:hover {
+    th.clickable:not(.ew-resize):hover {
         background-color: var(--button-primary-hover-background);
         cursor: pointer;
+    }
+
+    th.ew-resize {
+        cursor: ew-resize;
     }
 
     td {
@@ -222,12 +226,12 @@ table.viewer {
         background-color: var(--button-primary-background);
     }
 
-    td:nth-child(1).clickable:hover {
+    td:nth-child(1):not(.ew-resize):hover {
         background-color: var(--button-primary-hover-background);
         cursor: pointer;
     }
 
-    td.clickable:hover:not(.editing):not(:nth-child(1)) {
+    td:not(.ew-resize):hover:not(.editing):not(:nth-child(1)) {
         background-color: rgba(207, 255, 255, 0.371);
         cursor: pointer;
     }
@@ -242,4 +246,9 @@ table.viewer {
     th pre {
         font-size: 125%;
     }
+}
+
+body.ew-resize,
+body.ew-resize * {
+    cursor: ew-resize;
 }
