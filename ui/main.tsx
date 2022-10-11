@@ -39,13 +39,40 @@ const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: Table
     }
 
     // thead
-    return <table className="viewer" style={{ background: "white" }}>
+    return <table className="viewer" style={{ background: "white", width: "max-content" }}>
         <thead>
             <tr>
                 <th></th>
-                {tableInfo.map(({ name, notnull, pk, type }) => <th
+                {tableInfo.map(({ name, notnull, pk, type }, i) => <th
                     className={tableName !== null ? "clickable" : ""}
-                    onClick={() => { if (tableName !== null) { alter_table.open(tableName, name) } }}>
+                    onMouseMove={(ev) => {
+                        const rect = ev.currentTarget.getBoundingClientRect()
+                        if (rect.right - ev.clientX < 10) {
+                            ev.currentTarget.classList.add("ew-resize")
+                        } else {
+                            ev.currentTarget.classList.remove("ew-resize")
+                        }
+                    }}
+                    onMouseDown={(ev) => {
+                        const th = ev.currentTarget
+                        const rect = th.getBoundingClientRect()
+                        if (rect.right - ev.clientX < 10) { // right
+                            const mouseMove = (ev: MouseEvent) => {
+                                th.style.width = Math.max(50, ev.clientX - rect.left) + "px"
+                            }
+                            document.body.classList.add("ew-resize")
+                            window.addEventListener("mousemove", mouseMove)
+                            window.addEventListener("mouseup", () => {
+                                window.removeEventListener("mousemove", mouseMove)
+                                document.body.classList.remove("ew-resize")
+                            }, { once: true })
+                        } else if (tableName !== null) { // center
+                            alter_table.open(tableName, name)
+                        }
+                    }}
+                    onMouseLeave={(ev) => {
+                        ev.currentTarget.classList.remove("ew-resize")
+                    }}>
                     <code>
                         {name}
                         <span className="type">{(type ? (" " + type) : "") + (pk ? (autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
@@ -166,7 +193,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
             {viewerStatement === "PRAGMA" && <Select value={pragma} onChange={setPragma} options={Object.fromEntries(props.pragmaList.map((k) => [k, {}]))} />}
         </h2>}
         <div>
-            <div style={{ marginLeft: "10px", marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", maxWidth: "100%", display: "inline-block" }}>
+            <div style={{ marginLeft: "10px", marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", width: "100%", display: "inline-block" }}>
                 {tableProps && <Table {...tableProps} />}
             </div>
         </div>
