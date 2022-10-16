@@ -58,7 +58,7 @@ export const Editor: EditorComponent<State> = (props) => {
                 ref={autoFocusRef}
                 autocomplete="off"
                 style={{ height: "20vh", color: type2color(props.state.type) }}
-                value={props.state.type === "null" ? "null" : props.state.textareaValue}
+                value={props.state.type === "null" ? "NULL" : props.state.textareaValue}
                 onInput={(ev) => props.setState({ ...props.state, textareaValue: ev.currentTarget.value })}
                 disabled={props.state.type === "null"}></textarea>
             {"AS "}
