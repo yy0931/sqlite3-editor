@@ -19,7 +19,7 @@ const editors = [insert, createTable, dropTable, dropView, update, delete_, alte
 
 export type State = (typeof editors[number])["state"]
 
-type OnWriteOptions = { refreshTableList?: true, selectTable?: string }
+export type OnWriteOptions = { refreshTableList?: true, selectTable?: string }
 
 export const Editor = (props: { tableName?: string, tableList: TableListItem[], onWrite: (opts: OnWriteOptions) => void, sql: SQLite3Client }) => {
     const [state, setState] = useState<State>({ statement: "CREATE TABLE", strict: true, tableConstraints: "", tableName: "", withoutRowId: false })

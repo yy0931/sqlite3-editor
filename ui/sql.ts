@@ -16,6 +16,8 @@ declare global {
 
 const vscode = window.acquireVsCodeApi?.()
 
+export type Message = { data: { requestId: undefined } | { requestId: number } & ({ err: string } | { body: Uint8Array }) }
+
 const querying = new Set()
 export default class SQLite3Client {
     addErrorMessage: ((value: string) => void) | undefined
@@ -28,10 +30,9 @@ export default class SQLite3Client {
         return new Promise<Record<string, DataTypes>[]>((resolve, reject) => {
             const requestId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
             vscode.postMessage({ requestId, body: pack(body) })
-            const callback = ({ data }: { data: { requestId: number } & ({ err: string } | { body: Uint8Array }) }) => {
+            const callback = ({ data }: Message) => {
                 if (data.requestId !== requestId) { return }
                 window.removeEventListener("message", callback)
-                console.log(data)
                 if ("err" in data) {
                     this.addErrorMessage?.(data.err)
                     reject(new Error(data.err))
