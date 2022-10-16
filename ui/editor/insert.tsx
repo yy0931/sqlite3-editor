@@ -47,7 +47,7 @@ export const Editor: EditorComponent<State> = (props) => {
                         <div style={{ marginRight: "1em" }}>{name}</div>
                         <textarea
                             autocomplete="off" rows={1} style={{ width: "100%", resize: "vertical", display: "block", color: type2color(props.state.dataTypes[i]!) }}
-                            value={props.state.dataTypes[i]! === "null" ? "null" : props.state.values[i]!}
+                            value={props.state.dataTypes[i]! === "null" ? "NULL" : props.state.values[i]!}
                             onInput={(ev) => { props.setState(produce(props.state, (d) => { d.values[i] = ev.currentTarget.value })) }}
                             disabled={props.state.dataTypes[i]! === "null"}
                             tabIndex={0}></textarea>
