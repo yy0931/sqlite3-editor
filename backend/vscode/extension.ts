@@ -46,14 +46,14 @@ export const activate = (context: vscode.ExtensionContext) => {
 
                 context.subscriptions.push(webviewPanel.webview.onDidReceiveMessage(({ requestId, body }: { requestId: number, body: Uint8Array }) => {
                     query({ body }, document.readonlyConnection, document.readWriteConnection)
-                        .then((body) => webviewPanel.webview.postMessage({ requestId, body }))
+                        .then((body) => webviewPanel.webview.postMessage({ type: "sqlite3-editor-server", requestId, body }))
                         .catch((err: Error) => {
-                            webviewPanel.webview.postMessage({ requestId, err: err.message })
+                            webviewPanel.webview.postMessage({ type: "sqlite3-editor-server", requestId, err: err.message })
                         })
                 }))
 
                 document.watcher.on("change", () => {
-                    webviewPanel.webview.postMessage({})
+                    webviewPanel.webview.postMessage({ type: "sqlite3-editor-server" })
                 })
             },
         } as vscode.CustomReadonlyEditorProvider<vscode.Disposable & {

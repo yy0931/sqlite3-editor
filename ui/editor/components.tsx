@@ -14,7 +14,7 @@ export const parseTextareaValue = (value: string, type: EditorDataType): DataTyp
     } else if (type === "number") {
         return +value
     } else if (type === "blob") {
-        return Uint8Array.from(value.match(/.{1, 2}/g)?.map((byte) => parseInt(byte, 16)) ?? /* TODO: Show an error message*/[])
+        return Uint8Array.from(value.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) ?? /* TODO: Show an error message*/[])
     } else {
         return value
     }
