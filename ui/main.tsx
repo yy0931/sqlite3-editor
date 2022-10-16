@@ -180,7 +180,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
             setTableProps({
                 tableName: null,
                 autoIncrement: false,
-                records: await props.sql.query(`${viewerStatement} ${pragma}`, [], "r"),
+                records: (await props.sql.query(`${viewerStatement} ${pragma}`, [], "r")) ?? [],
                 rowStart: 0,
                 tableInfo: null,
             })
