@@ -226,7 +226,7 @@ table.viewer {
         background-color: var(--button-primary-background);
     }
 
-    td:nth-child(1):not(.ew-resize):hover {
+    td:nth-child(1):not(.ew-resize):hover:not(.no-hover) {
         background-color: var(--button-primary-hover-background);
         cursor: pointer;
     }
