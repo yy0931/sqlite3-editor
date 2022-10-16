@@ -16,7 +16,7 @@ declare global {
 
 const vscode = window.acquireVsCodeApi?.()
 
-export type Message = { data: { requestId: undefined } | { requestId: number } & ({ err: string } | { body: Uint8Array }) }
+export type Message = { data: { /* preact debugger also uses message events */ type: "sqlite3-editor-server" } & ({ requestId: undefined } | { requestId: number } & ({ err: string } | { body: Uint8Array })) }
 
 const querying = new Set()
 export default class SQLite3Client {
@@ -31,7 +31,7 @@ export default class SQLite3Client {
             const requestId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
             vscode.postMessage({ requestId, body: pack(body) })
             const callback = ({ data }: Message) => {
-                if (data.requestId !== requestId) { return }
+                if (data.type !== "sqlite3-editor-server" || data.requestId !== requestId) { return }
                 window.removeEventListener("message", callback)
                 if ("err" in data) {
                     this.addErrorMessage?.(data.err)

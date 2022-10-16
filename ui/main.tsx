@@ -1,4 +1,4 @@
-import { render, } from "preact"
+import { render } from "preact"
 import * as editor from "./editor"
 import * as update from "./editor/update"
 import * as delete_ from "./editor/delete_"
@@ -18,8 +18,8 @@ export const escapeSQLIdentifier = (ident: string) => {
 export const unsafeEscapeValue = (x: unknown): string =>
     typeof x === "string" ? `'${x.replaceAll("'", "''")}'` : x + ""
 
-export const blob2hex = (blob: Uint8Array, maxLength = 8) =>
-    Array.from(blob.slice(0, maxLength), (x) => x.toString(16).padStart(2, "0")).join("") + (blob.length > maxLength ? "..." : "")
+export const blob2hex = (blob: Uint8Array, maxLength?: number) =>
+    Array.from(blob.slice(0, maxLength), (x) => x.toString(16).padStart(2, "0")).join("") + (maxLength !== undefined && blob.length > maxLength ? "..." : "")
 
 export const type2color = (type: string) => {
     if (type === "number") {
@@ -38,12 +38,16 @@ const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: Table
         tableInfo = Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0, pk: 0, type: "", cid: 0, dflt_value: 0 }))
     }
 
+    const columnWidths = useRef<(number | null)[]>(Object.keys(records[0] ?? {}).map(() => null))
+    const tableRef = useRef() as Ref<HTMLTableElement>
+
     // thead
-    return <table className="viewer" style={{ background: "white", width: "max-content" }}>
+    return <table ref={tableRef} className="viewer" style={{ background: "white", width: "max-content" }}>
         <thead>
             <tr>
                 <th></th>
                 {tableInfo.map(({ name, notnull, pk, type }, i) => <th
+                    style={{ width: columnWidths.current[i] }}
                     className={tableName !== null ? "clickable" : ""}
                     onMouseMove={(ev) => {
                         const rect = ev.currentTarget.getBoundingClientRect()
@@ -58,7 +62,11 @@ const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: Table
                         const rect = th.getBoundingClientRect()
                         if (rect.right - ev.clientX < 10) { // right
                             const mouseMove = (ev: MouseEvent) => {
-                                th.style.width = Math.max(50, ev.clientX - rect.left) + "px"
+                                columnWidths.current[i] = Math.max(50, ev.clientX - rect.left)
+                                th.style.width = columnWidths.current[i] + "px"
+                                for (const td of tableRef.current?.querySelectorAll<HTMLElement>(`td:nth-child(${i + 2})`) ?? []) {
+                                    td.style.maxWidth = columnWidths.current[i] + "px"
+                                }
                             }
                             document.body.classList.add("ew-resize")
                             window.addEventListener("mousemove", mouseMove)
@@ -88,13 +96,14 @@ const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: Table
                 <td
                     className={tableName !== null ? "clickable" : ""}
                     onClick={(ev) => { if (tableName !== null) { delete_.open(tableName, record, ev.currentTarget.parentElement as HTMLTableRowElement).catch(console.error) } }}>{rowStart + i + 1}</td>
-                {tableInfo!.map(({ name }) => {
+                {tableInfo!.map(({ name }, i) => {
                     const value = record[name]
                     return <td
+                        style={{ maxWidth: columnWidths.current[i] }}
                         className={tableName !== null ? "clickable" : ""}
                         onClick={(ev) => { if (tableName !== null) { update.open(tableName, name, record, ev.currentTarget).catch(console.error) } }}>
                         <pre style={{ color: type2color(typeof value) }}>
-                            {value instanceof Uint8Array ? `x'${blob2hex(value)}'` :
+                            {value instanceof Uint8Array ? `x'${blob2hex(value, 8)}'` :
                                 value === null ? "NULL" :
                                     typeof value === "string" ? unsafeEscapeValue(value) :
                                         JSON.stringify(value)}
@@ -188,7 +197,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
 
     useEffect(() => {
         const handler = ({ data }: Message) => {
-            if (data.requestId === undefined) {
+            if (data.type === "sqlite3-editor-server" && data.requestId === undefined) {
                 setReloadRequired(true)
             }
         }
