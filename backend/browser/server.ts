@@ -1,31 +1,36 @@
 import express from "express"
-import sqlite3 from "sqlite3"
+import sqlite3 from "better-sqlite3"
 import { pack, unpack } from "msgpackr"
 import fs from "fs"
 
-const readonlyConnection = new sqlite3.Database("samples/employees_db-full-1.0.6.db", sqlite3.OPEN_READONLY)
-const readWriteConnection = new sqlite3.Database("samples/employees_db-full-1.0.6.db")
-
-const query = (req: { body: Buffer }) => new Promise<Buffer>((resolve, reject) => {
-    const query = unpack(req.body) as { query: string, params: (null | number | string | Buffer)[], mode: "r" | "w+" }
-
-    if (typeof query.query !== "string") { reject(new Error(`Invalid search params: ${JSON.stringify(query)}`)); return }
-    if (!(Array.isArray(query.params) && query.params.every((p) => p === null || typeof p === "number" || typeof p === "string" || p instanceof Buffer))) { reject(new Error(`Invalid search params: ${JSON.stringify(query)}`)); return }
-    if (!["r", "w+"].includes(query.mode)) { reject(new Error(`Invalid search params: ${JSON.stringify(query)}`)); return }
-
-    (query.mode === "w+" ? readWriteConnection : readonlyConnection).all(query.query, query.params, (err, rows) => {
-        if (err !== null) { console.error(err); reject(new Error(`${err.message}\nQuery: ${query.query}\nParams: ${JSON.stringify(query.params)}`)); return }
-        resolve(pack(rows))
-    })
-})
+const readonlyConnection = sqlite3("samples/employees_db-full-1.0.6.db", { readonly: true })
+const readWriteConnection = sqlite3("samples/employees_db-full-1.0.6.db")
 
 express()
     .use(express.raw())
     .use("/", express.static("../../ui/dist"))
     .post("/query", (req, res) => {
-        query(req)
-            .then((data) => { res.send(data) })
-            .catch((err: Error) => { res.status(400).send(err.message) })
+        try {
+            const query = unpack(req.body as Buffer) as { query: string, params: (null | number | string | Buffer)[], mode: "r" | "w+" }
+
+            if (typeof query.query !== "string") { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
+            if (!(Array.isArray(query.params) && query.params.every((p) => p === null || typeof p === "number" || typeof p === "string" || p instanceof Buffer))) { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
+            if (!["r", "w+"].includes(query.mode)) { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
+
+            try {
+                const statement = (query.mode === "w+" ? readWriteConnection : readonlyConnection).prepare(query.query)
+                if (statement.reader) {
+                    res.send(pack(statement.all(...query.params)))
+                } else {
+                    statement.run(...query.params)
+                    res.send(pack(undefined))
+                }
+            } catch (err) {
+                throw new Error(`${(err as Error).message}\nQuery: ${query.query}\nParams: ${JSON.stringify(query.params)}`)
+            }
+        } catch (err) {
+            res.status(400).send((err as Error).message)
+        }
     })
     .post("/import", (req, res) => {
         const { filepath } = unpack(req.body as Buffer) as { filepath: string }

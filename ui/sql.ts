@@ -71,8 +71,11 @@ export default class SQLite3Client {
         }
     }
 
-    query = (query: string, params: DataTypes[], mode: "r" | "w+") =>
-        this.#post(`/query`, { query, params, mode }) as Promise<Record<string, DataTypes>[]>
+    query = <T extends string>(query: T, params: DataTypes[], mode: "r" | "w+"): Promise<
+        T extends `SELECT ${string}` | `PRAGMA pragma_list` ?
+        Record<string, DataTypes>[] :
+        Record<string, DataTypes>[] | undefined> =>
+        this.#post(`/query`, { query, params, mode })
 
     import = (filepath: string) =>
         this.#post(`/import`, { filepath }) as Promise<Uint8Array>

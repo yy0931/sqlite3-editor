@@ -1,29 +1,16 @@
 import vscode from "vscode"
-import sqlite3 from "sqlite3"
+import sqlite3 from "better-sqlite3"
 import { pack, unpack } from "msgpackr"
 import fs from "fs"
 import path from "path"
 import os from "os"
 
-const query = (req: { body: Uint8Array }, readonlyConnection: sqlite3.Database, readWriteConnection: sqlite3.Database) => new Promise<Buffer>((resolve, reject) => {
-    const query = unpack(req.body) as { query: string, params: (null | number | string | Uint8Array)[], mode: "r" | "w+" }
-
-    if (typeof query.query !== "string") { reject(new Error(`Invalid argument: ${JSON.stringify(query)}`)); return }
-    if (!(Array.isArray(query.params) && query.params.every((p) => p === null || typeof p === "number" || typeof p === "string" || p instanceof Uint8Array))) { reject(new Error(`Invalid argument: ${JSON.stringify(query)}`)); return }
-    if (!["r", "w+"].includes(query.mode)) { reject(new Error(`Invalid argument: ${JSON.stringify(query)}`)); return }
-
-    (query.mode === "w+" ? readWriteConnection : readonlyConnection).all(query.query, query.params, (err, rows) => {
-        if (err !== null) { reject(new Error(`${err.message}\nQuery: ${query.query}\nParams: ${JSON.stringify(query.params)}`)); return }
-        resolve(pack(rows))
-    })
-})
-
 export const activate = (context: vscode.ExtensionContext) => {
     context.subscriptions.push(
         vscode.window.registerCustomEditorProvider("sqlite3-editor.editor", {
             openCustomDocument(uri, openContext, token) {
-                const readonlyConnection = new sqlite3.Database(uri.fsPath, sqlite3.OPEN_READONLY)
-                const readWriteConnection = new sqlite3.Database(uri.fsPath)
+                const readonlyConnection = sqlite3(uri.fsPath, { readonly: true })
+                const readWriteConnection = sqlite3(uri.fsPath)
                 const watcher = fs.watch(uri.fsPath)
                 return {
                     uri,
@@ -57,9 +44,27 @@ export const activate = (context: vscode.ExtensionContext) => {
                             vscode.Uri.joinPath(vscode.workspace.getWorkspaceFolder(document.uri)?.uri ?? vscode.Uri.file(os.homedir()), filepath)
 
                     if (url === `/query`) {
-                        query({ body }, document.readonlyConnection, document.readWriteConnection)
-                            .then((body) => res.send(body))
-                            .catch((err) => { res.status(400).send(err.message) })
+                        try {
+                            const query = unpack(body as Buffer) as { query: string, params: (null | number | string | Buffer)[], mode: "r" | "w+" }
+
+                            if (typeof query.query !== "string") { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
+                            if (!(Array.isArray(query.params) && query.params.every((p) => p === null || typeof p === "number" || typeof p === "string" || p instanceof Buffer))) { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
+                            if (!["r", "w+"].includes(query.mode)) { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
+
+                            try {
+                                const statement = (query.mode === "w+" ? document.readWriteConnection : document.readonlyConnection).prepare(query.query)
+                                if (statement.reader) {
+                                    res.send(pack(statement.all(...query.params)))
+                                } else {
+                                    statement.run(...query.params)
+                                    res.send(pack(undefined))
+                                }
+                            } catch (err) {
+                                throw new Error(`${(err as Error).message}\nQuery: ${query.query}\nParams: ${JSON.stringify(query.params)}`)
+                            }
+                        } catch (err) {
+                            res.status(400).send((err as Error).message)
+                        }
                     } else if (url === "/import") {
                         const { filepath } = unpack(body as Uint8Array) as { filepath: string }
                         vscode.workspace.fs.readFile(resolveFilepath(filepath))
