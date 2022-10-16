@@ -81,6 +81,9 @@ const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: Table
             </tr>
         </thead>
         <tbody>
+            {records.length === 0 && <tr>
+                <td className="no-hover" style={{ display: "inline-block", height: "1.2em", cursor: "default" }}></td>
+            </tr>}
             {records.map((record, i) => <tr>
                 <td
                     className={tableName !== null ? "clickable" : ""}
