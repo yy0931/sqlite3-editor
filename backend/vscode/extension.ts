@@ -1,6 +1,7 @@
 import vscode from "vscode"
 import sqlite3 from "sqlite3"
 import { pack, unpack } from "msgpackr"
+import fs from "fs"
 
 const query = (req: { body: Uint8Array }, readonlyConnection: sqlite3.Database, readWriteConnection: sqlite3.Database) => new Promise<Uint8Array>((resolve, reject) => {
     const query = unpack(req.body) as { query: string, params: (null | number | string | Buffer)[], mode: "r" | "w+" }
@@ -21,14 +22,18 @@ export const activate = (context: vscode.ExtensionContext) => {
             openCustomDocument(uri, openContext, token) {
                 const readonlyConnection = new sqlite3.Database(uri.fsPath, sqlite3.OPEN_READONLY)
                 const readWriteConnection = new sqlite3.Database(uri.fsPath)
+                const watcher = fs.watch(uri.fsPath)
                 return {
                     uri,
                     dispose: () => {
                         readonlyConnection.close()
                         readWriteConnection.close()
+                        watcher.removeAllListeners()
+                        watcher.close()
                     },
                     readonlyConnection,
                     readWriteConnection,
+                    watcher,
                 }
             },
             async resolveCustomEditor(document, webviewPanel, token) {
@@ -43,14 +48,21 @@ export const activate = (context: vscode.ExtensionContext) => {
                     query({ body }, document.readonlyConnection, document.readWriteConnection)
                         .then((body) => webviewPanel.webview.postMessage({ requestId, body }))
                         .catch((err: Error) => {
-                            console.log("catch!!!!!")
-                            console.log("sent: " + JSON.stringify({ requestId, err: err.message }))
                             webviewPanel.webview.postMessage({ requestId, err: err.message })
                         })
                 }))
+
+                document.watcher.on("change", () => {
+                    webviewPanel.webview.postMessage({})
+                })
             },
-        } as vscode.CustomReadonlyEditorProvider<vscode.Disposable & { uri: vscode.Uri, readonlyConnection: sqlite3.Database, readWriteConnection: sqlite3.Database }>, {
-            supportsMultipleEditorsPerDocument: false,
+        } as vscode.CustomReadonlyEditorProvider<vscode.Disposable & {
+            uri: vscode.Uri
+            readonlyConnection: sqlite3.Database
+            readWriteConnection: sqlite3.Database
+            watcher: fs.FSWatcher
+        }>, {
+            supportsMultipleEditorsPerDocument: true,
             webviewOptions: {
                 enableFindWidget: true,
                 retainContextWhenHidden: true,

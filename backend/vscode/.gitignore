@@ -1,3 +1,4 @@
 webview/
 node_modules/
 *.vsix
+extension.js

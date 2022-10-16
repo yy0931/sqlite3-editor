@@ -6,7 +6,7 @@ import * as alter_table from "./editor/alter_table"
 import deepEqual from "fast-deep-equal"
 import { useState, useEffect, useReducer, useRef, Ref } from "preact/hooks"
 import { Select } from "./editor/components"
-import SQLite3Client, { DataTypes, TableInfo, TableListItem } from "./sql"
+import SQLite3Client, { DataTypes, Message, TableInfo, TableListItem } from "./sql"
 
 /** https://stackoverflow.com/a/6701665/10710682, https://stackoverflow.com/a/51574648/10710682 */
 export const escapeSQLIdentifier = (ident: string) => {
@@ -181,6 +181,54 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
         queryAndRenderTable().catch(console.error)
     }, [viewerStatement, pragma, viewerTableName, viewerConstraints, tableList, page, pageSize])
 
+    const [reloadRequired, setReloadRequired] = useState(false)
+
+    useEffect(() => {
+        const handler = ({ data }: Message) => {
+            if (data.requestId === undefined) {
+                setReloadRequired(true)
+            }
+        }
+        window.addEventListener("message", handler)
+        return () => { window.removeEventListener("message", handler) }
+    }, [])
+
+    {
+        const reloadRequiredRef = useRef(false)
+        useEffect(() => { reloadRequiredRef.current = reloadRequired }, [reloadRequired])
+        useEffect(() => {
+            const timer = setInterval(() => {
+                if (reloadRequiredRef.current) {
+                    reload({ refreshTableList: true })
+                }
+            }, 1000)
+            return () => { clearInterval(timer) }
+        }, [reloadRequired])
+    }
+
+    const reload = (opts: editor.OnWriteOptions) => {
+        setReloadRequired(false)
+        const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
+        if (!skipTableRefresh) {
+            queryAndRenderTable().catch(console.error)
+        }
+        props.sql.getTableList().then((newTableList) => {
+            if (deepEqual(newTableList, tableList)) {
+                if (skipTableRefresh) {
+                    queryAndRenderTable().catch(console.error)
+                }
+                return
+            }
+            const newViewerTableName = opts.selectTable ?? viewerTableName
+            if (newTableList.some((table) => table.name === newViewerTableName)) {
+                setViewerTableName(newViewerTableName)
+            } else {
+                setViewerTableName(newTableList[0]?.name)
+            }
+            setTableList(newTableList)
+        }).catch(console.error)
+    }
+
     return <>
         <ProgressBar />
         {viewerTableName !== undefined && <h2>
@@ -193,7 +241,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
             {viewerStatement === "PRAGMA" && <Select value={pragma} onChange={setPragma} options={Object.fromEntries(props.pragmaList.map((k) => [k, {}]))} />}
         </h2>}
         <div>
-            <div style={{ marginLeft: "10px", marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", width: "100%", display: "inline-block" }}>
+            <div style={{ marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", width: "100%", display: "inline-block" }}>
                 {tableProps && <Table {...tableProps} />}
             </div>
         </div>
@@ -205,27 +253,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
             <pre>{errorMessage}</pre>
             <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => setErrorMessage("")} />
         </p>}
-        <editor.Editor tableName={viewerStatement === "SELECT" ? viewerTableName : undefined} tableList={tableList} onWrite={(opts) => {
-            const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
-            if (!skipTableRefresh) {
-                queryAndRenderTable().catch(console.error)
-            }
-            props.sql.getTableList().then((newTableList) => {
-                if (deepEqual(newTableList, tableList)) {
-                    if (skipTableRefresh) {
-                        queryAndRenderTable().catch(console.error)
-                    }
-                    return
-                }
-                const newViewerTableName = opts.selectTable ?? viewerTableName
-                if (newTableList.some((table) => table.name === newViewerTableName)) {
-                    setViewerTableName(newViewerTableName)
-                } else {
-                    setViewerTableName(newTableList[0]?.name)
-                }
-                setTableList(newTableList)
-            }).catch(console.error)
-        }} sql={props.sql} />
+        <editor.Editor tableName={viewerStatement === "SELECT" ? viewerTableName : undefined} tableList={tableList} onWrite={(opts) => { reload(opts) }} sql={props.sql} />
     </>
 }
 
