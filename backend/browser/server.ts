@@ -1,6 +1,7 @@
 import express from "express"
 import sqlite3 from "sqlite3"
 import { pack, unpack } from "msgpackr"
+import fs from "fs"
 
 const readonlyConnection = new sqlite3.Database("samples/employees_db-full-1.0.6.db", sqlite3.OPEN_READONLY)
 const readWriteConnection = new sqlite3.Database("samples/employees_db-full-1.0.6.db")
@@ -25,5 +26,17 @@ express()
         query(req)
             .then((data) => { res.send(data) })
             .catch((err: Error) => { res.status(400).send(err.message) })
+    })
+    .post("/import", (req, res) => {
+        const { filepath } = unpack(req.body as Buffer) as { filepath: string }
+        fs.promises.readFile(filepath)
+            .then((buf) => { res.send(pack(buf)) })
+            .catch((err) => { res.status(400).send(err.message) })
+    })
+    .post("/export", (req, res) => {
+        const { filepath, data } = unpack(req.body as Buffer) as { filepath: string, data: Buffer }
+        fs.promises.writeFile(filepath, data)
+            .then(() => { res.send(pack(null)) })
+            .catch((err) => { res.status(400).send(err.message) })
     })
     .listen(8080, "127.0.0.1", () => { console.log(`http://localhost:8080`) })
