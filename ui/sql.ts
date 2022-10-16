@@ -22,61 +22,63 @@ const querying = new Set()
 export default class SQLite3Client {
     addErrorMessage: ((value: string) => void) | undefined
 
-    async #postVSCode(body: unknown) {
-        if (vscode === undefined) { return }
+    async #post(url: string, body: unknown) {
         const id = {}
         querying.add(id)
         document.body.classList.add("querying")
-        return new Promise<Record<string, DataTypes>[]>((resolve, reject) => {
-            const requestId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
-            vscode.postMessage({ requestId, body: pack(body) })
-            const callback = ({ data }: Message) => {
-                if (data.type !== "sqlite3-editor-server" || data.requestId !== requestId) { return }
-                window.removeEventListener("message", callback)
-                if ("err" in data) {
-                    this.addErrorMessage?.(data.err)
-                    reject(new Error(data.err))
-                    return
+        if (vscode !== undefined) {
+            return new Promise<unknown>((resolve, reject) => {
+                const requestId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
+                vscode.postMessage({ requestId, path: url, body: pack(body) })
+                const callback = ({ data }: Message) => {
+                    if (data.type !== "sqlite3-editor-server" || data.requestId !== requestId) { return }
+                    window.removeEventListener("message", callback)
+                    if ("err" in data) {
+                        this.addErrorMessage?.(data.err)
+                        reject(new Error(data.err))
+                        return
+                    }
+                    resolve(unpack(data.body))
                 }
-                resolve(unpack(data.body))
-            }
-            window.addEventListener("message", callback)
-        }).finally(() => {
-            querying.delete(id)
-            if (querying.size === 0) {
-                document.body.classList.remove("querying")
-            }
-        })
-    }
-
-    async #postHTTP(body: unknown) {
-        const id = {}
-        querying.add(id)
-        document.body.classList.add("querying")
-        try {
-            let res: Response
+                window.addEventListener("message", callback)
+            }).finally(() => {
+                querying.delete(id)
+                if (querying.size === 0) {
+                    document.body.classList.remove("querying")
+                }
+            })
+        } else {
             try {
-                res = await fetch(`/query`, { method: "POST", body: pack(body), headers: { "Content-Type": "application/octet-stream" } })
-            } catch (err: any) {
-                this.addErrorMessage?.("message" in err ? err.message : "" + err)
-                throw err
-            }
-            if (!res.ok) {
-                const message = await res.text()
-                this.addErrorMessage?.(message)
-                throw new Error(message)
-            }
-            return unpack(new Uint8Array(await res.arrayBuffer()))
-        } finally {
-            querying.delete(id)
-            if (querying.size === 0) {
-                document.body.classList.remove("querying")
+                let res: Response
+                try {
+                    res = await fetch(url, { method: "POST", body: pack(body), headers: { "Content-Type": "application/octet-stream" } })
+                } catch (err: any) {
+                    this.addErrorMessage?.("message" in err ? err.message : "" + err)
+                    throw err
+                }
+                if (!res.ok) {
+                    const message = await res.text()
+                    this.addErrorMessage?.(message)
+                    throw new Error(message)
+                }
+                return unpack(new Uint8Array(await res.arrayBuffer()))
+            } finally {
+                querying.delete(id)
+                if (querying.size === 0) {
+                    document.body.classList.remove("querying")
+                }
             }
         }
     }
 
-    query = (query: string, params: DataTypes[], mode: "r" | "w+"): Promise<Record<string, DataTypes>[]> =>
-        vscode ? this.#postVSCode({ query, params, mode }) : this.#postHTTP({ query, params, mode })
+    query = (query: string, params: DataTypes[], mode: "r" | "w+") =>
+        this.#post(`/query`, { query, params, mode }) as Promise<Record<string, DataTypes>[]>
+
+    import = (filepath: string) =>
+        this.#post(`/import`, { filepath }) as Promise<Uint8Array>
+
+    export = (filepath: string, data: Uint8Array) =>
+        this.#post(`/export`, { filepath, data }) as Promise<void>
 
     /** https://stackoverflow.com/a/1604121/10710682 */
     hasTable = async (tableName: string) =>
