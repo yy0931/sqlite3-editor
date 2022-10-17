@@ -37,7 +37,7 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
         record,
         textareaValue: value instanceof Uint8Array ? "" : (value + ""),
         blobValue: value instanceof Uint8Array ? value : null,
-        type: value === null ? "null" : value instanceof Uint8Array ? "blob" : typeof value === "number" ? "number" : "string",
+        type: value === null ? "null" : value instanceof Uint8Array ? "blob" : (typeof value === "number" || typeof value === "bigint") ? "number" : "string",
         constraintChoices,
         td,
         sql,

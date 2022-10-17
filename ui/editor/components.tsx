@@ -42,7 +42,11 @@ export const parseTextareaValue = (value: string, blobValue: Uint8Array | null, 
     if (type === "null") {
         return null
     } else if (type === "number") {
-        return +value
+        if (/^[+\-]?\d+$/.test(value.trim()) && -(2n ** 64n / 2n) <= BigInt(value) && BigInt(value) <= 2n ** 64n / 2n - 1n) {
+            return BigInt(value)  // i64
+        } else {
+            return +value
+        }
     } else if (type === "blob") {
         return blobValue ?? new Uint8Array()
     } else {

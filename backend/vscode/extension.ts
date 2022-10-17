@@ -45,10 +45,10 @@ export const activate = (context: vscode.ExtensionContext) => {
 
                     if (url === `/query`) {
                         try {
-                            const query = unpack(body as Buffer) as { query: string, params: (null | number | string | Buffer)[], mode: "r" | "w+" }
+                            const query = unpack(body as Buffer) as { query: string, params: (null | number | bigint | string | Buffer)[], mode: "r" | "w+" }
 
                             if (typeof query.query !== "string") { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
-                            if (!(Array.isArray(query.params) && query.params.every((p) => p === null || typeof p === "number" || typeof p === "string" || p instanceof Buffer))) { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
+                            if (!(Array.isArray(query.params) && query.params.every((p) => p === null || typeof p === "number" || typeof p === "bigint" || typeof p === "string" || p instanceof Buffer))) { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
                             if (!["r", "w+"].includes(query.mode)) { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
 
                             try {

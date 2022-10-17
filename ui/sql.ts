@@ -1,10 +1,10 @@
 import { pack, unpack } from "msgpackr"
 import { escapeSQLIdentifier } from "./main"
 
-export type TableInfo = { cid: number, dflt_value: number, name: string, notnull: number, type: string, pk: number }[]
+export type TableInfo = { cid: bigint, dflt_value: bigint, name: string, notnull: bigint, type: string, pk: bigint }[]
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
-export type DataTypes = string | number | Uint8Array | null
-export type TableListItem = { schema: string, name: string, type: "table" | "view" | "shadow" | "virtual", ncol: number, wr: number, strict: number }
+export type DataTypes = string | number | bigint | Uint8Array | null
+export type TableListItem = { schema: string, name: string, type: "table" | "view" | "shadow" | "virtual", ncol: bigint, wr: bigint, strict: bigint }
 
 type VSCodeAPI = { postMessage(data: unknown): void }
 
@@ -99,10 +99,10 @@ export default class SQLite3Client {
                 uniqueConstraints.push({ primary: true, columns: [column.name] })
             }
         }
-        for (const index of await this.query(`PRAGMA index_list(${escapeSQLIdentifier(tableName)})`, [], "r") as { seq: number, name: string, unique: 0 | 1, origin: "c" | "u" | "pk", partial: 0 | 1 }[]) {
+        for (const index of await this.query(`PRAGMA index_list(${escapeSQLIdentifier(tableName)})`, [], "r") as { seq: bigint, name: string, unique: 0n | 1n, origin: "c" | "u" | "pk", partial: 0n | 1n }[]) {
             if (index.partial) { continue }
             if (!index.unique) { continue }
-            const indexInfo = await this.query(`PRAGMA index_info(${escapeSQLIdentifier(index.name)})`, [], "r") as { seqno: number, cid: number, name: string }[]
+            const indexInfo = await this.query(`PRAGMA index_info(${escapeSQLIdentifier(index.name)})`, [], "r") as { seqno: bigint, cid: bigint, name: string }[]
             uniqueConstraints.push({ primary: index.origin === "pk", columns: indexInfo.map(({ name }) => name) })
         }
         return uniqueConstraints

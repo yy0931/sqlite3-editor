@@ -22,7 +22,7 @@ export const blob2hex = (blob: Uint8Array, maxLength?: number) =>
     Array.from(blob.slice(0, maxLength), (x) => x.toString(16).padStart(2, "0")).join("") + (maxLength !== undefined && blob.length > maxLength ? "..." : "")
 
 export const type2color = (type: string) => {
-    if (type === "number") {
+    if (type === "number" || type === "bigint") {
         return "green"
     } else if (type === "string") {
         return "rgb(138, 4, 4)"
@@ -31,11 +31,11 @@ export const type2color = (type: string) => {
     }
 }
 
-type TableProps = { tableName: string | null, tableInfo: TableInfo | null, records: Record<string, DataTypes>[], rowStart: number, autoIncrement: boolean }
+type TableProps = { tableName: string | null, tableInfo: TableInfo | null, records: Record<string, DataTypes>[], rowStart: bigint, autoIncrement: boolean }
 
 const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: TableProps) => {
     if (tableInfo === null) {
-        tableInfo = Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0, pk: 0, type: "", cid: 0, dflt_value: 0 }))
+        tableInfo = Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0n, pk: 0n, type: "", cid: 0n, dflt_value: 0n }))
     }
 
     const columnWidths = useRef<(number | null)[]>(Object.keys(records[0] ?? {}).map(() => null))
@@ -95,9 +95,9 @@ const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: Table
             {records.map((record, i) => <tr>
                 <td
                     className={tableName !== null ? "clickable" : ""}
-                    onClick={(ev) => { if (tableName !== null) { delete_.open(tableName, record, ev.currentTarget.parentElement as HTMLTableRowElement).catch(console.error) } }}>{rowStart + i + 1}</td>
+                    onClick={(ev) => { if (tableName !== null) { delete_.open(tableName, record, ev.currentTarget.parentElement as HTMLTableRowElement).catch(console.error) } }}>{rowStart + BigInt(i) + 1n}</td>
                 {tableInfo!.map(({ name }, i) => {
-                    const value = record[name]
+                    const value = record[name] as DataTypes
                     return <td
                         style={{ maxWidth: columnWidths.current[i] }}
                         className={tableName !== null ? "clickable" : ""}
@@ -106,7 +106,8 @@ const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: Table
                             {value instanceof Uint8Array ? `x'${blob2hex(value, 8)}'` :
                                 value === null ? "NULL" :
                                     typeof value === "string" ? unsafeEscapeValue(value) :
-                                        JSON.stringify(value)}
+                                        typeof value === "number" ? (/^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value) :
+                                            "" + value}
                         </pre>
                     </td>
                 })}
@@ -137,6 +138,11 @@ const ProgressBar = () => {
     return <div className="progressbar" ref={ref} style={{ display: "inline-block", userSelect: "none", pointerEvents: "none", position: "absolute", zIndex: 100, width: width + "px", height: "5px", top: 0, background: "var(--button-primary-background)" }}></div>
 }
 
+const BigintMath = {
+    max: (...args: bigint[]) => args.reduce((prev, curr) => curr > prev ? curr : prev),
+    min: (...args: bigint[]) => args.reduce((prev, curr) => curr < prev ? curr : prev),
+}
+
 const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQLite3Client }) => {
     const [tableList, setTableList] = useState(props.tableList)
 
@@ -145,15 +151,15 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
     const [viewerTableName, setViewerTableName] = useState(tableList[0]?.name) // undefined if there are no tables
     const [viewerConstraints, setViewerConstraints] = useState("")
     const [errorMessage, setErrorMessage] = useState("")
-    const [pageSize, setPageSize] = useReducer<number, number>((_, value) => Math.max(1, value), 1000)
-    const [numRecords, setRecordCount] = useState(0)
-    const pageMax = Math.ceil(numRecords / pageSize)
+    const [pageSize, setPageSize] = useReducer<bigint, bigint>((_, value) => BigintMath.max(1n, value), 1000n)
+    const [numRecords, setRecordCount] = useState(0n)
+    const pageMax = BigInt(Math.ceil(Number(numRecords) / Number(pageSize)))
     const [_, rerender] = useState({})
-    const [page, setPage] = useReducer<number, number>((_, value) => {
-        const clippedValue = Math.max(1, Math.min(pageMax, value))
+    const [page, setPage] = useReducer<bigint, bigint>((_, value) => {
+        const clippedValue = BigintMath.max(1n, BigintMath.min(pageMax, value))
         if (value !== clippedValue) { rerender({}) }  // Update the input box when value !== clippedValue === oldValue
         return clippedValue
-    }, 0)
+    }, 0n)
     const [tableProps, setTableProps] = useState<TableProps | null>(null)
 
     props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
@@ -165,15 +171,15 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
 
         // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
         if (viewerStatement === "SELECT") {
-            const records = await props.sql.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1) * pageSize], "r")
+            const records = await props.sql.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1n) * pageSize], "r")
             const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count
-            if (typeof newRecordCount !== "number") { throw new Error(newRecordCount + "") }
+            if (typeof newRecordCount !== "bigint") { throw new Error(newRecordCount + "") }
             setRecordCount(newRecordCount)
             setTableProps({
                 tableName: viewerTableName,
                 autoIncrement: viewerTableName === null ? false : await props.sql.hasTableAutoincrement(viewerTableName),
                 records,
-                rowStart: (page - 1) * pageSize,
+                rowStart: (page - 1n) * pageSize,
                 tableInfo: await props.sql.getTableInfo(viewerTableName),
             })
         } else {
@@ -181,7 +187,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
                 tableName: null,
                 autoIncrement: false,
                 records: (await props.sql.query(`${viewerStatement} ${pragma}`, [], "r")) ?? [],
-                rowStart: 0,
+                rowStart: 0n,
                 tableInfo: null,
             })
         }
@@ -258,8 +264,8 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
             </div>
         </div>
         <div style={{ marginBottom: "30px", paddingTop: "3px" }} className="primary">
-            <span><span style={{ cursor: "pointer", paddingLeft: "8px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page - 1)}>‹</span><input value={page} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onChange={(ev) => setPage(+ev.currentTarget.value)} /> / {pageMax} <span style={{ cursor: "pointer", paddingLeft: "4px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page + 1)}>›</span></span>
-            <span style={{ marginLeft: "40px" }}><input value={pageSize} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onBlur={(ev) => setPageSize(+ev.currentTarget.value)} /> records</span>
+            <span><span style={{ cursor: "pointer", paddingLeft: "8px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page - 1n)}>‹</span><input value={"" + page} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onChange={(ev) => setPage(BigInt(ev.currentTarget.value))} /> / {pageMax} <span style={{ cursor: "pointer", paddingLeft: "4px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page + 1n)}>›</span></span>
+            <span style={{ marginLeft: "40px" }}><input value={"" + pageSize} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onBlur={(ev) => setPageSize(BigInt(ev.currentTarget.value))} /> records</span>
         </div>
         {errorMessage && <p style={{ background: "rgb(14, 72, 117)", color: "white", padding: "10px" }}>
             <pre>{errorMessage}</pre>
