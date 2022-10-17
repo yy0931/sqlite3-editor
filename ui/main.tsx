@@ -161,6 +161,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
         return clippedValue
     }, 0n)
     const [tableProps, setTableProps] = useState<TableProps | null>(null)
+    const scrollerRef = useRef() as Ref<HTMLDivElement>
 
     props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
 
@@ -228,7 +229,16 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
         setReloadRequired(false)
         const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
         if (!skipTableRefresh) {
-            queryAndRenderTable().catch(console.error)
+            queryAndRenderTable()
+                .then(() => {
+                    if (opts.scrollToBottom) {
+                        setTimeout(() => {  // TODO: remove setTimeout
+                            setPage(pageMax)
+                            scrollerRef.current?.scrollBy({ behavior: "smooth", top: scrollerRef.current!.scrollHeight - scrollerRef.current!.offsetHeight })
+                        }, 80)
+                    }
+                })
+                .catch(console.error)
         }
         props.sql.getTableList().then((newTableList) => {
             if (deepEqual(newTableList, tableList)) {
