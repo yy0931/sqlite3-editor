@@ -259,17 +259,22 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
 
     return <>
         <ProgressBar />
-        {viewerTableName !== undefined && <h2>
-            <Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
-            {viewerStatement === "SELECT" && <> * FROM
-                {" "}
-                <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
-                {" "}
-                <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "1000px" }} /></>}
-            {viewerStatement === "PRAGMA" && <Select value={pragma} onChange={setPragma} options={Object.fromEntries(props.pragmaList.map((k) => [k, {}]))} />}
+        {viewerTableName !== undefined && <h2 style={{ display: "flex" }}>
+            <div style={{ whiteSpace: "pre" }}>
+                <Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
+                {viewerStatement === "SELECT" && <> * FROM
+                    {" "}
+                    <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
+                    {" "}
+                </>}
+            </div>
+            <div style={{ flex: 1 }}>
+                {viewerStatement === "SELECT" && <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "100%" }} />}
+                {viewerStatement === "PRAGMA" && <Select value={pragma} onChange={setPragma} options={Object.fromEntries(props.pragmaList.map((k) => [k, {}]))} />}
+            </div>
         </h2>}
         <div>
-            <div style={{ marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", width: "100%", display: "inline-block" }}>
+            <div ref={scrollerRef} style={{ marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", width: "100%", display: "inline-block" }}>
                 {tableProps && <Table {...tableProps} />}
             </div>
         </div>
