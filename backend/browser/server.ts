@@ -6,16 +6,19 @@ import fs from "fs"
 const readonlyConnection = sqlite3("samples/employees_db-full-1.0.6.db", { readonly: true })
 const readWriteConnection = sqlite3("samples/employees_db-full-1.0.6.db")
 
+readonlyConnection.defaultSafeIntegers()
+readWriteConnection.defaultSafeIntegers()
+
 express()
     .use(express.raw())
     .use("/", express.static("../../ui/dist"))
     .post("/query", (req, res) => {
         try {
-            const query = unpack(req.body as Buffer) as { query: string, params: (null | number | string | Buffer)[], mode: "r" | "w+" }
+            const query = unpack(req.body as Buffer) as { query: string, params: (null | bigint | number | string | Buffer)[], mode: "r" | "w+" }
 
-            if (typeof query.query !== "string") { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
-            if (!(Array.isArray(query.params) && query.params.every((p) => p === null || typeof p === "number" || typeof p === "string" || p instanceof Buffer))) { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
-            if (!["r", "w+"].includes(query.mode)) { throw new Error(`Invalid arguments: ${JSON.stringify(query)}`) }
+            if (typeof query.query !== "string") { throw new Error(`Invalid arguments`) }
+            if (!(Array.isArray(query.params) && query.params.every((p) => p === null || typeof p === "number" || typeof p === "bigint" || typeof p === "string" || p instanceof Buffer))) { throw new Error(`Invalid arguments`) }
+            if (!["r", "w+"].includes(query.mode)) { throw new Error(`Invalid arguments`) }
 
             try {
                 const statement = (query.mode === "w+" ? readWriteConnection : readonlyConnection).prepare(query.query)
@@ -26,7 +29,7 @@ express()
                     res.send(pack(undefined))
                 }
             } catch (err) {
-                throw new Error(`${(err as Error).message}\nQuery: ${query.query}\nParams: ${JSON.stringify(query.params)}`)
+                throw new Error(`${(err as Error).message}\nQuery: ${query.query}\nParams: [${query.params.map((x) => "" + x).join(", ")}]`)
             }
         } catch (err) {
             res.status(400).send((err as Error).message)
