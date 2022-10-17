@@ -62,7 +62,7 @@ export const Editor: EditorComponent<State> = (props) => {
                 })}
             </ul>
             <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
-                props.commit(`INSERT ${query}`, props.state.textareaValues.map((value, i) => parseTextareaValue(value, props.state.blobValues[i]!, props.state.dataTypes[i]!)), {}).then(() => {
+                props.commit(`INSERT ${query}`, props.state.textareaValues.map((value, i) => parseTextareaValue(value, props.state.blobValues[i]!, props.state.dataTypes[i]!)), { scrollToBottom: true }).then(() => {
                     open(props.state.tableName)
                 })
             }} />
