@@ -40,12 +40,11 @@
     }
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^18.7.18",
     "@types/vscode": "^1.71.0",
     "esbuild": "^0.15.7"
   },
   "dependencies": {
-    "better-sqlite3": "^7.6.2",
-    "msgpackr": "^1.6.3"
+    "tempy": "^3.0.0"
   }
 }

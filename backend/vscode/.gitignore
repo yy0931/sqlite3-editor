@@ -2,3 +2,4 @@ webview/
 node_modules/
 *.vsix
 extension.js
+__pycache__

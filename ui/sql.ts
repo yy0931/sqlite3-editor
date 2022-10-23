@@ -1,4 +1,4 @@
-import { pack, unpack } from "msgpackr"
+import { pack, Unpackr } from "msgpackr"
 import { escapeSQLIdentifier } from "./main"
 
 export type TableInfo = { cid: bigint, dflt_value: bigint, name: string, notnull: bigint, type: string, pk: bigint }[]
@@ -17,6 +17,8 @@ declare global {
 const vscode = window.acquireVsCodeApi?.()
 
 export type Message = { data: { /* preact debugger also uses message events */ type: "sqlite3-editor-server" } & ({ requestId: undefined } | { requestId: number } & ({ err: string } | { body: Uint8Array })) }
+
+const unpackr = new Unpackr({ largeBigIntToFloat: false, int64AsNumber: false, mapsAsObjects: true, useRecords: true })
 
 const querying = new Set()
 export default class SQLite3Client {
@@ -38,7 +40,7 @@ export default class SQLite3Client {
                         reject(new Error(data.err))
                         return
                     }
-                    resolve(unpack(data.body))
+                    resolve(unpackr.unpack(data.body))
                 }
                 window.addEventListener("message", callback)
             }).finally(() => {
@@ -61,7 +63,7 @@ export default class SQLite3Client {
                     this.addErrorMessage?.(message)
                     throw new Error(message)
                 }
-                return unpack(new Uint8Array(await res.arrayBuffer()))
+                return unpackr.unpack(new Uint8Array(await res.arrayBuffer()))
             } finally {
                 querying.delete(id)
                 if (querying.size === 0) {
