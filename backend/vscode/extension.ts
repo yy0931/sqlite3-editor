@@ -77,6 +77,9 @@ server = Server(${JSON.stringify(path.join("/mnt", path.basename(databasePath)))
 
             return pyodide
         })
+        this.#pyodide.catch((err) => {
+            console.error(err)
+        })
     }
 
     request(url: string, body: Buffer, resolve: (data: Uint8Array) => void, reject: (err: Error) => void) {
@@ -110,11 +113,14 @@ const findPython = async () => {
     for (const name of [...[...Array(10).keys()].map((x) => `python3.${x + 6}`).reverse(), "python3", "python", "py"]) {
         try {
             const filepath = await which(name)
-            if (spawnSync(filepath, ["-c", "import sys; print(sys.version_info >= (3, 6))"]).stdout.toString().includes("True")) {
+            const out = spawnSync(filepath, ["-c", "import sys; print(sys.version_info >= (3, 6))"]).stdout.toString()
+            if (out.includes("True")) {
                 return filepath
             }
         } catch (err) {
-            console.error(err)
+            if ((err as any).code !== "ENOENT") {
+                console.error(err)
+            }
         }
     }
     return null
@@ -124,7 +130,9 @@ export const activate = (context: vscode.ExtensionContext) => {
     context.subscriptions.push(
         vscode.window.registerCustomEditorProvider("sqlite3-editor.editor", {
             async openCustomDocument(uri, openContext, token) {
-                const pythonPath = vscode.workspace.getConfiguration("sqlite3-editor").get<string>("pythonPath") ?? await findPython()
+                const pythonPath =
+                    vscode.workspace.getConfiguration("sqlite3-editor").get<boolean>("alwaysUsePyodide") ? "" :
+                        (vscode.workspace.getConfiguration("sqlite3-editor").get<string>("pythonPath") || await findPython())
                 const conn = pythonPath ?
                     new LocalPythonClient(pythonPath, context.asAbsolutePath("server.py"), uri.fsPath, path.dirname(uri.fsPath)) :
                     new PyodideClient(context.asAbsolutePath("server.py"), uri.fsPath, path.dirname(uri.fsPath))
