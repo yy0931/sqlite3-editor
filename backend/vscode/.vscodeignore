@@ -2,3 +2,8 @@
 .vscode
 build.sh
 .gitignore
+node_modules
+extension.ts
+tsconfig.json
+**/__pycache__
+**/.gitignore

@@ -9,4 +9,4 @@ npm run build
 
 cd "$script_dir" || exit 1
 cp -r ../../ui/dist ./webview
-npx esbuild extension.ts --outfile=extension.js --target=esnext --format=cjs --platform=node  --minify
+npx esbuild extension.ts --bundle --outfile=extension.js --target=esnext --format=cjs --platform=node --minify --external:vscode

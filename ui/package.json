@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "vite build --watch --minify false --sourcemap true",
+    "start": "vite",
     "build": "vite build"
   },
   "keywords": [],

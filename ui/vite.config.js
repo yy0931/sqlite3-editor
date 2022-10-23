@@ -5,5 +5,8 @@ export default defineConfig({
     plugins: [preact()],
     build: {
         target: "esnext"
+    },
+    esbuild: {
+        logOverride: { 'this-is-undefined-in-esm': 'silent' }
     }
 })
