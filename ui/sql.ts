@@ -1,4 +1,4 @@
-import { pack, Unpackr } from "msgpackr"
+import { Packr, Unpackr } from "msgpackr"
 import { escapeSQLIdentifier } from "./main"
 
 export type TableInfo = { cid: bigint, dflt_value: bigint, name: string, notnull: bigint, type: string, pk: bigint }[]
@@ -18,7 +18,8 @@ const vscode = window.acquireVsCodeApi?.()
 
 export type Message = { data: { /* preact debugger also uses message events */ type: "sqlite3-editor-server" } & ({ requestId: undefined } | { requestId: number } & ({ err: string } | { body: Uint8Array })) }
 
-const unpackr = new Unpackr({ largeBigIntToFloat: false, int64AsNumber: false, mapsAsObjects: true, useRecords: true })
+const packr = new Packr({ useRecords: false, preserveNumericTypes: true })
+const unpackr = new Unpackr({ largeBigIntToFloat: false, int64AsNumber: false, mapsAsObjects: true, useRecords: true, preserveNumericTypes: true })
 
 const querying = new Set()
 export default class SQLite3Client {
@@ -31,7 +32,7 @@ export default class SQLite3Client {
         if (vscode !== undefined) {
             return new Promise<unknown>((resolve, reject) => {
                 const requestId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
-                vscode.postMessage({ requestId, path: url, body: pack(body) })
+                vscode.postMessage({ requestId, path: url, body: packr.pack(body) })
                 const callback = ({ data }: Message) => {
                     if (data.type !== "sqlite3-editor-server" || data.requestId !== requestId) { return }
                     window.removeEventListener("message", callback)
@@ -40,7 +41,9 @@ export default class SQLite3Client {
                         reject(new Error(data.err))
                         return
                     }
-                    resolve(unpackr.unpack(data.body))
+                    const value = unpackr.unpack(data.body)
+                    console.log(data.body, value)
+                    resolve(value)
                 }
                 window.addEventListener("message", callback)
             }).finally(() => {
@@ -53,7 +56,7 @@ export default class SQLite3Client {
             try {
                 let res: Response
                 try {
-                    res = await fetch(url, { method: "POST", body: pack(body), headers: { "Content-Type": "application/octet-stream" } })
+                    res = await fetch(url, { method: "POST", body: packr.pack(body), headers: { "Content-Type": "application/octet-stream" } })
                 } catch (err: any) {
                     this.addErrorMessage?.("message" in err ? err.message : "" + err)
                     throw err
