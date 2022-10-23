@@ -17,6 +17,14 @@
     "onCustomEditor:sqlite3-editor.editor"
   ],
   "contributes": {
+    "configuration": {
+      "properties": {
+        "sqlite3-editor.pythonPath": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
     "customEditors": [
       {
         "viewType": "sqlite3-editor.editor",
@@ -42,9 +50,12 @@
   "devDependencies": {
     "@types/node": "^18.7.18",
     "@types/vscode": "^1.71.0",
+    "@types/which": "^2.0.1",
     "esbuild": "^0.15.7"
   },
   "dependencies": {
-    "tempy": "^3.0.0"
+    "pyodide": "^0.21.3",
+    "tempy": "^3.0.0",
+    "which": "^2.0.2"
   }
 }
