@@ -7,3 +7,5 @@ extension.ts
 tsconfig.json
 **/__pycache__
 **/.gitignore
+node_modules
+!node_modules/pyodide
