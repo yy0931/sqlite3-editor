@@ -173,7 +173,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
         // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
         if (viewerStatement === "SELECT") {
             const records = await props.sql.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1n) * pageSize], "r")
-            const newRecordCount = BigInt((await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count as number | bigint)  // TODO: Remove BigInt() after https://github.com/kriszyp/msgpackr/issues/78 is resolved
+            const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count
             if (typeof newRecordCount !== "bigint") { throw new Error(newRecordCount + "") }
             setRecordCount(newRecordCount)
             setTableProps({
