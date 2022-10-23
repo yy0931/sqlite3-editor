@@ -22,10 +22,6 @@
         "sqlite3-editor.pythonPath": {
           "type": "string",
           "default": ""
-        },
-        "sqlite3-editor.alwaysUsePyodide": {
-          "type": "boolean",
-          "default": false
         }
       }
     },
