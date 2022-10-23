@@ -1,6 +1,7 @@
 *.vsix
 .vscode
 build.sh
+build-dev.sh
 .gitignore
 node_modules
 extension.ts
