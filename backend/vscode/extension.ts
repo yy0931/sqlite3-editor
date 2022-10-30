@@ -56,12 +56,13 @@ class LocalPythonClient {
     }
 }
 
-/** Find a Python 3.7+ binary */
+const supportedPythonVersion = [3, 6] as const
 const findPython = async () => {
-    for (const name of [...[...Array(10).keys()].map((x) => `python3.${x + 7}`).reverse(), "python3", "python", "py"]) {
+    const [major, minor] = supportedPythonVersion
+    for (const name of [...[...Array(10).keys()].map((x) => `python${major}.${x + minor}`).reverse(), `python${major}`, "python", "py"]) {
         try {
             const filepath = await which(name)
-            const out = spawnSync(filepath, ["-c", "import sys; print(sys.version_info >= (3, 7))"]).stdout.toString()
+            const out = spawnSync(filepath, ["-c", `import sys; print(sys.version_info >= (${major}, ${minor}))`]).stdout.toString()
             if (out.includes("True")) {
                 return filepath
             }
@@ -80,7 +81,7 @@ export const activate = (context: vscode.ExtensionContext) => {
             async openCustomDocument(uri, openContext, token) {
                 const pythonPath = (vscode.workspace.getConfiguration("sqlite3-editor").get<string>("pythonPath") || await findPython())
                 if (!pythonPath) {
-                    const msg = `Could not find a Python 3.7+ binary. Install one from https://www.python.org/ or your OS's package manager (brew, apt, etc.).`
+                    const msg = `Could not find a Python ${supportedPythonVersion[0]}.${supportedPythonVersion[1]}+ binary. Install one from https://www.python.org/ or your OS's package manager (brew, apt, etc.).`
                     vscode.window.showErrorMessage(msg)
                     throw new Error(msg)
                 }
