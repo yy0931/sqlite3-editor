@@ -32,8 +32,9 @@ class Server:
                             con.execute(request_body["query"], request_body["params"])
                     else:
                         cursor = self.readonly_connection.execute(request_body["query"], request_body["params"])
-                        columns = [desc[0] for desc in cursor.description]
-                        response_body = [{k: v for k, v in zip(columns, record)} for record in cursor.fetchall()]
+                        if cursor.description is not None:  # is None when inserting, updating, etc.
+                            columns = [desc[0] for desc in cursor.description]
+                            response_body = [{k: v for k, v in zip(columns, record)} for record in cursor.fetchall()]
                 except Exception as err:
                     raise Exception(f"{err}\nQuery: {request_body['query']}\nParams: {request_body['params']}")
             elif path == "/import":

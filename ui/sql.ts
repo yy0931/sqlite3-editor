@@ -41,9 +41,7 @@ export default class SQLite3Client {
                         reject(new Error(data.err))
                         return
                     }
-                    const value = unpackr.unpack(data.body)
-                    console.log(data.body, value)
-                    resolve(value)
+                    resolve(unpackr.unpack(data.body))
                 }
                 window.addEventListener("message", callback)
             }).finally(() => {

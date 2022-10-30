@@ -2,7 +2,6 @@ import vscode from "vscode"
 import { spawn, spawnSync } from "child_process"
 import { temporaryFile } from "tempy"
 import fs from "fs"
-import { loadPyodide } from "pyodide"
 import path from "path"
 import which from "which"
 

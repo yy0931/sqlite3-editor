@@ -54,7 +54,6 @@
     "esbuild": "^0.15.7"
   },
   "dependencies": {
-    "pyodide": "^0.21.3",
     "tempy": "^3.0.0",
     "which": "^2.0.2"
   }

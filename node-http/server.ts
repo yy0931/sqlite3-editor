@@ -3,8 +3,8 @@ import sqlite3 from "better-sqlite3"
 import { pack, unpack } from "msgpackr"
 import fs from "fs"
 
-const readonlyConnection = sqlite3("samples/employees_db-full-1.0.6.db", { readonly: true })
-const readWriteConnection = sqlite3("samples/employees_db-full-1.0.6.db")
+const readonlyConnection = sqlite3("../samples/employees_db-full-1.0.6.db", { readonly: true })
+const readWriteConnection = sqlite3("../samples/employees_db-full-1.0.6.db")
 
 readonlyConnection.defaultSafeIntegers()
 readWriteConnection.defaultSafeIntegers()
