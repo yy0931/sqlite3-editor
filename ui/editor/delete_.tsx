@@ -3,6 +3,7 @@ import { DispatchBuilder, EditorComponent } from "."
 import { DataTypes } from "../sql"
 import { Commit } from "./components"
 import * as insert from "./insert"
+import { useLayoutEffect } from "preact/hooks"
 
 export const statement = "DELETE"
 export type State = Readonly<{
@@ -13,7 +14,7 @@ export type State = Readonly<{
     selectedConstraint: number
     tr: HTMLElement
 }>
-export declare const state: State
+export declare const state: { _: State }
 
 export let open: (tableName?: string, record?: Record<string, DataTypes>, tr?: HTMLElement) => Promise<void>
 export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = async (tableName, record, tr) => {
@@ -34,6 +35,11 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
 
 export const Editor: EditorComponent<State> = (props) => {
     const columns = props.state.constraintChoices[props.state.selectedConstraint]!
+    useLayoutEffect(() => {
+        props.state.tr.classList.add("editing")
+        return () => { props.state.tr.classList.remove("editing") }
+    }, [props.state.tr])
+
     return <>
         <h2>
             {props.statementSelect}{" "}FROM {escapeSQLIdentifier(props.state.tableName)} WHERE <select value={props.state.selectedConstraint} onInput={(ev) => { props.setState({ ...props.state, selectedConstraint: +ev.currentTarget.value }) }}>{

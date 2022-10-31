@@ -17,7 +17,7 @@ import SQLite3Client, { DataTypes, TableListItem } from "../sql"
 
 const editors = [insert, createTable, dropTable, dropView, update, delete_, alterTable, custom]
 
-export type State = (typeof editors[number])["state"]
+export type State = (typeof editors[number])["state"]["_"]
 
 export type OnWriteOptions = {
     refreshTableList?: true
@@ -49,13 +49,6 @@ export const Editor = (props: { tableName?: string, tableList: TableListItem[], 
             }
         }
     }, [props.tableName])
-
-    document.querySelectorAll(".editing").forEach((el) => el.classList.remove("editing"))
-    if (state?.statement === "UPDATE") {
-        state.td.classList.add("editing")
-    } else if (state.statement === "DELETE") {
-        state.tr.classList.add("editing")
-    }
 
     for (const { buildDispatch } of editors) { buildDispatch(setState, props.sql) }
 

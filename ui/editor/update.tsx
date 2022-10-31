@@ -18,7 +18,7 @@ export type State = Readonly<{
     td: HTMLElement
     sql: SQLite3Client
 }>
-export declare const state: State
+export declare const state: { _: State }
 
 export let open: (tableName?: string, column?: string, record?: Record<string, DataTypes>, td?: HTMLElement) => Promise<void>
 export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = async (tableName, column, record, td) => {
@@ -63,9 +63,9 @@ export const Editor: EditorComponent<State> = (props) => {
                 rows={5}
                 type={props.state.type}
                 textareaValue={props.state.textareaValue}
-                setTextareaValue={(value) => props.setState({ ...props.state, textareaValue: value })}
+                onTextareaValueChange={(value) => props.setState({ ...props.state, textareaValue: value })}
                 blobValue={props.state.blobValue}
-                setBlobValue={(value) => props.setState({ ...props.state, blobValue: value })}
+                onBlobValueChange={(value) => props.setState({ ...props.state, blobValue: value })}
                 sql={props.state.sql}
             />
             {"AS "}

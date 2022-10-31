@@ -6,7 +6,7 @@ export const statement = "custom"
 export type State = Readonly<{
     statement: typeof statement,
 }>
-export declare const state: State
+export declare const state: { _: State }
 
 export let open: () => Promise<void>
 export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = async () => {

@@ -13,7 +13,7 @@ export type State = Readonly<{
     strict: boolean
     tableConstraints: string
 }>
-export declare const state: State
+export declare const state: { _: State }
 
 export let open: () => Promise<void>
 

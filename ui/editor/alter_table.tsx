@@ -14,7 +14,7 @@ export type State = Readonly<{
     | "DROP COLUMN"
     oldColumnName: string
 }>
-export declare const state: State
+export declare const state: { _: State }
 
 export let open: (tableName?: string, column?: string) => Promise<void>
 export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = async (tableName, column) => {
