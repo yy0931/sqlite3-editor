@@ -14,7 +14,7 @@ export type State = Readonly<{
     dataTypes: EditorDataType[]
     sql: SQLite3Client
 }>
-export declare const state: State
+export declare const state: { _: State }
 
 export let open: (tableName?: string) => Promise<void>
 export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = async (tableName) => {
@@ -52,9 +52,9 @@ export const Editor: EditorComponent<State> = (props) => {
                             rows={1}
                             style={{ width: "100%", resize: "vertical", display: "block", color: type2color(props.state.dataTypes[i]!) }}
                             textareaValue={props.state.textareaValues[i]!}
-                            setTextareaValue={(value) => { props.setState(produce(props.state, (d) => { d.textareaValues[i] = value })) }}
+                            onTextareaValueChange={(value) => { props.setState(produce(props.state, (d) => { d.textareaValues[i] = value })) }}
                             blobValue={props.state.blobValues[i]!}
-                            setBlobValue={(value) => { props.setState(produce(props.state, (d) => { d.blobValues[i] = value })) }}
+                            onBlobValueChange={(value) => { props.setState(produce(props.state, (d) => { d.blobValues[i] = value })) }}
                             tabIndex={0}
                             sql={props.state.sql} />
                         {"AS "}<DataTypeInput value={props.state.dataTypes[i]!} onChange={(value) => { props.setState(produce(props.state, (d) => { d.dataTypes[i] = value })) }} />

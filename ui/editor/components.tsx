@@ -8,13 +8,13 @@ export type EditorDataType = "string" | "number" | "null" | "blob"
 export const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorDataType) => void }) =>
     <Select value={props.value} onChange={props.onChange} tabIndex={-1} options={{ string: { text: "TEXT" }, number: { text: "NUMERIC" }, null: { text: "NULL" }, blob: { text: "BLOB" } }} />
 
-export const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, setTextareaValue: (value: string) => void, blobValue: Uint8Array | null, setBlobValue: (value: Uint8Array) => void, tabIndex?: number, sql: SQLite3Client }) => {
+export const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, sql: SQLite3Client }) => {
     const [filename, setFilename] = useState("")
     if (props.type === "blob") {
         return <div>
             <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} style={{ marginRight: "10px" }} />
             <input value={filename} placeholder={"tmp.dat"} onInput={(ev) => setFilename(ev.currentTarget.value)} />
-            <input type="button" value="Import" onClick={() => props.sql.import(filename).then((data) => props.setBlobValue(data))} disabled={filename === ""} />
+            <input type="button" value="Import" onClick={() => props.sql.import(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
             <input type="button" value="Export" onClick={() => props.sql.export(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
         </div>
     }
@@ -25,7 +25,7 @@ export const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProper
             autocomplete="off"
             style={{ color: type2color(props.type), resize: props.type === "string" ? "vertical" : "none", ...props.style }}
             value={props.textareaValue}
-            onInput={(ev) => props.setTextareaValue(ev.currentTarget.value)}
+            onInput={(ev) => props.onTextareaValueChange(ev.currentTarget.value)}
             tabIndex={props.tabIndex} />
     }
     return <input
@@ -33,7 +33,7 @@ export const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProper
         autocomplete="off"
         style={{ color: type2color(props.type), display: "block" }}
         value={props.type === "null" ? "NULL" : props.textareaValue}
-        onInput={(ev) => props.setTextareaValue(ev.currentTarget.value)}
+        onInput={(ev) => props.onTextareaValueChange(ev.currentTarget.value)}
         disabled={props.type === "null"}
         tabIndex={props.tabIndex} />
 }

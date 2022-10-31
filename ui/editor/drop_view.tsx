@@ -7,7 +7,7 @@ export type State = Readonly<{
     statement: typeof statement,
     tableName: string
 }>
-export declare const state: State
+export declare const state: { _: State }
 
 export let open: (tableName?: string) => Promise<void>
 export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = async (tableName) => {
