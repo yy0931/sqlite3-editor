@@ -49,6 +49,9 @@ export const Editor: EditorComponent<State> = (props) => {
     const autoFocusRef = useRef(null) as Ref<HTMLTextAreaElement & HTMLInputElement>
     useEffect(() => {
         autoFocusRef.current?.focus?.()
+        const td = props.state.td
+        td.classList.add("editing")
+        return () => { td.classList.remove("editing") }
     }, [props.state.td])
 
     return <>
