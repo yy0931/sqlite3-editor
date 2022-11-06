@@ -36,8 +36,9 @@ export const buildDispatch: DispatchBuilder<State> = (setState, sql) => open = a
 export const Editor: EditorComponent<State> = (props) => {
     const columns = props.state.constraintChoices[props.state.selectedConstraint]!
     useLayoutEffect(() => {
-        props.state.tr.classList.add("editing")
-        return () => { props.state.tr.classList.remove("editing") }
+        const tr = props.state.tr
+        tr.classList.add("editing")
+        return () => { tr.classList.remove("editing") }
     }, [props.state.tr])
 
     return <>
