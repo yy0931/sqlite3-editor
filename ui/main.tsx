@@ -1,12 +1,10 @@
 import { render } from "preact"
 import * as editor from "./editor"
-import * as update from "./editor/update"
-import * as delete_ from "./editor/delete_"
-import * as alter_table from "./editor/alter_table"
 import deepEqual from "fast-deep-equal"
-import { useState, useEffect, useReducer, useRef, Ref } from "preact/hooks"
-import { Select } from "./editor/components"
-import SQLite3Client, { DataTypes, Message, TableInfo, TableListItem } from "./sql"
+import { useEffect, useReducer, useRef, Ref, useState } from "preact/hooks"
+import SQLite3Client, { Message, TableListItem } from "./sql"
+import { Select } from "./components"
+import { Table, TableProps } from "./table"
 
 /** https://stackoverflow.com/a/6701665/10710682, https://stackoverflow.com/a/51574648/10710682 */
 export const escapeSQLIdentifier = (ident: string) => {
@@ -29,91 +27,6 @@ export const type2color = (type: string) => {
     } else {
         return "rgb(4, 63, 138)"
     }
-}
-
-type TableProps = { tableName: string | null, tableInfo: TableInfo | null, records: Record<string, DataTypes>[], rowStart: bigint, autoIncrement: boolean }
-
-const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement }: TableProps) => {
-    if (tableInfo === null) {
-        tableInfo = Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0n, pk: 0n, type: "", cid: 0n, dflt_value: 0n }))
-    }
-
-    const columnWidths = useRef<(number | null)[]>(Object.keys(records[0] ?? {}).map(() => null))
-    const tableRef = useRef() as Ref<HTMLTableElement>
-
-    // thead
-    return <table ref={tableRef} className="viewer" style={{ background: "white", width: "max-content" }}>
-        <thead>
-            <tr>
-                <th></th>
-                {tableInfo.map(({ name, notnull, pk, type }, i) => <th
-                    style={{ width: columnWidths.current[i] }}
-                    className={tableName !== null ? "clickable" : ""}
-                    onMouseMove={(ev) => {
-                        const rect = ev.currentTarget.getBoundingClientRect()
-                        if (rect.right - ev.clientX < 10) {
-                            ev.currentTarget.classList.add("ew-resize")
-                        } else {
-                            ev.currentTarget.classList.remove("ew-resize")
-                        }
-                    }}
-                    onMouseDown={(ev) => {
-                        const th = ev.currentTarget
-                        const rect = th.getBoundingClientRect()
-                        if (rect.right - ev.clientX < 10) { // right
-                            const mouseMove = (ev: MouseEvent) => {
-                                columnWidths.current[i] = Math.max(50, ev.clientX - rect.left)
-                                th.style.width = columnWidths.current[i] + "px"
-                                for (const td of tableRef.current?.querySelectorAll<HTMLElement>(`td:nth-child(${i + 2})`) ?? []) {
-                                    td.style.maxWidth = columnWidths.current[i] + "px"
-                                }
-                            }
-                            document.body.classList.add("ew-resize")
-                            window.addEventListener("mousemove", mouseMove)
-                            window.addEventListener("mouseup", () => {
-                                window.removeEventListener("mousemove", mouseMove)
-                                document.body.classList.remove("ew-resize")
-                            }, { once: true })
-                        } else if (tableName !== null) { // center
-                            alter_table.open(tableName, name)
-                        }
-                    }}
-                    onMouseLeave={(ev) => {
-                        ev.currentTarget.classList.remove("ew-resize")
-                    }}>
-                    <code>
-                        {name}
-                        <span className="type">{(type ? (" " + type) : "") + (pk ? (autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
-                    </code>
-                </th>)}
-            </tr>
-        </thead>
-        <tbody>
-            {records.length === 0 && <tr>
-                <td className="no-hover" style={{ display: "inline-block", height: "1.2em", cursor: "default" }}></td>
-            </tr>}
-            {records.map((record, i) => <tr>
-                <td
-                    className={tableName !== null ? "clickable" : ""}
-                    onClick={(ev) => { if (tableName !== null) { delete_.open(tableName, record, ev.currentTarget.parentElement as HTMLTableRowElement).catch(console.error) } }}>{rowStart + BigInt(i) + 1n}</td>
-                {tableInfo!.map(({ name }, i) => {
-                    const value = record[name] as DataTypes
-                    return <td
-                        style={{ maxWidth: columnWidths.current[i] }}
-                        className={tableName !== null ? "clickable" : ""}
-                        onClick={(ev) => { if (tableName !== null) { update.open(tableName, name, record, ev.currentTarget).catch(console.error) } }}>
-                        <pre style={{ color: type2color(typeof value) }}>
-                            {value instanceof Uint8Array ? `x'${blob2hex(value, 8)}'` :
-                                value === null ? "NULL" :
-                                    typeof value === "string" ? unsafeEscapeValue(value) :
-                                        typeof value === "number" ? (/^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value) :
-                                            "" + value}
-                        </pre>
-                    </td>
-                })}
-            </tr>)}
-        </tbody>
-    </table>
 }
 
 const ProgressBar = () => {
@@ -144,11 +57,13 @@ const BigintMath = {
 }
 
 const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQLite3Client }) => {
+    const [tableName, setTableName] = useState(editor.useStore.getState().tableName!)
+    const switchEditorTable = editor.useStore((state) => state.switchTable)
+
     const [tableList, setTableList] = useState(props.tableList)
 
     const [viewerStatement, setViewerStatement] = useState<"SELECT" | "PRAGMA">("SELECT")
     const [pragma, setPragma] = useState("analysis_limit")
-    const [viewerTableName, setViewerTableName] = useState(tableList[0]?.name) // undefined if there are no tables
     const [viewerConstraints, setViewerConstraints] = useState("")
     const [errorMessage, setErrorMessage] = useState("")
     const [pageSize, setPageSize] = useReducer<bigint, bigint>((_, value) => BigintMath.max(1n, value), 1000n)
@@ -166,22 +81,23 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
     props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
 
     const queryAndRenderTable = async () => {
-        if (viewerTableName === undefined) { return }
-        const { wr, type } = tableList.find(({ name }) => name === viewerTableName) ?? {}
+        if (tableName === undefined) { return }
+        const { wr, type } = tableList.find(({ name }) => name === tableName) ?? {}
         if (wr === undefined || type === undefined) { return }
 
         // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
         if (viewerStatement === "SELECT") {
-            const records = await props.sql.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1n) * pageSize], "r")
-            const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(viewerTableName)} ${viewerConstraints}`, [], "r"))[0]!.count
+            const records = await props.sql.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(tableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1n) * pageSize], "r")
+            const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(tableName)} ${viewerConstraints}`, [], "r"))[0]!.count
             if (typeof newRecordCount !== "bigint") { throw new Error(newRecordCount + "") }
             setRecordCount(newRecordCount)
             setTableProps({
-                tableName: viewerTableName,
-                autoIncrement: viewerTableName === null ? false : await props.sql.hasTableAutoincrement(viewerTableName),
+                tableName,
+                autoIncrement: tableName === null ? false : await props.sql.hasTableAutoincrement(tableName),
                 records,
                 rowStart: (page - 1n) * pageSize,
-                tableInfo: await props.sql.getTableInfo(viewerTableName),
+                tableInfo: await props.sql.getTableInfo(tableName),
+                sql: props.sql,
             })
         } else {
             setTableProps({
@@ -190,6 +106,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
                 records: (await props.sql.query(`${viewerStatement} ${pragma}`, [], "r")) ?? [],
                 rowStart: 0n,
                 tableInfo: null,
+                sql: props.sql,
             })
         }
     }
@@ -198,7 +115,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
 
     useEffect(() => {
         queryAndRenderTable().catch(console.error)
-    }, [viewerStatement, pragma, viewerTableName, viewerConstraints, tableList, page, pageSize])
+    }, [viewerStatement, pragma, tableName, viewerConstraints, tableList, page, pageSize])
 
     const [reloadRequired, setReloadRequired] = useState(false)
 
@@ -247,11 +164,11 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
                 }
                 return
             }
-            const newViewerTableName = opts.selectTable ?? viewerTableName
-            if (newTableList.some((table) => table.name === newViewerTableName)) {
-                setViewerTableName(newViewerTableName)
+            const newTableName = opts.selectTable ?? tableName
+            if (newTableList.some((table) => table.name === newTableName)) {
+                switchEditorTable(newTableName, props.sql)
             } else {
-                setViewerTableName(newTableList[0]?.name)
+                switchEditorTable(newTableList[0]?.name, props.sql)
             }
             setTableList(newTableList)
         }).catch(console.error)
@@ -259,12 +176,22 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
 
     return <>
         <ProgressBar />
-        {viewerTableName !== undefined && <h2 style={{ display: "flex" }}>
+        <h2 style={{ display: "flex" }}>
             <div style={{ whiteSpace: "pre" }}>
-                <Select value={viewerStatement} onChange={setViewerStatement} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
+                <Select value={viewerStatement} onChange={(value) => {
+                    setViewerStatement(value)
+                    if (value === "PRAGMA") {
+                        switchEditorTable(undefined, props.sql)
+                    } else {
+                        switchEditorTable(tableName, props.sql)
+                    }
+                }} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
                 {viewerStatement === "SELECT" && <> * FROM
                     {" "}
-                    <Select value={viewerTableName} onChange={setViewerTableName} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />
+                    {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => {
+                        setTableName(value)
+                        switchEditorTable(value, props.sql)
+                    }} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />}
                     {" "}
                 </>}
             </div>
@@ -272,7 +199,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
                 {viewerStatement === "SELECT" && <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "100%" }} />}
                 {viewerStatement === "PRAGMA" && <Select value={pragma} onChange={setPragma} options={Object.fromEntries(props.pragmaList.map((k) => [k, {}]))} />}
             </div>
-        </h2>}
+        </h2>
         <div>
             <div ref={scrollerRef} style={{ marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", width: "100%", display: "inline-block" }}>
                 {tableProps && <Table {...tableProps} />}
@@ -286,15 +213,17 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
             <pre>{errorMessage}</pre>
             <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => setErrorMessage("")} />
         </p>}
-        <editor.Editor tableName={viewerStatement === "SELECT" ? viewerTableName : undefined} tableList={tableList} onWrite={(opts) => { reload(opts) }} sql={props.sql} />
+        <editor.Editor tableList={tableList} onWrite={(opts) => { reload(opts) }} sql={props.sql} />
     </>
 }
 
 (async () => {
     const sql = new SQLite3Client()
     sql.addErrorMessage = (value) => document.write(value)
+    const tableList = await sql.getTableList()
+    editor.useStore.setState({ tableName: tableList[0]?.name })
     render(<App
-        tableList={await sql.getTableList()}
+        tableList={tableList}
         pragmaList={(await sql.query("PRAGMA pragma_list", [], "r")).map(({ name }) => name as string)}
         sql={sql} />, document.body)
 })().catch(console.error)
