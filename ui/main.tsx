@@ -4,7 +4,7 @@ import deepEqual from "fast-deep-equal"
 import { useEffect, useReducer, useRef, Ref, useState } from "preact/hooks"
 import SQLite3Client, { Message, TableListItem } from "./sql"
 import { Select } from "./components"
-import { Table, TableProps } from "./table"
+import { Table, useTableStore } from "./table"
 
 /** https://stackoverflow.com/a/6701665/10710682, https://stackoverflow.com/a/51574648/10710682 */
 export const escapeSQLIdentifier = (ident: string) => {
@@ -57,8 +57,8 @@ const BigintMath = {
 }
 
 const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQLite3Client }) => {
-    const [tableName, setTableName] = useState(editor.useStore.getState().tableName!)
-    const switchEditorTable = editor.useStore((state) => state.switchTable)
+    const [tableName, setTableName] = useState(editor.useEditorStore.getState().tableName!)
+    const switchEditorTable = editor.useEditorStore((state) => state.switchTable)
 
     const [tableList, setTableList] = useState(props.tableList)
 
@@ -75,7 +75,6 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
         if (value !== clippedValue) { rerender({}) }  // Update the input box when value !== clippedValue === oldValue
         return clippedValue
     }, 0n)
-    const [tableProps, setTableProps] = useState<TableProps | null>(null)
     const scrollerRef = useRef() as Ref<HTMLDivElement>
 
     props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
@@ -91,23 +90,14 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
             const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(tableName)} ${viewerConstraints}`, [], "r"))[0]!.count
             if (typeof newRecordCount !== "bigint") { throw new Error(newRecordCount + "") }
             setRecordCount(newRecordCount)
-            setTableProps({
-                tableName,
-                autoIncrement: tableName === null ? false : await props.sql.hasTableAutoincrement(tableName),
+            useTableStore.getState().update(
+                await props.sql.getTableInfo(tableName),
                 records,
-                rowStart: (page - 1n) * pageSize,
-                tableInfo: await props.sql.getTableInfo(tableName),
-                sql: props.sql,
-            })
+                (page - 1n) * pageSize,
+                tableName === null ? false : await props.sql.hasTableAutoincrement(tableName),
+            )
         } else {
-            setTableProps({
-                tableName: null,
-                autoIncrement: false,
-                records: (await props.sql.query(`${viewerStatement} ${pragma}`, [], "r")) ?? [],
-                rowStart: 0n,
-                tableInfo: null,
-                sql: props.sql,
-            })
+            useTableStore.getState().update(null, (await props.sql.query(`${viewerStatement} ${pragma}`, [], "r")) ?? [], 0n, false)
         }
     }
 
@@ -202,7 +192,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
         </h2>
         <div>
             <div ref={scrollerRef} style={{ marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", width: "100%", display: "inline-block" }}>
-                {tableProps && <Table {...tableProps} />}
+                {<Table tableName={tableName} sql={props.sql} />}
             </div>
         </div>
         <div style={{ marginBottom: "30px", paddingTop: "3px" }} className="primary">
@@ -221,7 +211,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
     const sql = new SQLite3Client()
     sql.addErrorMessage = (value) => document.write(value)
     const tableList = await sql.getTableList()
-    editor.useStore.setState({ tableName: tableList[0]?.name })
+    editor.useEditorStore.setState({ tableName: tableList[0]?.name })
     render(<App
         tableList={tableList}
         pragmaList={(await sql.query("PRAGMA pragma_list", [], "r")).map(({ name }) => name as string)}
