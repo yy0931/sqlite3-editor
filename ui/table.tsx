@@ -1,19 +1,37 @@
-import { useRef, Ref } from "preact/hooks"
+import { useRef, Ref, useMemo } from "preact/hooks"
 import { type2color, blob2hex, unsafeEscapeValue } from "./main"
 import { DataTypes, TableInfo } from "./sql"
-import { useStore } from "./editor"
+import { useEditorStore } from "./editor"
 import type SQLite3Client from "./sql"
+import zustand from "zustand"
 
-export type TableProps = { tableName: string | null, tableInfo: TableInfo | null, records: Record<string, DataTypes>[], rowStart: bigint, autoIncrement: boolean, sql: SQLite3Client }
-
-export const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement, sql }: TableProps) => {
-    const store = useStore()
-
-    if (tableInfo === null) {
-        tableInfo = Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0n, pk: 0n, type: "", cid: 0n, dflt_value: 0n }))
+export const useTableStore = zustand<{
+    tableInfo: TableInfo
+    records: readonly { readonly [key in string]: Readonly<DataTypes> }[]
+    rowStart: bigint
+    autoIncrement: boolean
+    update: (tableInfo: TableInfo | null, records: readonly { readonly [key in string]: Readonly<DataTypes> }[], rowStart: bigint, autoIncrement: boolean) => void
+}>()((set) => ({
+    records: [],
+    rowStart: 0n,
+    tableInfo: [],
+    autoIncrement: false,
+    update: (tableInfo: TableInfo | null, records: readonly { readonly [key in string]: Readonly<DataTypes> }[], rowStart: bigint, autoIncrement: boolean) => {
+        set({
+            tableInfo: tableInfo ?? Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0n, pk: 0n, type: "", cid: 0n, dflt_value: 0n })),
+            records,
+            rowStart,
+            autoIncrement,
+        })
     }
+}))
 
-    const columnWidths = useRef<(number | null)[]>(Object.keys(records[0] ?? {}).map(() => null))
+export const Table = ({ tableName, sql }: { tableName: string, sql: SQLite3Client }) => {
+    const alterTable = useEditorStore((state) => state.alterTable)
+
+    const state = useTableStore()
+
+    const columnWidths = useRef<(number | null)[]>(Object.keys(state.records[0] ?? {}).map(() => null))
     const tableRef = useRef() as Ref<HTMLTableElement>
 
     // thead
@@ -21,7 +39,7 @@ export const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement, 
         <thead>
             <tr>
                 <th></th>
-                {tableInfo.map(({ name, notnull, pk, type }, i) => <th
+                {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
                     style={{ width: columnWidths.current[i] }}
                     className={tableName !== null ? "clickable" : ""}
                     onMouseMove={(ev) => {
@@ -50,7 +68,7 @@ export const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement, 
                                 document.body.classList.remove("ew-resize")
                             }, { once: true })
                         } else if (tableName !== null) { // center
-                            store.alterTable(tableName, name)
+                            alterTable(tableName, name)
                         }
                     }}
                     onMouseLeave={(ev) => {
@@ -58,35 +76,52 @@ export const Table = ({ records, rowStart, tableInfo, tableName, autoIncrement, 
                     }}>
                     <code>
                         {name}
-                        <span className="type">{(type ? (" " + type) : "") + (pk ? (autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
+                        <span className="type">{(type ? (" " + type) : "") + (pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
                     </code>
                 </th>)}
             </tr>
         </thead>
         <tbody>
-            {records.length === 0 && <tr>
+            {state.records.length === 0 && <tr>
                 <td className="no-hover" style={{ display: "inline-block", height: "1.2em", cursor: "default" }}></td>
             </tr>}
-            {records.map((record, i) => <tr>
-                <td
-                    className={tableName !== null ? "clickable" : ""}
-                    onClick={(ev) => { if (tableName !== null) { store.delete_(tableName, record, ev.currentTarget.parentElement as HTMLTableRowElement, sql).catch(console.error) } }}>{rowStart + BigInt(i) + 1n}</td>
-                {tableInfo!.map(({ name }, i) => {
-                    const value = record[name] as DataTypes
-                    return <td
-                        style={{ maxWidth: columnWidths.current[i] }}
-                        className={tableName !== null ? "clickable" : ""}
-                        onClick={(ev) => { if (tableName !== null) { store.update(tableName, name, record, ev.currentTarget, sql).catch(console.error) } }}>
-                        <pre style={{ color: type2color(typeof value) }}>
-                            {value instanceof Uint8Array ? `x'${blob2hex(value, 8)}'` :
-                                value === null ? "NULL" :
-                                    typeof value === "string" ? unsafeEscapeValue(value) :
-                                        typeof value === "number" ? (/^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value) :
-                                            "" + value}
-                        </pre>
-                    </td>
-                })}
-            </tr>)}
+            {state.records.map((record, i) => <TableRow key={i} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidth={columnWidths.current[i]!} rowNumber={state.rowStart + BigInt(i) + 1n} sql={sql} />)}
         </tbody>
     </table>
+}
+
+const TableRow = (props: { tableName: string, tableInfo: TableInfo, record: { readonly [key in string]: Readonly<DataTypes> }, sql: SQLite3Client, rowNumber: bigint, columnWidth: number }) => {
+    const delete_ = useEditorStore((state) => state.delete_)
+    const update = useEditorStore((state) => state.update)
+
+    return useMemo(() => <tr>
+        <td
+            className={props.tableName !== null ? "clickable" : ""}
+            onClick={(ev) => { if (props.tableName !== null) { delete_(props.tableName, props.record, ev.currentTarget.parentElement as HTMLTableRowElement, props.sql).catch(console.error) } }}>{props.rowNumber}</td>
+        {props.tableInfo.map(({ name }, i) => {
+            const value = props.record[name] as DataTypes
+            return <td
+                style={{ maxWidth: props.columnWidth }}
+                className={props.tableName !== null ? "clickable" : ""}
+                onClick={(ev) => { if (props.tableName !== null) { update(props.tableName, name, props.record, ev.currentTarget, props.sql).catch(console.error) } }}>
+                <pre style={{ color: type2color(typeof value) }}>
+                    <span className="value">{renderValue(value)}</span>
+                </pre>
+            </td>
+        })}
+    </tr>, [props.tableName, props.tableInfo, props.record, props.sql, props.rowNumber])  // excluded: props.columnWidth
+}
+
+export const renderValue = (value: DataTypes) => {
+    if (value instanceof Uint8Array) {
+        return `x'${blob2hex(value, 8)}'`
+    } else if (value === null) {
+        return "NULL"
+    } else if (typeof value === "string") {
+        return unsafeEscapeValue(value)
+    } else if (typeof value === "number") {
+        return /^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value
+    } else {
+        return "" + value
+    }
 }
