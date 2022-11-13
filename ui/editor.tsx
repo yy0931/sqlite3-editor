@@ -2,8 +2,8 @@ import { useEffect, useLayoutEffect, Ref, useState, useRef } from "preact/hooks"
 import zustand from "zustand"
 import produce, { enableMapSet } from "immer"
 import type { JSXInternal } from "preact/src/jsx"
-import SQLite3Client, { DataTypes, TableInfo, TableListItem } from "./sql"
-import { blob2hex, escapeSQLIdentifier, type2color, unsafeEscapeValue } from "./main"
+import SQLite3Client, { SQLite3Value, TableInfo, TableListItem } from "./sql"
+import { blob2hex, escapeSQLIdentifier, type2color } from "./main"
 import { Select } from "./components"
 import { renderValue, useTableStore } from "./table"
 
@@ -23,7 +23,7 @@ type State =
         }
         | {
             statement: "DELETE"
-            record: Record<string, DataTypes>
+            record: Record<string, SQLite3Value>
             constraintChoices: readonly (readonly string[])[]
             selectedConstraint: number
             row: number
@@ -45,7 +45,7 @@ type State =
         | {
             statement: "UPDATE"
             column: string
-            record: Record<string, DataTypes>
+            record: Record<string, SQLite3Value>
             textareaValue: string
             blobValue: Uint8Array | null
             type: EditorDataType
@@ -73,12 +73,12 @@ type State =
 export const useEditorStore = zustand<State & {
     alterTable: (tableName: string, column: string | undefined) => void
     createTable: (tableName: string | undefined) => void
-    delete_: (tableName: string, record: Record<string, DataTypes>, row: number, sql: SQLite3Client) => Promise<void>
+    delete_: (tableName: string, record: Record<string, SQLite3Value>, row: number, sql: SQLite3Client) => Promise<void>
     dropTable: (tableName: string) => void
     dropView: (tableName: string) => void
     insert: (tableName: string, sql: SQLite3Client) => void
     custom: (tableName: string | undefined) => void
-    update: (tableName: string, column: string, record: Record<string, DataTypes>, row: number, sql: SQLite3Client) => Promise<void>
+    update: (tableName: string, column: string, record: Record<string, SQLite3Value>, row: number, sql: SQLite3Client) => Promise<void>
     switchTable: (tableName: string | undefined, sql: SQLite3Client) => void
 }>()((setPartial, get) => {
     const set = (state: State) => { setPartial(state) }
@@ -123,7 +123,7 @@ export const useEditorStore = zustand<State & {
             newTableName: tableName,
         })
     }
-    const delete_ = async (tableName: string, record: Record<string, DataTypes>, row: number, sql: SQLite3Client) => {
+    const delete_ = async (tableName: string, record: Record<string, SQLite3Value>, row: number, sql: SQLite3Client) => {
         set({
             statement: "DELETE",
             tableName,
@@ -147,7 +147,7 @@ export const useEditorStore = zustand<State & {
 
         alterTable, createTable, delete_, dropTable, dropView, insert,
         custom: (tableName: string | undefined) => { set({ statement: "custom", query: "", tableName }) },
-        update: async (tableName: string, column: string, record: Record<string, DataTypes>, row: number, sql: SQLite3Client) => {
+        update: async (tableName: string, column: string, record: Record<string, SQLite3Value>, row: number, sql: SQLite3Client) => {
             const value = record[column]
             const constraintChoices = ("rowid" in record ? [["rowid"]] : [])
                 .concat((await sql.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
@@ -195,23 +195,23 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
 
     useLayoutEffect(() => {
         if (state.statement !== "UPDATE") { return }
-        const input = document.createElement("input")
-        input.style.color = type2color(state.type)
+        const textarea = document.createElement("textarea")
+        textarea.style.color = type2color(state.type)
 
         const unsubscribe = useEditorStore.subscribe((state) => {
             if (state.statement !== "UPDATE") { return }
-            input.style.color = type2color(state.type)
+            textarea.style.color = type2color(state.type)
         })
 
-        input.classList.add("single-click")
+        textarea.classList.add("single-click")
 
-        input.value = state.textareaValue
-        input.addEventListener("input", () => {
-            input.classList.remove("single-click")
-            useEditorStore.setState({ textareaValue: input.value })
+        textarea.value = state.textareaValue
+        textarea.addEventListener("input", () => {
+            textarea.classList.remove("single-click")
+            useEditorStore.setState({ textareaValue: textarea.value })
         })
-        input.addEventListener("click", () => {
-            input.classList.remove("single-click")
+        textarea.addEventListener("click", () => {
+            textarea.classList.remove("single-click")
         })
 
         useTableStore.setState({
@@ -219,7 +219,7 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
                 row: state.row,
                 column: state.column,
                 draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
-                input,
+                textarea,
             }
         })
 
@@ -233,11 +233,11 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
         if (state.statement !== "UPDATE") { return }
         const input = useTableStore.getState().input
         if (input === null) { return }
-        input.input.value = state.textareaValue
+        input.textarea.value = state.textareaValue
         useTableStore.setState({ input: { ...input, draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)) } })
     }, state.statement === "UPDATE" ? [state.textareaValue, state.blobValue, state.type] : [undefined, undefined, undefined])
 
-    const commit = async (query: string, params: DataTypes[], opts: OnWriteOptions) => {
+    const commit = async (query: string, params: SQLite3Value[], opts: OnWriteOptions) => {
         await props.sql.query(query, params, "w+")
         props.onWrite(opts)
         state.switchTable(state.tableName, props.sql)  // clear inputs
@@ -301,12 +301,12 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
             const columns = state.constraintChoices[state.selectedConstraint]!
             header = <>
                 FROM {escapeSQLIdentifier(state.tableName)} WHERE <select value={state.selectedConstraint} onInput={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
-                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column])}`).join(" AND ")}</option>)
+                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${renderValue(state.record[column] as SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>
             editor = <>
                 <Commit style={{ marginBottom: "10px" }} onClick={() => {
-                    commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as DataTypes)], {})
+                    commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as SQLite3Value)], {})
                 }} />
             </>
             break
@@ -352,7 +352,7 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
         case "UPDATE": {
             header = <>
                 {escapeSQLIdentifier(state.tableName)} SET {escapeSQLIdentifier(state.column)} = ? WHERE <select value={state.selectedConstraint} onChange={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
-                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column])}`).join(" AND ")}</option>)
+                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${renderValue(state.record[column] as SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>
             editor = <>
@@ -370,7 +370,7 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
                 <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
                     // <textarea> replaces \r\n with \n
                     const columns = state.constraintChoices[state.selectedConstraint]!
-                    commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as DataTypes)], {})
+                    commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as SQLite3Value)], {})
                 }} />
             </>
             break
@@ -457,7 +457,7 @@ const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, r
         tabIndex={props.tabIndex} />
 }
 
-const parseTextareaValue = (value: string, blobValue: Uint8Array | null, type: EditorDataType): DataTypes => {
+const parseTextareaValue = (value: string, blobValue: Uint8Array | null, type: EditorDataType): SQLite3Value => {
     if (type === "null") {
         return null
     } else if (type === "number") {
