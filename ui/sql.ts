@@ -3,7 +3,7 @@ import { escapeSQLIdentifier } from "./main"
 
 export type TableInfo = { cid: bigint, dflt_value: bigint, name: string, notnull: bigint, type: string, pk: bigint }[]
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
-export type DataTypes = string | number | bigint | Uint8Array | null
+export type SQLite3Value = string | number | bigint | Uint8Array | null
 export type TableListItem = { schema: string, name: string, type: "table" | "view" | "shadow" | "virtual", ncol: bigint, wr: bigint, strict: bigint }
 
 type VSCodeAPI = { postMessage(data: unknown): void }
@@ -74,10 +74,10 @@ export default class SQLite3Client {
         }
     }
 
-    query = <T extends string>(query: T, params: DataTypes[], mode: "r" | "w+"): Promise<
+    query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): Promise<
         T extends `SELECT ${string}` | `PRAGMA pragma_list` ?
-        Record<string, DataTypes>[] :
-        Record<string, DataTypes>[] | undefined> =>
+        Record<string, SQLite3Value>[] :
+        Record<string, SQLite3Value>[] | undefined> =>
         this.#post(`/query`, { query, params, mode })
 
     import = (filepath: string) =>

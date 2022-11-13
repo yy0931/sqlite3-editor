@@ -1,24 +1,24 @@
 import { useRef, Ref, useMemo, useLayoutEffect } from "preact/hooks"
-import { type2color, blob2hex, unsafeEscapeValue } from "./main"
-import { DataTypes, TableInfo } from "./sql"
+import { type2color, blob2hex } from "./main"
+import { SQLite3Value, TableInfo } from "./sql"
 import { useEditorStore } from "./editor"
 import type SQLite3Client from "./sql"
 import zustand from "zustand"
 
 export const useTableStore = zustand<{
     tableInfo: TableInfo
-    records: readonly { readonly [key in string]: Readonly<DataTypes> }[]
+    records: readonly { readonly [key in string]: Readonly<SQLite3Value> }[]
     rowStart: bigint
     autoIncrement: boolean
-    input: { row: number, readonly column: string, readonly draftValue: string, readonly input: HTMLInputElement } | null
-    update: (tableInfo: TableInfo | null, records: readonly { readonly [key in string]: Readonly<DataTypes> }[], rowStart: bigint, autoIncrement: boolean) => void
+    input: { row: number, readonly column: string, readonly draftValue: string, readonly textarea: HTMLTextAreaElement } | null
+    update: (tableInfo: TableInfo | null, records: readonly { readonly [key in string]: Readonly<SQLite3Value> }[], rowStart: bigint, autoIncrement: boolean) => void
 }>()((set) => ({
     records: [],
     rowStart: 0n,
     tableInfo: [],
     autoIncrement: false,
     input: null,
-    update: (tableInfo: TableInfo | null, records: readonly { readonly [key in string]: Readonly<DataTypes> }[], rowStart: bigint, autoIncrement: boolean) => {
+    update: (tableInfo: TableInfo | null, records: readonly { readonly [key in string]: Readonly<SQLite3Value> }[], rowStart: bigint, autoIncrement: boolean) => {
         set({
             tableInfo: tableInfo ?? Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0n, pk: 0n, type: "", cid: 0n, dflt_value: 0n })),
             records,
@@ -100,7 +100,7 @@ export const Table = ({ tableName, sql }: { tableName: string, sql: SQLite3Clien
     </table>
 }
 
-const TableRow = (props: { selected: boolean, input: { readonly column: string, readonly draftValue: string, readonly input: HTMLInputElement } | null, tableName: string, tableInfo: TableInfo, record: { readonly [key in string]: Readonly<DataTypes> }, sql: SQLite3Client, rowNumber: bigint, row: number, columnWidth: number }) => {
+const TableRow = (props: { selected: boolean, input: { readonly column: string, readonly draftValue: string, readonly textarea: HTMLTextAreaElement } | null, tableName: string, tableInfo: TableInfo, record: { readonly [key in string]: Readonly<SQLite3Value> }, sql: SQLite3Client, rowNumber: bigint, row: number, columnWidth: number }) => {
     if (props.rowNumber <= 0) {
         throw new Error(props.rowNumber + "")
     }
@@ -112,7 +112,7 @@ const TableRow = (props: { selected: boolean, input: { readonly column: string, 
             className={(props.tableName !== null ? "clickable" : "")}
             onMouseDown={(ev) => { if (props.tableName !== null) { delete_(props.tableName, props.record, props.row, props.sql).catch(console.error) } }}>{props.rowNumber}</td>
         {props.tableInfo.map(({ name }) => {
-            const value = props.record[name] as DataTypes
+            const value = props.record[name] as SQLite3Value
             const input = props.input?.column === name ? props.input : undefined
             return <td
                 style={{ maxWidth: props.columnWidth }}
@@ -120,14 +120,14 @@ const TableRow = (props: { selected: boolean, input: { readonly column: string, 
                 onMouseDown={(ev) => { if (props.tableName !== null) { update(props.tableName, name, props.record, props.row, props.sql).catch(console.error) } }}>
                 <pre style={{ color: type2color(typeof value) }}>
                     <span className="value">{input?.draftValue ?? renderValue(value)}</span>
-                    {input && <MountInput element={input.input} />}
+                    {input && <MountInput element={input.textarea} />}
                 </pre>
             </td>
         })}
     </tr>, [props.selected, props.input, props.tableName, props.tableInfo, props.record, props.sql, props.rowNumber])  // excluded: props.columnWidth
 }
 
-const MountInput = (props: { element: HTMLInputElement }) => {
+const MountInput = (props: { element: HTMLTextAreaElement }) => {
     const ref = useRef() as Ref<HTMLSpanElement>
     useLayoutEffect(() => {
         ref.current?.append(props.element)
@@ -138,13 +138,13 @@ const MountInput = (props: { element: HTMLInputElement }) => {
     return <span ref={ref}></span>
 }
 
-export const renderValue = (value: DataTypes) => {
+export const renderValue = (value: SQLite3Value) => {
     if (value instanceof Uint8Array) {
         return `x'${blob2hex(value, 8)}'`
     } else if (value === null) {
         return "NULL"
     } else if (typeof value === "string") {
-        return unsafeEscapeValue(value)
+        return typeof value === "string" ? `'${value.replaceAll("'", "''").replaceAll("\r", "\\r").replaceAll("\n", "\\n")}'` : value + ""
     } else if (typeof value === "number") {
         return /^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value
     } else {

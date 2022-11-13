@@ -12,10 +12,6 @@ export const escapeSQLIdentifier = (ident: string) => {
     return ident.includes('"') || /[^A-Za-z0-9_\$]/.test(ident) ? `"${ident.replaceAll('"', '""')}"` : ident
 }
 
-/** For presentation only */
-export const unsafeEscapeValue = (x: unknown): string =>
-    typeof x === "string" ? `'${x.replaceAll("'", "''")}'` : x + ""
-
 export const blob2hex = (blob: Uint8Array, maxLength?: number) =>
     Array.from(blob.slice(0, maxLength), (x) => x.toString(16).padStart(2, "0")).join("") + (maxLength !== undefined && blob.length > maxLength ? "..." : "")
 
@@ -117,6 +113,18 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
         }
         window.addEventListener("message", handler)
         return () => { window.removeEventListener("message", handler) }
+    }, [])
+
+    useEffect(() => {
+        window.addEventListener("keydown", (ev) => {
+            if (ev.code === "Escape") {
+                const state = editor.useEditorStore.getState()
+                if (state.statement === "UPDATE" || state.statement === "DELETE") {
+
+                    state.switchTable(state.tableName, props.sql)  // clear selections
+                }
+            }
+        })
     }, [])
 
     {
