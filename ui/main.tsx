@@ -74,7 +74,7 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
         const clippedValue = BigintMath.max(1n, BigintMath.min(pageMax, value))
         if (value !== clippedValue) { rerender({}) }  // Update the input box when value !== clippedValue === oldValue
         return clippedValue
-    }, 0n)
+    }, 1n)
     const scrollerRef = useRef() as Ref<HTMLDivElement>
 
     props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
