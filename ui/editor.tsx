@@ -2,8 +2,8 @@ import { useEffect, useLayoutEffect, Ref, useState, useRef } from "preact/hooks"
 import zustand from "zustand"
 import produce, { enableMapSet } from "immer"
 import type { JSXInternal } from "preact/src/jsx"
-import SQLite3Client, { SQLite3Value, TableInfo, TableListItem } from "./sql"
-import { blob2hex, escapeSQLIdentifier, type2color } from "./main"
+import { SQLite3Value, TableInfo, TableListItem } from "./sql"
+import { blob2hex, escapeSQLIdentifier, type2color, useMainStore } from "./main"
 import { Select } from "./components"
 import { renderValue, useTableStore } from "./table"
 
@@ -40,7 +40,6 @@ type State =
             textareaValues: string[]
             blobValues: (Uint8Array | null)[]
             dataTypes: EditorDataType[]
-            sql: SQLite3Client
         }
         | {
             statement: "UPDATE"
@@ -52,7 +51,7 @@ type State =
             constraintChoices: readonly (readonly string[])[]
             row: number
             selectedConstraint: number
-            sql: SQLite3Client
+            isTextareaDirty: boolean
         }
     )
     | { tableName: string | undefined } & (
@@ -73,69 +72,17 @@ type State =
 export const useEditorStore = zustand<State & {
     alterTable: (tableName: string, column: string | undefined) => void
     createTable: (tableName: string | undefined) => void
-    delete_: (tableName: string, record: Record<string, SQLite3Value>, row: number, sql: SQLite3Client) => Promise<void>
+    delete_: (tableName: string, record: Record<string, SQLite3Value>, row: number) => Promise<void>
     dropTable: (tableName: string) => void
     dropView: (tableName: string) => void
-    insert: (tableName: string, sql: SQLite3Client) => void
+    insert: (tableName: string) => Promise<void>
     custom: (tableName: string | undefined) => void
-    update: (tableName: string, column: string, record: Record<string, SQLite3Value>, row: number, sql: SQLite3Client) => Promise<void>
-    switchTable: (tableName: string | undefined, sql: SQLite3Client) => void
+    update: (tableName: string, column: string, record: Record<string, SQLite3Value>, row: number) => Promise<void>
+    switchTable: (tableName: string | undefined) => Promise<void>
+    commit: (query: string, params: SQLite3Value[], opts: OnWriteOptions) => Promise<void>
+    commitUpdate: () => Promise<void>
 }>()((setPartial, get) => {
     const set = (state: State) => { setPartial(state) }
-    const createTable = (tableName: string | undefined) => {
-        set({ statement: "CREATE TABLE", strict: true, newTableName: "", tableConstraints: "", withoutRowId: false, columnDefs: [], tableName })
-    }
-    const insert = async (tableName: string, sql: SQLite3Client) => {
-        const tableInfo = await sql.getTableInfo(tableName)
-        set({
-            statement: "INSERT",
-            tableName, tableInfo,
-            textareaValues: tableInfo.map(() => ""),
-            blobValues: tableInfo.map(() => null),
-            dataTypes: tableInfo.map(({ type }) => {
-                type = type.toLowerCase()
-                if (type === "numeric" || type === "real" || type === "int" || type === "integer") {
-                    return "number"
-                } else if (type === "text") {
-                    return "string"
-                } else if (type === "null" || type === "blob") {
-                    return type
-                } else {
-                    return "string"
-                }
-            }), sql,
-        })
-    }
-    const dropTable = (tableName: string) => {
-        set({ statement: "DROP TABLE", tableName })
-    }
-    const dropView = (tableName: string) => {
-        set({ statement: "DROP VIEW", tableName })
-    }
-    const alterTable = (tableName: string, column: string | undefined) => {
-        set({
-            statement: "ALTER TABLE",
-            tableName,
-            statement2: column ? "RENAME COLUMN" : "RENAME TO",
-            oldColumnName: column ?? "",
-            columnDef: { name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false },
-            newColumnName: column ?? "",
-            newTableName: tableName,
-        })
-    }
-    const delete_ = async (tableName: string, record: Record<string, SQLite3Value>, row: number, sql: SQLite3Client) => {
-        set({
-            statement: "DELETE",
-            tableName,
-            record,
-            constraintChoices: ("rowid" in record ? [["rowid"]] : [])
-                .concat((await sql.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
-                    .map(({ columns }) => columns)
-                    .filter((columns) => columns.every((column) => record[column] !== null))),
-            selectedConstraint: 0,
-            row,
-        })
-    }
     return {
         statement: "CREATE TABLE",
         strict: true,
@@ -145,41 +92,108 @@ export const useEditorStore = zustand<State & {
         columnDefs: [],
         tableName: undefined,
 
-        alterTable, createTable, delete_, dropTable, dropView, insert,
+        alterTable: (tableName: string, column: string | undefined) => {
+            set({
+                statement: "ALTER TABLE",
+                tableName,
+                statement2: column ? "RENAME COLUMN" : "RENAME TO",
+                oldColumnName: column ?? "",
+                columnDef: { name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false },
+                newColumnName: column ?? "",
+                newTableName: tableName,
+            })
+        },
+        createTable: (tableName: string | undefined) => {
+            set({ statement: "CREATE TABLE", strict: true, newTableName: "", tableConstraints: "", withoutRowId: false, columnDefs: [], tableName })
+        },
+        delete_: async (tableName: string, record: Record<string, SQLite3Value>, row: number) => {
+            set({
+                statement: "DELETE",
+                tableName,
+                record,
+                constraintChoices: ("rowid" in record ? [["rowid"]] : [])
+                    .concat((await useMainStore.getState().sql.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
+                        .map(({ columns }) => columns)
+                        .filter((columns) => columns.every((column) => record[column] !== null))),
+                selectedConstraint: 0,
+                row,
+            })
+        },
+        dropTable: (tableName: string) => {
+            set({ statement: "DROP TABLE", tableName })
+        },
+        dropView: (tableName: string) => {
+            set({ statement: "DROP VIEW", tableName })
+        },
+        insert: async (tableName: string) => {
+            const tableInfo = await useMainStore.getState().sql.getTableInfo(tableName)
+            set({
+                statement: "INSERT",
+                tableName, tableInfo,
+                textareaValues: tableInfo.map(() => ""),
+                blobValues: tableInfo.map(() => null),
+                dataTypes: tableInfo.map(({ type }) => {
+                    type = type.toLowerCase()
+                    if (type === "numeric" || type === "real" || type === "int" || type === "integer") {
+                        return "number"
+                    } else if (type === "text") {
+                        return "string"
+                    } else if (type === "null" || type === "blob") {
+                        return type
+                    } else {
+                        return "string"
+                    }
+                }),
+            })
+        },
         custom: (tableName: string | undefined) => { set({ statement: "custom", query: "", tableName }) },
-        update: async (tableName: string, column: string, record: Record<string, SQLite3Value>, row: number, sql: SQLite3Client) => {
+        update: async (tableName: string, column: string, record: Record<string, SQLite3Value>, row: number) => {
             const value = record[column]
             const constraintChoices = ("rowid" in record ? [["rowid"]] : [])
-                .concat((await sql.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
+                .concat((await useMainStore.getState().sql.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
                     .map(({ columns }) => columns)
                     .filter((columns) => columns.every((column) => record[column] !== null)))
             if (constraintChoices.length === 0) { return }
             set({
-                statement: "UPDATE", tableName, column, record, constraintChoices, row, sql,
+                statement: "UPDATE", tableName, column, record, constraintChoices, row,
                 selectedConstraint: 0,
                 textareaValue: value instanceof Uint8Array ? "" : (value + ""),
                 blobValue: value instanceof Uint8Array ? value : null,
                 type: value === null ? "null" : value instanceof Uint8Array ? "blob" : (typeof value === "number" || typeof value === "bigint") ? "number" : "string",
+                isTextareaDirty: false,
             })
         },
-        switchTable: (tableName: string | undefined, sql: SQLite3Client) => {
+        switchTable: async (tableName: string | undefined) => {
             const state = get()
             if (tableName === undefined) {
-                createTable(tableName)
+                state.createTable(tableName)
                 return
             }
             switch (state.statement) {
-                case "INSERT": insert(tableName, sql); break
-                case "DROP TABLE": dropTable(tableName); break
-                case "DROP VIEW": dropView(tableName); break
-                case "ALTER TABLE": alterTable(tableName, undefined); break
-                case "DELETE": case "UPDATE": insert(tableName, sql); break
+                case "INSERT": await state.insert(tableName); break
+                case "DROP TABLE": state.dropTable(tableName); break
+                case "DROP VIEW": state.dropView(tableName); break
+                case "ALTER TABLE": state.alterTable(tableName, undefined); break
+                case "DELETE": case "UPDATE": await state.insert(tableName); break
                 case "CREATE TABLE": case "custom": setPartial({ tableName }); break
                 default: {
                     const _: never = state
                 }
             }
         },
+        commit: async (query: string, params: SQLite3Value[], opts: OnWriteOptions) => {
+            await useMainStore.getState().sql.query(query, params, "w+")
+            await useMainStore.getState().reload(opts)
+            const state = get()
+            await state.switchTable(state.tableName)  // clear inputs
+        },
+        commitUpdate: async () => {
+            // <textarea> replaces \r\n with \n
+            const state = get()
+            if (state.statement !== "UPDATE" || !state.isTextareaDirty) { return }
+            const columns = state.constraintChoices[state.selectedConstraint]!
+            await state.commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as SQLite3Value)], {})
+        }
     }
 })
 
@@ -190,58 +204,78 @@ export type OnWriteOptions = {
     scrollToBottom?: true
 }
 
-export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWriteOptions) => void, sql: SQLite3Client }) => {
+export const Editor = (props: { tableList: TableListItem[] }) => {
     const state = useEditorStore()
 
     useLayoutEffect(() => {
         if (state.statement !== "UPDATE") { return }
-        const textarea = document.createElement("textarea")
-        textarea.style.color = type2color(state.type)
+        let unmount = () => { }
+        const mount = () => {
+            unmount()
+            if (state.type === "number" || state.type === "string") {
+                const textarea = document.createElement("textarea")
+                textarea.style.color = type2color(state.type)
 
-        const unsubscribe = useEditorStore.subscribe((state) => {
-            if (state.statement !== "UPDATE") { return }
-            textarea.style.color = type2color(state.type)
-        })
+                const unsubscribe = useEditorStore.subscribe((state) => {
+                    if (state.statement !== "UPDATE") { return }
+                    textarea.style.color = type2color(state.type)
+                })
 
-        textarea.classList.add("single-click")
+                unmount = () => {
+                    unsubscribe()
+                    useTableStore.setState({ input: null })
+                }
 
-        textarea.value = state.textareaValue
-        textarea.addEventListener("input", () => {
-            textarea.classList.remove("single-click")
-            useEditorStore.setState({ textareaValue: textarea.value })
-        })
-        textarea.addEventListener("click", () => {
-            textarea.classList.remove("single-click")
-        })
+                textarea.classList.add("single-click")
 
-        useTableStore.setState({
-            input: {
-                row: state.row,
-                column: state.column,
-                draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
-                textarea,
+                textarea.value = state.textareaValue
+                textarea.addEventListener("input", () => {
+                    textarea.classList.remove("single-click")
+                    useEditorStore.setState({ textareaValue: textarea.value, isTextareaDirty: true })
+                })
+                textarea.addEventListener("click", () => {
+                    textarea.classList.remove("single-click")
+                })
+
+                useTableStore.setState({
+                    input: {
+                        row: state.row,
+                        column: state.column,
+                        draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
+                        textarea,
+                    }
+                })
+            } else {
+                unmount = () => {
+                    useTableStore.setState({ input: null })
+                }
+                useTableStore.setState({
+                    input: {
+                        row: state.row,
+                        column: state.column,
+                        draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
+                        textarea: null,
+                    }
+                })
             }
-        })
-
-        return () => {
-            unsubscribe()
-            useTableStore.setState({ input: null })
         }
+        mount()
+        useEditorStore.subscribe((state, prevState) => {
+            if (state.statement !== "UPDATE" || prevState.statement !== "UPDATE" || state.type === prevState.type) { return }
+            mount()
+        })
+        return unmount
     }, [state.statement === "UPDATE" ? state.row : undefined])
 
     useLayoutEffect(() => {
         if (state.statement !== "UPDATE") { return }
         const input = useTableStore.getState().input
         if (input === null) { return }
-        input.textarea.value = state.textareaValue
+        if (input.textarea !== null) {
+            input.textarea.value = state.textareaValue
+        }
         useTableStore.setState({ input: { ...input, draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)) } })
     }, state.statement === "UPDATE" ? [state.textareaValue, state.blobValue, state.type] : [undefined, undefined, undefined])
-
-    const commit = async (query: string, params: SQLite3Value[], opts: OnWriteOptions) => {
-        await props.sql.query(query, params, "w+")
-        props.onWrite(opts)
-        state.switchTable(state.tableName, props.sql)  // clear inputs
-    }
 
     const { type } = props.tableList.find(({ name }) => name === state.tableName) ?? {}
 
@@ -277,7 +311,7 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
                         case "DROP COLUMN": query += escapeSQLIdentifier(state.oldColumnName); break
                         case "ADD COLUMN": query += `${printColumnDef(state.columnDef)}`; break
                     }
-                    commit(query, [], { refreshTableList: true, selectTable: state.statement2 === "RENAME TO" ? state.newTableName : undefined })
+                    state.commit(query, [], { refreshTableList: true, selectTable: state.statement2 === "RENAME TO" ? state.newTableName : undefined })
                 }} />
             </>
             break
@@ -292,7 +326,7 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
                 <MultiColumnDefEditor value={state.columnDefs} onChange={(columnDefs) => useEditorStore.setState({ columnDefs })} />
                 <textarea autocomplete="off" style={{ marginTop: "10px", height: "20vh" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
                 <Commit disabled={state.tableName === "" || state.columnDefs.length === 0} style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
-                    commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.tableName })
+                    state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.tableName })
                 }} />
             </>
             break
@@ -306,19 +340,19 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
             </>
             editor = <>
                 <Commit style={{ marginBottom: "10px" }} onClick={() => {
-                    commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as SQLite3Value)], {})
+                    state.commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as SQLite3Value)], {})
                 }} />
             </>
             break
         }
         case "DROP TABLE": {
             header = <>{escapeSQLIdentifier(state.tableName)}</>
-            editor = <><Commit style={{ marginBottom: "10px" }} onClick={() => commit(`DROP TABLE ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} /></>
+            editor = <><Commit style={{ marginBottom: "10px" }} onClick={() => state.commit(`DROP TABLE ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} /></>
             break
         }
         case "DROP VIEW": {
             header = <>{escapeSQLIdentifier(state.tableName)}</>
-            editor = <><Commit style={{ marginBottom: "10px" }} onClick={() => commit(`DROP VIEW ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} /></>
+            editor = <><Commit style={{ marginBottom: "10px" }} onClick={() => state.commit(`DROP VIEW ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} /></>
             break
         }
         case "INSERT": {
@@ -337,14 +371,13 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
                                 onTextareaValueChange={(value) => { useEditorStore.setState({ textareaValues: produce(state.textareaValues, (d) => { d[i] = value }) }) }}
                                 blobValue={state.blobValues[i]!}
                                 onBlobValueChange={(value) => { useEditorStore.setState({ blobValues: produce(state.blobValues, (d) => { d[i] = value }) }) }}
-                                tabIndex={0}
-                                sql={state.sql} />
+                                tabIndex={0} />
                             {"AS "}<DataTypeInput value={state.dataTypes[i]!} onChange={(value) => { useEditorStore.setState({ dataTypes: produce(state.dataTypes, (d) => { d[i] = value }) }) }} />
                         </li>
                     })}
                 </ul>
                 <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
-                    commit(`INSERT ${query}`, state.textareaValues.map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true })
+                    state.commit(`INSERT ${query}`, state.textareaValues.map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true })
                 }} />
             </>
             break
@@ -360,18 +393,13 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
                     rows={5}
                     type={state.type}
                     textareaValue={state.textareaValue}
-                    onTextareaValueChange={(value) => useEditorStore.setState({ textareaValue: value })}
+                    onTextareaValueChange={(value) => useEditorStore.setState({ textareaValue: value, isTextareaDirty: true })}
                     blobValue={state.blobValue}
                     onBlobValueChange={(value) => useEditorStore.setState({ blobValue: value })}
-                    sql={state.sql}
                 />
                 {"AS "}
                 <DataTypeInput value={state.type} onChange={(value) => useEditorStore.setState({ type: value })} />
-                <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
-                    // <textarea> replaces \r\n with \n
-                    const columns = state.constraintChoices[state.selectedConstraint]!
-                    commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as SQLite3Value)], {})
-                }} />
+                <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={state.commitUpdate} />
             </>
             break
         }
@@ -379,7 +407,7 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
             header = <></>
             editor = <>
                 <textarea autocomplete="off" style={{ marginTop: "15px", height: "20vh" }} placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
-                <Commit style={{ marginBottom: "10px" }} onClick={() => commit(state.query, [], { refreshTableList: true })} />
+                <Commit style={{ marginBottom: "10px" }} onClick={() => state.commit(state.query, [], { refreshTableList: true })} />
             </>
             break
         }
@@ -398,7 +426,7 @@ export const Editor = (props: { tableList: TableListItem[], onWrite: (opts: OnWr
                     case "DELETE": throw new Error()
                     case "DROP TABLE": state.dropTable(state.tableName!); break
                     case "DROP VIEW": state.dropView(state.tableName!); break
-                    case "INSERT": state.insert(state.tableName!, props.sql); break
+                    case "INSERT": state.insert(state.tableName!); break
                     case "UPDATE": throw new Error()
                     case "custom": state.custom(state.tableName); break
                     default: const _: never = value
@@ -427,14 +455,14 @@ const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorD
 
 type EditorDataType = "string" | "number" | "null" | "blob"
 
-const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, sql: SQLite3Client }) => {
+const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number }) => {
     const [filename, setFilename] = useState("")
     if (props.type === "blob") {
         return <div>
             <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} style={{ marginRight: "10px" }} />
             <input value={filename} placeholder={"tmp.dat"} onInput={(ev) => setFilename(ev.currentTarget.value)} />
-            <input type="button" value="Import" onClick={() => props.sql.import(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
-            <input type="button" value="Export" onClick={() => props.sql.export(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
+            <input type="button" value="Import" onClick={() => useMainStore.getState().sql.import(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
+            <input type="button" value="Export" onClick={() => useMainStore.getState().sql.export(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
         </div>
     }
     if (props.type === "string") {

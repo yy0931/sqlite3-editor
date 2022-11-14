@@ -1,8 +1,7 @@
-import { useRef, Ref, useMemo, useLayoutEffect } from "preact/hooks"
+import { useRef, Ref, useMemo, useLayoutEffect, useCallback, useState } from "preact/hooks"
 import { type2color, blob2hex } from "./main"
 import { SQLite3Value, TableInfo } from "./sql"
 import { useEditorStore } from "./editor"
-import type SQLite3Client from "./sql"
 import zustand from "zustand"
 
 export const useTableStore = zustand<{
@@ -10,7 +9,7 @@ export const useTableStore = zustand<{
     records: readonly { readonly [key in string]: Readonly<SQLite3Value> }[]
     rowStart: bigint
     autoIncrement: boolean
-    input: { row: number, readonly column: string, readonly draftValue: string, readonly textarea: HTMLTextAreaElement } | null
+    input: { row: number, readonly column: string, readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null
     update: (tableInfo: TableInfo | null, records: readonly { readonly [key in string]: Readonly<SQLite3Value> }[], rowStart: bigint, autoIncrement: boolean) => void
 }>()((set) => ({
     records: [],
@@ -28,7 +27,7 @@ export const useTableStore = zustand<{
     }
 }))
 
-export const Table = ({ tableName, sql }: { tableName: string, sql: SQLite3Client }) => {
+export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const alterTable = useEditorStore((state) => state.alterTable)
 
     const state = useTableStore()
@@ -51,7 +50,7 @@ export const Table = ({ tableName, sql }: { tableName: string, sql: SQLite3Clien
                 <th></th>
                 {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
                     style={{ width: columnWidths.current[i] }}
-                    className={tableName !== null ? "clickable" : ""}
+                    className={tableName !== undefined ? "clickable" : ""}
                     onMouseMove={(ev) => {
                         const rect = ev.currentTarget.getBoundingClientRect()
                         if (rect.right - ev.clientX < 10) {
@@ -61,25 +60,27 @@ export const Table = ({ tableName, sql }: { tableName: string, sql: SQLite3Clien
                         }
                     }}
                     onMouseDown={(ev) => {
-                        const th = ev.currentTarget
-                        const rect = th.getBoundingClientRect()
-                        if (rect.right - ev.clientX < 10) { // right
-                            const mouseMove = (ev: MouseEvent) => {
-                                columnWidths.current[i] = Math.max(50, ev.clientX - rect.left)
-                                th.style.width = columnWidths.current[i] + "px"
-                                for (const td of tableRef.current?.querySelectorAll<HTMLElement>(`td:nth-child(${i + 2})`) ?? []) {
-                                    td.style.maxWidth = columnWidths.current[i] + "px"
+                        useEditorStore.getState().commitUpdate().then(() => {
+                            const th = ev.currentTarget
+                            const rect = th.getBoundingClientRect()
+                            if (rect.right - ev.clientX < 10) { // right
+                                const mouseMove = (ev: MouseEvent) => {
+                                    columnWidths.current[i] = Math.max(50, ev.clientX - rect.left)
+                                    th.style.width = columnWidths.current[i] + "px"
+                                    for (const td of tableRef.current?.querySelectorAll<HTMLElement>(`td:nth-child(${i + 2})`) ?? []) {
+                                        td.style.maxWidth = columnWidths.current[i] + "px"
+                                    }
                                 }
+                                document.body.classList.add("ew-resize")
+                                window.addEventListener("mousemove", mouseMove)
+                                window.addEventListener("mouseup", () => {
+                                    window.removeEventListener("mousemove", mouseMove)
+                                    document.body.classList.remove("ew-resize")
+                                }, { once: true })
+                            } else if (tableName !== undefined) { // center
+                                alterTable(tableName, name)
                             }
-                            document.body.classList.add("ew-resize")
-                            window.addEventListener("mousemove", mouseMove)
-                            window.addEventListener("mouseup", () => {
-                                window.removeEventListener("mousemove", mouseMove)
-                                document.body.classList.remove("ew-resize")
-                            }, { once: true })
-                        } else if (tableName !== null) { // center
-                            alterTable(tableName, name)
-                        }
+                        })
                     }}
                     onMouseLeave={(ev) => {
                         ev.currentTarget.classList.remove("ew-resize")
@@ -95,45 +96,63 @@ export const Table = ({ tableName, sql }: { tableName: string, sql: SQLite3Clien
             {state.records.length === 0 && <tr>
                 <td className="no-hover" style={{ display: "inline-block", height: "1.2em", cursor: "default" }}></td>
             </tr>}
-            {state.records.map((record, i) => <TableRow selected={selectedRow === i} key={i} row={i} input={state.input?.row === i ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidth={columnWidths.current[i]!} rowNumber={state.rowStart + BigInt(i) + 1n} sql={sql} />)}
+            {state.records.map((record, i) => <TableRow selected={selectedRow === i} key={i} row={i} input={state.input?.row === i ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidth={columnWidths.current[i]!} rowNumber={state.rowStart + BigInt(i) + 1n} />)}
         </tbody>
     </table>
 }
 
-const TableRow = (props: { selected: boolean, input: { readonly column: string, readonly draftValue: string, readonly textarea: HTMLTextAreaElement } | null, tableName: string, tableInfo: TableInfo, record: { readonly [key in string]: Readonly<SQLite3Value> }, sql: SQLite3Client, rowNumber: bigint, row: number, columnWidth: number }) => {
+const TableRow = (props: { selected: boolean, input: { readonly column: string, readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: TableInfo, record: { readonly [key in string]: Readonly<SQLite3Value> }, rowNumber: bigint, row: number, columnWidth: number }) => {
     if (props.rowNumber <= 0) {
         throw new Error(props.rowNumber + "")
     }
     const delete_ = useEditorStore((state) => state.delete_)
     const update = useEditorStore((state) => state.update)
 
+    const [cursorVisibility, setCursorVisibility] = useState(true)
+    const onFocusOrMount = useCallback(() => { setCursorVisibility(true) }, [])
+    const onBlurOrUnmount = useCallback(() => { setCursorVisibility(false) }, [])
+
     return useMemo(() => <tr className={props.selected ? "editing" : ""}>
         <td
-            className={(props.tableName !== null ? "clickable" : "")}
-            onMouseDown={(ev) => { if (props.tableName !== null) { delete_(props.tableName, props.record, props.row, props.sql).catch(console.error) } }}>{props.rowNumber}</td>
+            className={(props.tableName !== undefined ? "clickable" : "")}
+            onMouseDown={(ev) => {
+                useEditorStore.getState().commitUpdate().then(() => {
+                    if (props.tableName !== undefined) { delete_(props.tableName, props.record, props.row).catch(console.error) }
+                })
+            }}>{props.rowNumber}</td>
         {props.tableInfo.map(({ name }) => {
             const value = props.record[name] as SQLite3Value
             const input = props.input?.column === name ? props.input : undefined
             return <td
                 style={{ maxWidth: props.columnWidth }}
-                className={(props.tableName !== null ? "clickable" : "") + " " + (input ? "editing" : "")}
-                onMouseDown={(ev) => { if (props.tableName !== null) { update(props.tableName, name, props.record, props.row, props.sql).catch(console.error) } }}>
-                <pre style={{ color: type2color(typeof value) }}>
+                className={(props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
+                onMouseDown={(ev) => {
+                    useEditorStore.getState().commitUpdate().then(() => {
+                        if (props.tableName !== undefined) { update(props.tableName, name, props.record, props.row).catch(console.error) }
+                    })
+                }}>
+                <pre className={input?.textarea && cursorVisibility ? "cursor-line" : ""} style={{ color: type2color(typeof value) }}>
                     <span className="value">{input?.draftValue ?? renderValue(value)}</span>
-                    {input && <MountInput element={input.textarea} />}
+                    {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
                 </pre>
             </td>
         })}
-    </tr>, [props.selected, props.input, props.tableName, props.tableInfo, props.record, props.sql, props.rowNumber])  // excluded: props.columnWidth
+    </tr>, [props.selected, props.input, props.tableName, props.tableInfo, props.record, props.rowNumber, cursorVisibility])  // excluded: props.columnWidth
 }
 
-const MountInput = (props: { element: HTMLTextAreaElement }) => {
+const MountInput = (props: { element: HTMLTextAreaElement, onFocusOrMount: () => void, onBlurOrUnmount: () => void }) => {
     const ref = useRef() as Ref<HTMLSpanElement>
     useLayoutEffect(() => {
         ref.current?.append(props.element)
+        props.onFocusOrMount()
+        props.element.addEventListener("focus", () => { props.onFocusOrMount() })
+        props.element.addEventListener("blur", () => { props.onBlurOrUnmount() })
         props.element.select()
         props.element.focus()
-        return () => { if (ref.current?.contains(props.element)) { ref.current.removeChild(props.element) } }
+        return () => {
+            props.onBlurOrUnmount()
+            if (ref.current?.contains(props.element)) { ref.current.removeChild(props.element) }
+        }
     }, [props.element])
     return <span ref={ref}></span>
 }

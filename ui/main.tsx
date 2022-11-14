@@ -1,10 +1,11 @@
 import { render } from "preact"
 import * as editor from "./editor"
 import deepEqual from "fast-deep-equal"
-import { useEffect, useReducer, useRef, Ref, useState } from "preact/hooks"
+import { useEffect, useRef, Ref } from "preact/hooks"
 import SQLite3Client, { Message, TableListItem } from "./sql"
 import { Select } from "./components"
 import { Table, useTableStore } from "./table"
+import zustand from "zustand"
 
 /** https://stackoverflow.com/a/6701665/10710682, https://stackoverflow.com/a/51574648/10710682 */
 export const escapeSQLIdentifier = (ident: string) => {
@@ -52,63 +53,133 @@ const BigintMath = {
     min: (...args: bigint[]) => args.reduce((prev, curr) => curr < prev ? curr : prev),
 }
 
-const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQLite3Client }) => {
-    const [tableName, setTableName] = useState(editor.useEditorStore.getState().tableName!)
-    const switchEditorTable = editor.useEditorStore((state) => state.switchTable)
-
-    const [tableList, setTableList] = useState(props.tableList)
-
-    const [viewerStatement, setViewerStatement] = useState<"SELECT" | "PRAGMA">("SELECT")
-    const [pragma, setPragma] = useState("analysis_limit")
-    const [viewerConstraints, setViewerConstraints] = useState("")
-    const [errorMessage, setErrorMessage] = useState("")
-    const [pageSize, setPageSize] = useReducer<bigint, bigint>((_, value) => BigintMath.max(1n, value), 1000n)
-    const [numRecords, setRecordCount] = useState(0n)
-    const pageMax = BigInt(Math.ceil(Number(numRecords) / Number(pageSize)))
-    const [_, rerender] = useState({})
-    const [page, setPage] = useReducer<bigint, bigint>((_, value) => {
-        const clippedValue = BigintMath.max(1n, BigintMath.min(pageMax, value))
-        if (value !== clippedValue) { rerender({}) }  // Update the input box when value !== clippedValue === oldValue
-        return clippedValue
-    }, 1n)
-    const scrollerRef = useRef() as Ref<HTMLDivElement>
-
-    props.sql.addErrorMessage = (value) => setErrorMessage((x) => x + value + "\n")
-
-    const queryAndRenderTable = async () => {
-        if (tableName === undefined) { return }
-        const { wr, type } = tableList.find(({ name }) => name === tableName) ?? {}
-        if (wr === undefined || type === undefined) { return }
-
-        // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
-        if (viewerStatement === "SELECT") {
-            const records = await props.sql.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(tableName)} ${viewerConstraints} LIMIT ? OFFSET ?`, [pageSize, (page - 1n) * pageSize], "r")
-            const newRecordCount = (await props.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(tableName)} ${viewerConstraints}`, [], "r"))[0]!.count
-            if (typeof newRecordCount !== "bigint") { throw new Error(newRecordCount + "") }
-            setRecordCount(newRecordCount)
-            useTableStore.getState().update(
-                await props.sql.getTableInfo(tableName),
-                records,
-                (page - 1n) * pageSize,
-                tableName === null ? false : await props.sql.hasTableAutoincrement(tableName),
-            )
-        } else {
-            useTableStore.getState().update(null, (await props.sql.query(`${viewerStatement} ${pragma}`, [], "r")) ?? [], 0n, false)
-        }
+export const useMainStore = zustand<{
+    sql: SQLite3Client
+    reloadRequired: boolean
+    paging: {
+        page: bigint
+        numRecords: bigint
+        pageSize: bigint
     }
+    errorMessage: string
+    viewerStatement: "SELECT" | "PRAGMA"
+    pragma: string
+    viewerConstraints: string
+    tableName: string | undefined
+    tableList: TableListItem[]
+    pragmaList: string[]
+    scrollerRef: { current: HTMLDivElement | null }
+    _rerender: {},
+    requireReloading: () => void
+    rerender: () => void,
+    getPageMax: () => bigint
+    reload: (opts: editor.OnWriteOptions) => Promise<void>
+    setPaging: (opts: { page?: bigint, numRecords?: bigint, pageSize?: bigint }) => void
+    addErrorMessage: (value: string) => void
+    queryAndRenderTable: () => Promise<void>
+}>()((set, get) => {
+    return {
+        sql: new SQLite3Client(),
+        reloadRequired: false,
+        getPageMax: () => BigInt(Math.ceil(Number(get().paging.numRecords) / Number(get().paging.pageSize))),
+        tableName: undefined,
+        paging: {
+            page: 1n,
+            numRecords: 0n,
+            pageSize: 1000n,
+        },
+        errorMessage: "",
+        viewerStatement: "SELECT",
+        pragma: "analysis_limit",
+        viewerConstraints: "",
+        tableList: [],
+        pragmaList: [],
+        scrollerRef: { current: null },
+        _rerender: {},
+        requireReloading: () => { set({ reloadRequired: true }) },
+        setPaging: (opts) => {
+            const newValue = { ...get().paging, ...opts }
+            newValue.pageSize = BigintMath.max(1n, newValue.pageSize)
 
-    useEffect(() => { setPage(page) }, [numRecords, pageSize])
+            const pageMax = BigInt(Math.ceil(Number(newValue.numRecords) / Number(newValue.pageSize)))
+            const clippedPage = BigintMath.max(1n, BigintMath.min(pageMax, newValue.page))
+            if (newValue.page !== clippedPage) { get().rerender() }  // Update the input box when value !== clippedPage === oldValue
+            set({ paging: { page: clippedPage, numRecords: newValue.numRecords, pageSize: newValue.pageSize } })
+        },
+        rerender: () => set({ _rerender: {} }),
+        addErrorMessage: (value: string) => set((s) => ({ errorMessage: s.errorMessage + value + "\n" })),
+        reload: async (opts: editor.OnWriteOptions) => {
+            set({ reloadRequired: false })
+            const state = get()
+            const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
+            const handles = new Array<Promise<void>>()
+            if (!skipTableRefresh) {
+                handles.push(state.queryAndRenderTable()
+                    .then(() => {
+                        if (opts.scrollToBottom) {
+                            setTimeout(() => {  // TODO: remove setTimeout
+                                get().setPaging({ page: state.getPageMax() })
+                                state.scrollerRef.current?.scrollBy({ behavior: "smooth", top: get().scrollerRef.current!.scrollHeight - get().scrollerRef.current!.offsetHeight })
+                            }, 80)
+                        }
+                    })
+                    .catch(console.error))
+            }
+            handles.push(state.sql.getTableList().then((newTableList) => {
+                if (deepEqual(newTableList, state.tableList)) {
+                    if (skipTableRefresh) {
+                        state.queryAndRenderTable().catch(console.error)
+                    }
+                    return
+                }
+                const newTableName = opts.selectTable ?? state.tableName
+                if (newTableList.some((table) => table.name === newTableName)) {
+                    editor.useEditorStore.getState().switchTable(newTableName)
+                } else {
+                    editor.useEditorStore.getState().switchTable(newTableList[0]?.name)
+                }
+                set({ tableList: newTableList })
+            }).catch(console.error))
+            await Promise.all(handles)
+        },
+        queryAndRenderTable: async () => {
+            let state = get()
+            if (state.tableName === undefined) { return }
+            const { wr, type } = state.tableList.find(({ name }) => name === state.tableName) ?? {}
+            if (wr === undefined || type === undefined) { return }
 
+            // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
+            if (state.viewerStatement === "SELECT") {
+                const records = await state.sql.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints} LIMIT ? OFFSET ?`, [state.paging.pageSize, (state.paging.page - 1n) * state.paging.pageSize], "r")
+                const newRecordCount = (await state.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints}`, [], "r"))[0]!.count
+                if (typeof newRecordCount !== "bigint") { throw new Error(newRecordCount + "") }
+                get().setPaging({ numRecords: newRecordCount })
+                state = get() // state.paging will be updated
+                if (state.tableName === undefined) { return }
+                useTableStore.getState().update(
+                    await state.sql.getTableInfo(state.tableName),
+                    records,
+                    (state.paging.page - 1n) * state.paging.pageSize,
+                    state.tableName === null ? false : await state.sql.hasTableAutoincrement(state.tableName),
+                )
+            } else {
+                useTableStore.getState().update(null, (await state.sql.query(`${state.viewerStatement} ${state.pragma}`, [], "r")) ?? [], 0n, false)
+            }
+        },
+    }
+})
+
+const App = () => {
+    const switchEditorTable = editor.useEditorStore((state) => state.switchTable)
+    const state = useMainStore()
     useEffect(() => {
-        queryAndRenderTable().catch(console.error)
-    }, [viewerStatement, pragma, tableName, viewerConstraints, tableList, page, pageSize])
-
-    const [reloadRequired, setReloadRequired] = useState(false)
+        state.queryAndRenderTable().catch(console.error)
+    }, [state.viewerStatement, state.pragma, state.tableName, state.viewerConstraints, state.tableList, state.paging.page, state.paging.pageSize])
 
     useEffect(() => {
         const handler = ({ data }: Message) => {
             if (data.type === "sqlite3-editor-server" && data.requestId === undefined) {
-                setReloadRequired(true)
+                state.requireReloading()
             }
         }
         window.addEventListener("message", handler)
@@ -118,110 +189,79 @@ const App = (props: { tableList: TableListItem[], pragmaList: string[], sql: SQL
     useEffect(() => {
         window.addEventListener("keydown", (ev) => {
             if (ev.code === "Escape") {
-                const state = editor.useEditorStore.getState()
-                if (state.statement === "UPDATE" || state.statement === "DELETE") {
-
-                    state.switchTable(state.tableName, props.sql)  // clear selections
+                const editorState = editor.useEditorStore.getState()
+                if (editorState.statement === "UPDATE" || editorState.statement === "DELETE") {
+                    editorState.switchTable(editorState.tableName)  // clear selections
                 }
             }
         })
     }, [])
 
-    {
-        const reloadRequiredRef = useRef(false)
-        useEffect(() => { reloadRequiredRef.current = reloadRequired }, [reloadRequired])
-        useEffect(() => {
-            const timer = setInterval(() => {
-                if (reloadRequiredRef.current) {
-                    reload({ refreshTableList: true })
-                }
-            }, 1000)
-            return () => { clearInterval(timer) }
-        }, [reloadRequired])
-    }
-
-    const reload = (opts: editor.OnWriteOptions) => {
-        setReloadRequired(false)
-        const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
-        if (!skipTableRefresh) {
-            queryAndRenderTable()
-                .then(() => {
-                    if (opts.scrollToBottom) {
-                        setTimeout(() => {  // TODO: remove setTimeout
-                            setPage(pageMax)
-                            scrollerRef.current?.scrollBy({ behavior: "smooth", top: scrollerRef.current!.scrollHeight - scrollerRef.current!.offsetHeight })
-                        }, 80)
-                    }
-                })
-                .catch(console.error)
-        }
-        props.sql.getTableList().then((newTableList) => {
-            if (deepEqual(newTableList, tableList)) {
-                if (skipTableRefresh) {
-                    queryAndRenderTable().catch(console.error)
-                }
-                return
+    useEffect(() => {
+        const timer = setInterval(() => {
+            if (useMainStore.getState().reloadRequired) {
+                useMainStore.getState().reload({ refreshTableList: true })
             }
-            const newTableName = opts.selectTable ?? tableName
-            if (newTableList.some((table) => table.name === newTableName)) {
-                switchEditorTable(newTableName, props.sql)
-            } else {
-                switchEditorTable(newTableList[0]?.name, props.sql)
-            }
-            setTableList(newTableList)
-        }).catch(console.error)
-    }
+        }, 1000)
+        return () => { clearInterval(timer) }
+    }, [])
 
     return <>
         <ProgressBar />
         <h2 style={{ display: "flex" }}>
             <div style={{ whiteSpace: "pre" }}>
-                <Select value={viewerStatement} onChange={(value) => {
-                    setViewerStatement(value)
+                <Select value={state.viewerStatement} onChange={(value) => {
+                    useMainStore.setState({ viewerStatement: value })
                     if (value === "PRAGMA") {
-                        switchEditorTable(undefined, props.sql)
+                        switchEditorTable(undefined)
                     } else {
-                        switchEditorTable(tableName, props.sql)
+                        switchEditorTable(state.tableName)
                     }
                 }} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
-                {viewerStatement === "SELECT" && <> * FROM
+                {state.viewerStatement === "SELECT" && <> * FROM
                     {" "}
-                    {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => {
-                        setTableName(value)
-                        switchEditorTable(value, props.sql)
-                    }} options={Object.fromEntries(tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />}
+                    {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => {
+                        useMainStore.setState({ tableName: value })
+                        switchEditorTable(value)
+                    }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />}
                     {" "}
                 </>}
             </div>
             <div style={{ flex: 1 }}>
-                {viewerStatement === "SELECT" && <input value={viewerConstraints} onBlur={(ev) => { setViewerConstraints(ev.currentTarget.value) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "100%" }} />}
-                {viewerStatement === "PRAGMA" && <Select value={pragma} onChange={setPragma} options={Object.fromEntries(props.pragmaList.map((k) => [k, {}]))} />}
+                {state.viewerStatement === "SELECT" && <input value={state.viewerConstraints} onBlur={(ev) => { useMainStore.setState({ viewerConstraints: ev.currentTarget.value }) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "100%" }} />}
+                {state.viewerStatement === "PRAGMA" && <Select value={state.pragma} onChange={(value) => useMainStore.setState({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
             </div>
         </h2>
         <div>
-            <div ref={scrollerRef} style={{ marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", width: "100%", display: "inline-block" }}>
-                {<Table tableName={tableName} sql={props.sql} />}
+            <div ref={state.scrollerRef} style={{ marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", width: "100%", display: "inline-block" }}>
+                <Table tableName={state.tableName} />
             </div>
         </div>
         <div style={{ marginBottom: "30px", paddingTop: "3px" }} className="primary">
-            <span><span style={{ cursor: "pointer", paddingLeft: "8px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page - 1n)}>‹</span><input value={"" + page} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onChange={(ev) => setPage(BigInt(ev.currentTarget.value))} /> / {pageMax} <span style={{ cursor: "pointer", paddingLeft: "4px", paddingRight: "8px", userSelect: "none" }} onClick={() => setPage(page + 1n)}>›</span></span>
-            <span style={{ marginLeft: "40px" }}><input value={"" + pageSize} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onBlur={(ev) => setPageSize(BigInt(ev.currentTarget.value))} /> records</span>
+            <span><span style={{ cursor: "pointer", paddingLeft: "8px", paddingRight: "8px", userSelect: "none" }} onClick={() => state.setPaging({ page: state.paging.page - 1n })}>‹</span><input value={"" + state.paging.page} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onChange={(ev) => state.setPaging({ page: BigInt(ev.currentTarget.value) })} /> / {state.getPageMax()} <span style={{ cursor: "pointer", paddingLeft: "4px", paddingRight: "8px", userSelect: "none" }} onClick={() => state.setPaging({ page: state.paging.page + 1n })}>›</span></span>
+            <span style={{ marginLeft: "40px" }}><input value={"" + state.paging.pageSize} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onBlur={(ev) => state.setPaging({ pageSize: BigInt(ev.currentTarget.value) })} /> records</span>
         </div>
-        {errorMessage && <p style={{ background: "rgb(14, 72, 117)", color: "white", padding: "10px" }}>
-            <pre>{errorMessage}</pre>
-            <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => setErrorMessage("")} />
+        {state.errorMessage && <p style={{ background: "rgb(14, 72, 117)", color: "white", padding: "10px" }}>
+            <pre>{state.errorMessage}</pre>
+            <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => useMainStore.setState({ errorMessage: "" })} />
         </p>}
-        <editor.Editor tableList={tableList} onWrite={(opts) => { reload(opts) }} sql={props.sql} />
+        <editor.Editor tableList={state.tableList} />
     </>
 }
 
 (async () => {
-    const sql = new SQLite3Client()
-    sql.addErrorMessage = (value) => document.write(value)
+    const { sql } = useMainStore.getState()
     const tableList = await sql.getTableList()
-    editor.useEditorStore.setState({ tableName: tableList[0]?.name })
-    render(<App
-        tableList={tableList}
-        pragmaList={(await sql.query("PRAGMA pragma_list", [], "r")).map(({ name }) => name as string)}
-        sql={sql} />, document.body)
-})().catch(console.error)
+    const tableName = tableList[0]?.name
+    editor.useEditorStore.setState({ tableName })
+    useMainStore.setState({
+        tableName,
+        tableList,
+        pragmaList: (await sql.query("PRAGMA pragma_list", [], "r")).map(({ name }) => name as string),
+    })
+    render(<App />, document.body)
+})().catch((err) => {
+    console.error(err)
+    document.write(err)
+    document.write(useMainStore.getState().errorMessage)
+})
