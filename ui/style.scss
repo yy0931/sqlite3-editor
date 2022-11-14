@@ -253,6 +253,10 @@ table.viewer {
         pre {
             position: relative;
 
+            &.cursor-line {
+                animation: cursor-line 1s linear infinite;
+            }
+
             textarea {
                 position: absolute;
                 padding: 0;
@@ -277,4 +281,20 @@ table.viewer {
 body.ew-resize,
 body.ew-resize * {
     cursor: ew-resize;
+}
+
+
+@keyframes cursor-line {
+    0% {
+        box-shadow: -1.5px 0px 0px 0px #6a6a6a;
+    }
+    50% {
+        box-shadow: -1.5px 0px 0px 0px #6a6a6a;
+    }
+    51% {
+        box-shadow: -1.5px 0px 0px 0px transparent;
+    }
+    100% {
+        box-shadow: -1.5px 0px 0px 0px transparent;
+    }
 }

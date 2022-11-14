@@ -1,5 +1,5 @@
 import { Packr, Unpackr } from "msgpackr"
-import { escapeSQLIdentifier } from "./main"
+import { escapeSQLIdentifier, useMainStore } from "./main"
 
 export type TableInfo = { cid: bigint, dflt_value: bigint, name: string, notnull: bigint, type: string, pk: bigint }[]
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
@@ -23,8 +23,6 @@ const unpackr = new Unpackr({ largeBigIntToFloat: false, int64AsNumber: false, m
 
 const querying = new Set()
 export default class SQLite3Client {
-    addErrorMessage: ((value: string) => void) | undefined
-
     async #post(url: string, body: unknown) {
         const id = {}
         querying.add(id)
@@ -37,7 +35,7 @@ export default class SQLite3Client {
                     if (data.type !== "sqlite3-editor-server" || data.requestId !== requestId) { return }
                     window.removeEventListener("message", callback)
                     if ("err" in data) {
-                        this.addErrorMessage?.(data.err)
+                        useMainStore.getState().addErrorMessage(data.err)
                         reject(new Error(data.err))
                         return
                     }
@@ -56,12 +54,12 @@ export default class SQLite3Client {
                 try {
                     res = await fetch(url, { method: "POST", body: packr.pack(body), headers: { "Content-Type": "application/octet-stream" } })
                 } catch (err: any) {
-                    this.addErrorMessage?.("message" in err ? err.message : "" + err)
+                    useMainStore.getState().addErrorMessage("message" in err ? err.message : "" + err)
                     throw err
                 }
                 if (!res.ok) {
                     const message = await res.text()
-                    this.addErrorMessage?.(message)
+                    useMainStore.getState().addErrorMessage(message)
                     throw new Error(message)
                 }
                 return unpackr.unpack(new Uint8Array(await res.arrayBuffer()))
