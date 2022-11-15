@@ -239,8 +239,6 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
 
                 useTableStore.setState({
                     input: {
-                        row: state.row,
-                        column: state.column,
                         draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
                         textarea,
                     }
@@ -251,8 +249,6 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
                 }
                 useTableStore.setState({
                     input: {
-                        row: state.row,
-                        column: state.column,
                         draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
                         textarea: null,
                     }
@@ -265,7 +261,7 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
             mount()
         })
         return unmount
-    }, [state.statement === "UPDATE" ? state.row : undefined])
+    }, state.statement === "UPDATE" ? [state.row, state.column] : [])
 
     useLayoutEffect(() => {
         if (state.statement !== "UPDATE") { return }
