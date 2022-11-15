@@ -208,7 +208,7 @@ const App = () => {
 
     return <>
         <ProgressBar />
-        <h2 style={{ display: "flex" }}>
+        <h2 className="first" style={{ display: "flex" }}>
             <div style={{ whiteSpace: "pre" }}>
                 <Select value={state.viewerStatement} onChange={(value) => {
                     useMainStore.setState({ viewerStatement: value })
@@ -233,7 +233,7 @@ const App = () => {
             </div>
         </h2>
         <div>
-            <div ref={state.scrollerRef} style={{ marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", width: "100%", display: "inline-block" }}>
+            <div ref={state.scrollerRef} style={{ marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", display: "inline-block", maxWidth: "100%", boxShadow: "0 0 0px 2px #000000ad" }}>
                 <Table tableName={state.tableName} />
             </div>
         </div>

@@ -10,6 +10,14 @@
     --input-background: #ffffff;
     --input-foreground: #3a3a3a;
     --input-placeholder-foreground: #7a7a7a;
+
+    --td-border-color: rgb(230, 230, 230);
+    --td-border-color-hover: rgb(199, 199, 199);
+    --td-border-color-active: rgb(143, 143, 143);
+
+    --page-padding: 5px;
+
+    --gutter-color: #f0f0f0;
 }
 
 * {
@@ -19,6 +27,7 @@
 }
 
 body {
+    padding: 0 !important;  // Override the VSCode's default
     overflow-x: hidden;
     background: #f0f0f0;
     font-family: monospace;
@@ -42,13 +51,18 @@ h2 {
     padding-bottom: 6px;
     font-size: inherit;
     border-top: 2px solid rgba(128, 128, 128, 0.147);
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: var(--page-padding);
+    padding-right: var(--page-padding);
+
+    &.first {
+        padding-top: var(--page-padding);
+        border-top: 0;
+    }
 }
 
 h2+div {
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: var(--page-padding);
+    padding-right: var(--page-padding);
 }
 
 ul {
@@ -175,8 +189,8 @@ table.viewer {
     thead {
         position: sticky;
         top: 0;
-        background-color: var(--button-primary-background);
-        color: white;
+        background-color: var(--gutter-color);
+        color: black;
         outline: rgb(181, 181, 181) 1px solid;
     }
 
@@ -195,7 +209,7 @@ table.viewer {
     }
 
     th.clickable:not(.ew-resize):hover {
-        background-color: var(--button-primary-hover-background);
+        background-color: var(--td-border-color-hover);
         cursor: pointer;
     }
 
@@ -205,7 +219,7 @@ table.viewer {
 
     td {
         overflow: hidden;
-        border-right: 1px solid rgba(0, 0, 0, 0.3);
+        border-right: 1px solid var(--td-border-color);
         padding-right: 10px;
         padding-left: 10px;
 
@@ -222,22 +236,29 @@ table.viewer {
         padding-left: 15px;
         padding-right: 5px;
         text-align: right;
-        color: white;
-        background-color: var(--button-primary-background);
+        color: black;
+        background-color: var(--gutter-color);
+        border-right: rgb(181, 181, 181) 1px solid;
+
+        &:hover:not(.ew-resize):not(.no-hover) {
+            background-color: var(--td-border-color-hover);
+            cursor: pointer;
+        }
     }
 
-    td:nth-child(1):not(.ew-resize):hover:not(.no-hover) {
-        background-color: var(--button-primary-hover-background);
-        cursor: pointer;
-    }
-
-    td:not(.ew-resize):hover:not(.editing):not(:nth-child(1)) {
+    td:hover:not(.ew-resize):not(.editing):not(:nth-child(1)) {
         background-color: rgba(207, 255, 255, 0.371);
         cursor: pointer;
     }
 
+    td+td {
+        border-bottom: 1px solid var(--td-border-color);
+    }
+
     td.editing,
-    tr.editing {
+    tr.editing,
+    tr.editing td:nth-child(1),
+    tr.editing td:nth-child(1):hover:not(.ew-resize):not(.no-hover) {
         background-color: rgba(66, 159, 202, 0.384);
         outline: 1px solid rgb(142, 197, 226);
         cursor: default;
