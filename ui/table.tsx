@@ -9,7 +9,7 @@ export const useTableStore = zustand<{
     records: readonly { readonly [key in string]: Readonly<SQLite3Value> }[]
     rowStart: bigint
     autoIncrement: boolean
-    input: { row: number, readonly column: string, readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null
+    input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null
     update: (tableInfo: TableInfo | null, records: readonly { readonly [key in string]: Readonly<SQLite3Value> }[], rowStart: bigint, autoIncrement: boolean) => void
 }>()((set) => ({
     records: [],
@@ -35,13 +35,9 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const columnWidths = useRef<(number | null)[]>(Object.keys(state.records[0] ?? {}).map(() => null))
     const tableRef = useRef() as Ref<HTMLTableElement>
 
-    const selectedRow = useEditorStore((state) => {
-        if (state.statement !== "DELETE") {
-            return null
-        } else {
-            return state.row
-        }
-    })
+    const selectedRow = useEditorStore((state) => state.statement === "DELETE" ? state.row : null)
+    const selectedDataRow = useEditorStore((state) => state.statement === "UPDATE" ? state.row : null)
+    const selectedDataColumn = useEditorStore((state) => state.statement === "UPDATE" ? state.column : null)
 
     // thead
     return <table ref={tableRef} className="viewer" style={{ background: "white", width: "max-content" }}>
@@ -96,12 +92,12 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
             {state.records.length === 0 && <tr>
                 <td className="no-hover" style={{ display: "inline-block", height: "1.2em", cursor: "default" }}></td>
             </tr>}
-            {state.records.map((record, i) => <TableRow selected={selectedRow === i} key={i} row={i} input={state.input?.row === i ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidth={columnWidths.current[i]!} rowNumber={state.rowStart + BigInt(i) + 1n} />)}
+            {state.records.map((record, i) => <TableRow selected={selectedRow === i} key={i} row={i} selectedColumn={selectedDataColumn} input={selectedDataRow === i ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidth={columnWidths.current[i]!} rowNumber={state.rowStart + BigInt(i) + 1n} />)}
         </tbody>
     </table>
 }
 
-const TableRow = (props: { selected: boolean, input: { readonly column: string, readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: TableInfo, record: { readonly [key in string]: Readonly<SQLite3Value> }, rowNumber: bigint, row: number, columnWidth: number }) => {
+const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: TableInfo, record: { readonly [key in string]: Readonly<SQLite3Value> }, rowNumber: bigint, row: number, columnWidth: number }) => {
     if (props.rowNumber <= 0) {
         throw new Error(props.rowNumber + "")
     }
@@ -122,7 +118,7 @@ const TableRow = (props: { selected: boolean, input: { readonly column: string, 
             }}>{props.rowNumber}</td>
         {props.tableInfo.map(({ name }) => {
             const value = props.record[name] as SQLite3Value
-            const input = props.input?.column === name ? props.input : undefined
+            const input = props.selectedColumn === name ? props.input : undefined
             return <td
                 style={{ maxWidth: props.columnWidth }}
                 className={(props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
@@ -137,7 +133,7 @@ const TableRow = (props: { selected: boolean, input: { readonly column: string, 
                 </pre>
             </td>
         })}
-    </tr>, [props.selected, props.input, props.tableName, props.tableInfo, props.record, props.rowNumber, cursorVisibility])  // excluded: props.columnWidth
+    </tr>, [props.selected, props.selectedColumn, props.input?.draftValue, props.input?.textarea, props.tableName, props.tableInfo, props.record, props.rowNumber, cursorVisibility])  // excluded: props.columnWidth
 }
 
 const MountInput = (props: { element: HTMLTextAreaElement, onFocusOrMount: () => void, onBlurOrUnmount: () => void }) => {
