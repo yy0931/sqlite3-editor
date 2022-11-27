@@ -13,7 +13,7 @@
   "dependencies": {
     "better-sqlite3": "^7.6.2",
     "express": "^4.18.1",
-    "msgpackr": "^1.6.3"
+    "msgpackr": "github:yy0931/msgpackr"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",

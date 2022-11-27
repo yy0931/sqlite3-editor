@@ -2,10 +2,22 @@ import { render } from "preact"
 import * as editor from "./editor"
 import deepEqual from "fast-deep-equal"
 import { useEffect, useRef, Ref } from "preact/hooks"
-import SQLite3Client, { Message, TableListItem } from "./sql"
+import * as remote from "./remote"
 import { Select } from "./components"
 import { Table, useTableStore } from "./table"
 import zustand from "zustand"
+
+export type VSCodeAPI = {
+    postMessage(data: unknown): void
+    getState(): unknown
+    setState(value: unknown): void
+}
+
+declare global {
+    interface Window {
+        acquireVsCodeApi?: () => VSCodeAPI
+    }
+}
 
 /** https://stackoverflow.com/a/6701665/10710682, https://stackoverflow.com/a/51574648/10710682 */
 export const escapeSQLIdentifier = (ident: string) => {
@@ -54,7 +66,6 @@ const BigintMath = {
 }
 
 export const useMainStore = zustand<{
-    sql: SQLite3Client
     reloadRequired: boolean
     paging: {
         page: bigint
@@ -66,7 +77,7 @@ export const useMainStore = zustand<{
     pragma: string
     viewerConstraints: string
     tableName: string | undefined
-    tableList: TableListItem[]
+    tableList: remote.TableListItem[]
     pragmaList: string[]
     scrollerRef: { current: HTMLDivElement | null }
     _rerender: {},
@@ -79,7 +90,6 @@ export const useMainStore = zustand<{
     queryAndRenderTable: () => Promise<void>
 }>()((set, get) => {
     return {
-        sql: new SQLite3Client(),
         reloadRequired: false,
         getPageMax: () => BigInt(Math.ceil(Number(get().paging.numRecords) / Number(get().paging.pageSize))),
         tableName: undefined,
@@ -125,7 +135,7 @@ export const useMainStore = zustand<{
                     })
                     .catch(console.error))
             }
-            handles.push(state.sql.getTableList().then((newTableList) => {
+            handles.push(remote.getTableList().then((newTableList) => {
                 if (deepEqual(newTableList, state.tableList)) {
                     if (skipTableRefresh) {
                         state.queryAndRenderTable().catch(console.error)
@@ -150,20 +160,20 @@ export const useMainStore = zustand<{
 
             // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
             if (state.viewerStatement === "SELECT") {
-                const records = await state.sql.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints} LIMIT ? OFFSET ?`, [state.paging.pageSize, (state.paging.page - 1n) * state.paging.pageSize], "r")
-                const newRecordCount = (await state.sql.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints}`, [], "r"))[0]!.count
+                const records = await remote.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints} LIMIT ? OFFSET ?`, [state.paging.pageSize, (state.paging.page - 1n) * state.paging.pageSize], "r")
+                const newRecordCount = (await remote.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints}`, [], "r"))[0]!.count
                 if (typeof newRecordCount !== "bigint") { throw new Error(newRecordCount + "") }
                 get().setPaging({ numRecords: newRecordCount })
                 state = get() // state.paging will be updated
                 if (state.tableName === undefined) { return }
                 useTableStore.getState().update(
-                    await state.sql.getTableInfo(state.tableName),
+                    await remote.getTableInfo(state.tableName),
                     records,
                     (state.paging.page - 1n) * state.paging.pageSize,
-                    state.tableName === null ? false : await state.sql.hasTableAutoincrement(state.tableName),
+                    state.tableName === null ? false : await remote.hasTableAutoincrement(state.tableName),
                 )
             } else {
-                useTableStore.getState().update(null, (await state.sql.query(`${state.viewerStatement} ${state.pragma}`, [], "r")) ?? [], 0n, false)
+                useTableStore.getState().update(null, (await remote.query(`${state.viewerStatement} ${state.pragma}`, [], "r")) ?? [], 0n, false)
             }
         },
     }
@@ -177,7 +187,7 @@ const App = () => {
     }, [state.viewerStatement, state.pragma, state.tableName, state.viewerConstraints, state.tableList, state.paging.page, state.paging.pageSize])
 
     useEffect(() => {
-        const handler = ({ data }: Message) => {
+        const handler = ({ data }: remote.Message) => {
             if (data.type === "sqlite3-editor-server" && data.requestId === undefined) {
                 state.requireReloading()
             }
@@ -250,14 +260,14 @@ const App = () => {
 }
 
 (async () => {
-    const { sql } = useMainStore.getState()
-    const tableList = await sql.getTableList()
+    await remote.downloadState()
+    const tableList = await remote.getTableList()
     const tableName = tableList[0]?.name
     editor.useEditorStore.setState({ tableName })
     useMainStore.setState({
         tableName,
         tableList,
-        pragmaList: (await sql.query("PRAGMA pragma_list", [], "r")).map(({ name }) => name as string),
+        pragmaList: (await remote.query("PRAGMA pragma_list", [], "r")).map(({ name }) => name as string),
     })
     render(<App />, document.body)
 })().catch((err) => {

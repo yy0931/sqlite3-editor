@@ -54,6 +54,7 @@
     "esbuild": "^0.15.7"
   },
   "dependencies": {
+    "msgpackr": "github:yy0931/msgpackr",
     "tempy": "^3.0.0",
     "which": "^2.0.2"
   }
