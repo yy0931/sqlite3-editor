@@ -205,7 +205,7 @@ export const useEditorStore = zustand<State & {
         },
         commit: async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions) => {
             await remote.query(query, params, "w+")
-            await useMainStore.getState().reload(opts)
+            await useMainStore.getState().reloadAllTables(opts)
             await get().clearInputs()
         },
         clearInputs: async () => {
@@ -227,6 +227,7 @@ export const useEditorStore = zustand<State & {
             // <textarea> replaces \r\n with \n
             const state = get()
             if (state.statement !== "UPDATE" || !state.isTextareaDirty) { return }
+            setPartial({ isTextareaDirty: false })
             const columns = state.constraintChoices[state.selectedConstraint]!
             await state.commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], {})
         }
