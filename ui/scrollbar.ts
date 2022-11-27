@@ -119,6 +119,12 @@ export abstract class Scrollbar extends HTMLElement {
     get size() { return this.#size }
     get value() { return this.#value }
 
+    wheel(delta: number) {
+        const oldValue = this.#value
+        this.value += delta
+        this.dispatchEvent(new ScrollbarEvent("change", this.#value - oldValue))
+    }
+
     #rescaled() {
         this.#value = Math.max(this.#min, Math.min(this.#max - this.#size, this.#value))
         this.#render()

@@ -38,11 +38,6 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const numRecords = useMainStore((state) => Number(state.paging.numRecords))
 
     const state = useTableStore()
-    useEffect(() => {
-        tableRef.current?.addEventListener("wheel", (ev) => {
-            console.log(ev.deltaY)
-        })
-    }, [])
 
     const columnWidths = persistentRef<Record<string, (number | undefined | null)[]>>("columnWidths_v3", {})
     const tableRef = useRef() as Ref<HTMLTableElement>
@@ -51,7 +46,14 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const selectedDataRow = useEditorStore((state) => state.statement === "UPDATE" ? state.row : null)
     const selectedDataColumn = useEditorStore((state) => state.statement === "UPDATE" ? state.column : null)
 
-    const ref = useRef() as Ref<ScrollbarY>
+    const scrollbarRef = useRef() as Ref<ScrollbarY>
+    useEffect(() => {
+        tableRef.current?.addEventListener("wheel", (ev) => {
+            ev.preventDefault()
+            scrollbarRef.current!.wheel(ev.deltaY / 30)
+        })
+    }, [])
+
     return <>
         <div style={{ maxWidth: "100%", overflowX: "auto", width: "max-content" }}>
             <table ref={tableRef} className="viewer" style={{ paddingRight: scrollbarWidth, width: "max-content" }}>
@@ -117,13 +119,13 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
         </div>
         {// @ts-ignore
             <scrollbar-y
-                ref={ref}
+                ref={scrollbarRef}
                 min={0}
                 max={numRecords}
                 size={pageSize}
                 value={visibleAreaTop}
                 style={{ width: scrollbarWidth, height: "100%", right: 0, top: 0, position: "absolute" }}
-                onChange={() => { useMainStore.getState().setPaging({ visibleAreaTop: BigInt(Math.round(ref.current!.value)) }) }} />}
+                onChange={() => { useMainStore.getState().setPaging({ visibleAreaTop: BigInt(Math.round(scrollbarRef.current!.value)) }) }} />}
     </>
 }
 
