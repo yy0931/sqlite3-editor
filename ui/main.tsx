@@ -6,6 +6,7 @@ import * as remote from "./remote"
 import { Select } from "./components"
 import { Table, useTableStore } from "./table"
 import zustand from "zustand"
+import "./scrollbar"
 
 export type VSCodeAPI = {
     postMessage(data: unknown): void
@@ -68,7 +69,7 @@ const BigintMath = {
 export const useMainStore = zustand<{
     reloadRequired: boolean
     paging: {
-        page: bigint
+        visibleAreaTop: bigint
         numRecords: bigint
         pageSize: bigint
     }
@@ -84,19 +85,20 @@ export const useMainStore = zustand<{
     requireReloading: () => void
     rerender: () => void,
     getPageMax: () => bigint
-    reload: (opts: editor.OnWriteOptions) => Promise<void>
-    setPaging: (opts: { page?: bigint, numRecords?: bigint, pageSize?: bigint }) => Promise<void>
+    setPaging: (opts: { visibleAreaTop?: bigint, numRecords?: bigint, pageSize?: bigint }) => Promise<void>
+    reloadAllTables: (opts: editor.OnWriteOptions) => Promise<void>
+    reloadCurrentTable: () => Promise<void>
+    reloadVisibleArea: () => Promise<void>
     addErrorMessage: (value: string) => void
-    queryAndRenderTable: () => Promise<void>
 }>()((set, get) => {
     return {
         reloadRequired: false,
         getPageMax: () => BigInt(Math.ceil(Number(get().paging.numRecords) / Number(get().paging.pageSize))),
         tableName: undefined,
         paging: {
-            page: 1n,
+            visibleAreaTop: 0n,
             numRecords: 0n,
-            pageSize: 1000n,
+            pageSize: 20n,
         },
         errorMessage: "",
         viewerStatement: "SELECT",
@@ -110,29 +112,26 @@ export const useMainStore = zustand<{
         setPaging: async (opts) => {
             await editor.useEditorStore.getState().commitUpdate()
             editor.useEditorStore.getState().clearInputs()
-            const newValue = { ...get().paging, ...opts }
-            newValue.pageSize = BigintMath.max(1n, newValue.pageSize)
-
-            const pageMax = BigInt(Math.ceil(Number(newValue.numRecords) / Number(newValue.pageSize)))
-            const clippedPage = BigintMath.max(1n, BigintMath.min(pageMax, newValue.page))
-            if (newValue.page !== clippedPage) { get().rerender() }  // Update the input box when value !== clippedPage === oldValue
-            set({ paging: { page: clippedPage, numRecords: newValue.numRecords, pageSize: newValue.pageSize } })
+            const paging = { ...get().paging, ...opts }
+            paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.pageSize, paging.visibleAreaTop))
+            set({ paging })
         },
         rerender: () => set({ _rerender: {} }),
         addErrorMessage: (value: string) => set((s) => ({ errorMessage: s.errorMessage + value + "\n" })),
-        reload: async (opts: editor.OnWriteOptions) => {
+        reloadAllTables: async (opts: editor.OnWriteOptions) => {
             set({ reloadRequired: false })
             const state = get()
             const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
             const handles = new Array<Promise<void>>()
             if (!skipTableRefresh) {
-                handles.push(state.queryAndRenderTable()
+                handles.push(state.reloadCurrentTable()
                     .then(() => {
                         if (opts.scrollToBottom) {
-                            setTimeout(() => {  // TODO: remove setTimeout
-                                get().setPaging({ page: state.getPageMax() })
-                                state.scrollerRef.current?.scrollBy({ behavior: "smooth", top: get().scrollerRef.current!.scrollHeight - get().scrollerRef.current!.offsetHeight })
-                            }, 80)
+                            const state = get()
+                            get().setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.pageSize, 0n) })
+                                .then(() => {
+                                    state.scrollerRef.current?.scrollBy({ behavior: "smooth", top: get().scrollerRef.current!.scrollHeight - get().scrollerRef.current!.offsetHeight })
+                                })
                         }
                     })
                     .catch(console.error))
@@ -140,7 +139,7 @@ export const useMainStore = zustand<{
             handles.push(remote.getTableList().then((newTableList) => {
                 if (deepEqual(newTableList, state.tableList)) {
                     if (skipTableRefresh) {
-                        state.queryAndRenderTable().catch(console.error)
+                        state.reloadCurrentTable().catch(console.error)
                     }
                     return
                 }
@@ -154,7 +153,7 @@ export const useMainStore = zustand<{
             }).catch(console.error))
             await Promise.all(handles)
         },
-        queryAndRenderTable: async () => {
+        reloadCurrentTable: async () => {
             let state = get()
             if (state.tableName === undefined) { return }
             const { wr, type } = state.tableList.find(({ name }) => name === state.tableName) ?? {}
@@ -162,20 +161,40 @@ export const useMainStore = zustand<{
 
             // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
             if (state.viewerStatement === "SELECT") {
-                const records = await remote.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints} LIMIT ? OFFSET ?`, [state.paging.pageSize, (state.paging.page - 1n) * state.paging.pageSize], "r")
-                const newRecordCount = (await remote.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints}`, [], "r"))[0]!.count
-                if (typeof newRecordCount !== "bigint") { throw new Error(newRecordCount + "") }
-                get().setPaging({ numRecords: newRecordCount })
+                const records = await remote.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r")
+                const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints}`, [], "r"))[0]!.count
+                if (typeof numRecords !== "bigint") { throw new Error(numRecords + "") }
+                await get().setPaging({ numRecords })
                 state = get() // state.paging will be updated
                 if (state.tableName === undefined) { return }
-                useTableStore.getState().update(
-                    await remote.getTableInfo(state.tableName),
+                useTableStore.setState({
+                    tableInfo: await remote.getTableInfo(state.tableName),
                     records,
-                    (state.paging.page - 1n) * state.paging.pageSize,
-                    state.tableName === null ? false : await remote.hasTableAutoincrement(state.tableName),
-                )
+                    autoIncrement: state.tableName === null ? false : await remote.hasTableAutoincrement(state.tableName),
+                })
             } else {
-                useTableStore.getState().update(null, (await remote.query(`${state.viewerStatement} ${state.pragma}`, [], "r")) ?? [], 0n, false)
+                const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM pragma_${state.pragma.toLowerCase()}`, [], "r"))[0]!.count
+                if (typeof numRecords !== "bigint") { throw new Error(numRecords + "") }
+                await get().setPaging({ numRecords })
+                state = get() // state.paging will be updated
+                if (state.tableName === undefined) { return }
+                useTableStore.setState({
+                    tableInfo: await remote.getTableInfo(`pragma_${state.pragma.toLowerCase()}`),
+                    records: (await remote.query(`SELECT * FROM pragma_${state.pragma.toLowerCase()} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r")) ?? [],
+                    autoIncrement: false,
+                })
+            }
+        },
+        reloadVisibleArea: async () => {
+            let state = get()
+            if (state.tableName === undefined) { return }
+            const { wr, type } = state.tableList.find(({ name }) => name === state.tableName) ?? {}
+            if (wr === undefined || type === undefined) { return }
+            // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
+            if (state.viewerStatement === "SELECT") {
+                useTableStore.setState({ records: await remote.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r") })
+            } else {
+                useTableStore.setState({ records: (await remote.query(`SELECT * FROM pragma_${state.pragma.toLowerCase()} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r")) ?? [] })
             }
         },
     }
@@ -185,8 +204,11 @@ const App = () => {
     const switchEditorTable = editor.useEditorStore((state) => state.switchTable)
     const state = useMainStore()
     useEffect(() => {
-        state.queryAndRenderTable().catch(console.error)
-    }, [state.viewerStatement, state.pragma, state.tableName, state.viewerConstraints, state.tableList, state.paging.page, state.paging.pageSize])
+        state.reloadCurrentTable().catch(console.error)
+    }, [state.viewerStatement, state.pragma, state.tableName, state.viewerConstraints, state.tableList])
+    useEffect(() => {
+        state.reloadVisibleArea().catch(console.error)
+    }, [state.paging.visibleAreaTop, state.paging.pageSize])
 
     useEffect(() => {
         const handler = ({ data }: remote.Message) => {
@@ -212,7 +234,7 @@ const App = () => {
     useEffect(() => {
         const timer = setInterval(() => {
             if (useMainStore.getState().reloadRequired) {
-                useMainStore.getState().reload({ refreshTableList: true })
+                useMainStore.getState().reloadAllTables({ refreshTableList: true })
             }
         }, 1000)
         return () => { clearInterval(timer) }
@@ -244,14 +266,8 @@ const App = () => {
                 {state.viewerStatement === "PRAGMA" && <Select value={state.pragma} onChange={(value) => useMainStore.setState({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
             </div>
         </h2>
-        <div>
-            <div ref={state.scrollerRef} style={{ marginRight: "10px", padding: 0, maxHeight: "50vh", overflowY: "scroll", display: "inline-block", maxWidth: "100%", boxShadow: "0 0 0px 2px #000000ad" }}>
-                <Table tableName={state.tableName} />
-            </div>
-        </div>
-        <div style={{ marginBottom: "30px", paddingTop: "3px" }} className="primary">
-            <span><span style={{ cursor: "pointer", paddingLeft: "8px", paddingRight: "8px", userSelect: "none" }} onClick={() => state.setPaging({ page: state.paging.page - 1n })}>‹</span><input value={"" + state.paging.page} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onChange={(ev) => state.setPaging({ page: BigInt(ev.currentTarget.value) })} /> / {state.getPageMax()} <span style={{ cursor: "pointer", paddingLeft: "4px", paddingRight: "8px", userSelect: "none" }} onClick={() => state.setPaging({ page: state.paging.page + 1n })}>›</span></span>
-            <span style={{ marginLeft: "40px" }}><input value={"" + state.paging.pageSize} style={{ textAlign: "center", width: "50px", background: "white", color: "black" }} onBlur={(ev) => state.setPaging({ pageSize: BigInt(ev.currentTarget.value) })} /> records</span>
+        <div style={{ position: "relative", width: "max-content", maxWidth: "100%" }}>
+            <Table tableName={state.tableName} />
         </div>
         {state.errorMessage && <p style={{ background: "rgb(14, 72, 117)", color: "white", padding: "10px" }}>
             <pre>{state.errorMessage}</pre>

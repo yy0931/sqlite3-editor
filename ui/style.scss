@@ -182,13 +182,12 @@ textarea {
 }
 
 table.viewer {
-    position: relative;
     border-collapse: collapse;
     table-layout: fixed;
+    background: white;
+    box-shadow: 0 0 0px 2px #000000ad;
 
     thead {
-        position: sticky;
-        top: 0;
         background-color: var(--gutter-color);
         color: black;
         outline: rgb(181, 181, 181) 1px solid;
@@ -232,6 +231,9 @@ table.viewer {
     }
 
     td:nth-child(1) {
+        position: sticky;
+        left: 0;
+
         white-space: nowrap;
         padding-left: 15px;
         padding-right: 5px;

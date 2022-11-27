@@ -1,32 +1,22 @@
-import { useRef, Ref, useMemo, useLayoutEffect, useCallback, useState } from "preact/hooks"
+import { useRef, Ref, useMemo, useLayoutEffect, useCallback, useState, useEffect } from "preact/hooks"
 import { type2color, blob2hex, useMainStore } from "./main"
 import * as remote from "./remote"
 import { useEditorStore } from "./editor"
 import zustand from "zustand"
 import type { ReadonlyDeep } from "type-fest"
 import produce from "immer"
+import { scrollbarWidth, ScrollbarY } from "./scrollbar"
 
 export const useTableStore = zustand<{
     tableInfo: remote.TableInfo
     records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[]
-    rowStart: bigint
     autoIncrement: boolean
     input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null
-    update: (tableInfo: remote.TableInfo | null, records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[], rowStart: bigint, autoIncrement: boolean) => void
 }>()((set) => ({
     records: [],
-    rowStart: 0n,
     tableInfo: [],
     autoIncrement: false,
     input: null,
-    update: (tableInfo: remote.TableInfo | null, records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[], rowStart: bigint, autoIncrement: boolean) => {
-        set({
-            tableInfo: tableInfo ?? Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0n, pk: 0n, type: "", cid: 0n, dflt_value: 0n })),
-            records,
-            rowStart,
-            autoIncrement,
-        })
-    }
 }))
 
 const persistentRef = <T extends unknown>(key: string, defaultValue: T) => {
@@ -39,10 +29,20 @@ const persistentRef = <T extends unknown>(key: string, defaultValue: T) => {
     })[0]
 }
 
+const defaultColumnWidth = 150
+
 export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const alterTable = useEditorStore((state) => state.alterTable)
+    const visibleAreaTop = useMainStore((state) => Number(state.paging.visibleAreaTop))
+    const pageSize = useMainStore((state) => Number(state.paging.pageSize))
+    const numRecords = useMainStore((state) => Number(state.paging.numRecords))
 
     const state = useTableStore()
+    useEffect(() => {
+        tableRef.current?.addEventListener("wheel", (ev) => {
+            console.log(ev.deltaY)
+        })
+    }, [])
 
     const columnWidths = persistentRef<Record<string, (number | undefined | null)[]>>("columnWidths_v3", {})
     const tableRef = useRef() as Ref<HTMLTableElement>
@@ -51,67 +51,80 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const selectedDataRow = useEditorStore((state) => state.statement === "UPDATE" ? state.row : null)
     const selectedDataColumn = useEditorStore((state) => state.statement === "UPDATE" ? state.column : null)
 
-    // thead
-    return <table ref={tableRef} className="viewer" style={{ background: "white", width: "max-content" }}>
-        <thead>
-            <tr>
-                <th></th>
-                {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
-                    style={{ width: columnWidths.current[tableName ?? ""]?.[i] }}
-                    className={tableName !== undefined ? "clickable" : ""}
-                    onMouseMove={(ev) => {
-                        const rect = ev.currentTarget.getBoundingClientRect()
-                        if (rect.right - ev.clientX < 10) {
-                            ev.currentTarget.classList.add("ew-resize")
-                        } else {
-                            ev.currentTarget.classList.remove("ew-resize")
-                        }
-                    }}
-                    onMouseDown={(ev) => {
-                        useEditorStore.getState().commitUpdate().then(() => {
-                            const th = ev.currentTarget
-                            const rect = th.getBoundingClientRect()
-                            if (rect.right - ev.clientX < 10) { // right
-                                const mouseMove = (ev: MouseEvent) => {
-                                    columnWidths.current = produce(columnWidths.current, (d) => {
-                                        if (!Array.isArray(d[tableName ?? ""])) {
-                                            d[tableName ?? ""] = []
-                                        }
-                                        d[tableName ?? ""]![i] = Math.max(50, ev.clientX - rect.left)
-                                    })
-                                    th.style.width = columnWidths.current[tableName ?? ""]![i]! + "px"
-                                    for (const td of tableRef.current?.querySelectorAll<HTMLElement>(`td:nth-child(${i + 2})`) ?? []) {
-                                        td.style.maxWidth = columnWidths.current[tableName ?? ""]![i]! + "px"
-                                    }
+    const ref = useRef() as Ref<ScrollbarY>
+    return <>
+        <div style={{ maxWidth: "100%", overflowX: "auto", width: "max-content" }}>
+            <table ref={tableRef} className="viewer" style={{ paddingRight: scrollbarWidth, width: "max-content" }}>
+                <thead>
+                    <tr>
+                        <th></th>
+                        {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
+                            style={{ width: columnWidths.current[tableName ?? ""]?.[i] ?? defaultColumnWidth }}
+                            className={tableName !== undefined ? "clickable" : ""}
+                            onMouseMove={(ev) => {
+                                const rect = ev.currentTarget.getBoundingClientRect()
+                                if (rect.right - ev.clientX < 10) {
+                                    ev.currentTarget.classList.add("ew-resize")
+                                } else {
+                                    ev.currentTarget.classList.remove("ew-resize")
                                 }
-                                document.body.classList.add("ew-resize")
-                                window.addEventListener("mousemove", mouseMove)
-                                window.addEventListener("mouseup", () => {
-                                    window.removeEventListener("mousemove", mouseMove)
-                                    document.body.classList.remove("ew-resize")
-                                }, { once: true })
-                            } else if (tableName !== undefined) { // center
-                                alterTable(tableName, name)
-                            }
-                        })
-                    }}
-                    onMouseLeave={(ev) => {
-                        ev.currentTarget.classList.remove("ew-resize")
-                    }}>
-                    <code>
-                        {name}
-                        <span className="type">{(type ? (" " + type) : "") + (pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
-                    </code>
-                </th>)}
-            </tr>
-        </thead>
-        <tbody>
-            {state.records.length === 0 && <tr>
-                <td className="no-hover" style={{ display: "inline-block", height: "1.2em", cursor: "default" }}></td>
-            </tr>}
-            {state.records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidths={columnWidths.current[tableName ?? ""] ?? []} rowNumber={state.rowStart + BigInt(row) + 1n} />)}
-        </tbody>
-    </table>
+                            }}
+                            onMouseDown={(ev) => {
+                                useEditorStore.getState().commitUpdate().then(() => {
+                                    const th = ev.currentTarget
+                                    const rect = th.getBoundingClientRect()
+                                    if (rect.right - ev.clientX < 10) { // right
+                                        const mouseMove = (ev: MouseEvent) => {
+                                            columnWidths.current = produce(columnWidths.current, (d) => {
+                                                if (!Array.isArray(d[tableName ?? ""])) {
+                                                    d[tableName ?? ""] = []
+                                                }
+                                                d[tableName ?? ""]![i] = Math.max(50, ev.clientX - rect.left)
+                                            })
+                                            th.style.width = columnWidths.current[tableName ?? ""]![i]! + "px"
+                                            for (const td of tableRef.current?.querySelectorAll<HTMLElement>(`td:nth-child(${i + 2})`) ?? []) {
+                                                td.style.maxWidth = columnWidths.current[tableName ?? ""]![i]! + "px"
+                                            }
+                                        }
+                                        document.body.classList.add("ew-resize")
+                                        window.addEventListener("mousemove", mouseMove)
+                                        window.addEventListener("mouseup", () => {
+                                            window.removeEventListener("mousemove", mouseMove)
+                                            document.body.classList.remove("ew-resize")
+                                        }, { once: true })
+                                    } else if (tableName !== undefined) { // center
+                                        alterTable(tableName, name)
+                                    }
+                                })
+                            }}
+                            onMouseLeave={(ev) => {
+                                ev.currentTarget.classList.remove("ew-resize")
+                            }}>
+                            <code>
+                                {name}
+                                <span className="type">{(type ? (" " + type) : "") + (pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
+                            </code>
+                        </th>)}
+                    </tr>
+                </thead>
+                <tbody>
+                    {state.records.length === 0 && <tr>
+                        <td className="no-hover" style={{ display: "inline-block", height: "1.2em", cursor: "default" }}></td>
+                    </tr>}
+                    {state.records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidths={columnWidths.current[tableName ?? ""] ?? []} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
+                </tbody>
+            </table>
+        </div>
+        {// @ts-ignore
+            <scrollbar-y
+                ref={ref}
+                min={0}
+                max={numRecords}
+                size={pageSize}
+                value={visibleAreaTop}
+                style={{ width: scrollbarWidth, height: "100%", right: 0, top: 0, position: "absolute" }}
+                onChange={() => { useMainStore.getState().setPaging({ visibleAreaTop: BigInt(Math.round(ref.current!.value)) }) }} />}
+    </>
 }
 
 const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: remote.TableInfo, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly (number | null | undefined)[] }) => {
@@ -137,7 +150,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
             return <td
-                style={{ maxWidth: props.columnWidths[i] }}
+                style={{ maxWidth: props.columnWidths[i] ?? defaultColumnWidth }}
                 className={(props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 onMouseDown={(ev) => {
                     useEditorStore.getState().commitUpdate().then(() => {
