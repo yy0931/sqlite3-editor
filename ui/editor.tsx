@@ -5,7 +5,7 @@ import type { JSXInternal } from "preact/src/jsx"
 import { SQLite3Value, TableInfo, TableListItem } from "./sql"
 import { blob2hex, escapeSQLIdentifier, type2color, useMainStore } from "./main"
 import { Select } from "./components"
-import { renderValue, useTableStore } from "./table"
+import { renderValue, unsafeEscapeValue, useTableStore } from "./table"
 
 enableMapSet()
 
@@ -154,12 +154,31 @@ export const useEditorStore = zustand<State & {
                     .map(({ columns }) => columns)
                     .filter((columns) => columns.every((column) => record[column] !== null)))
             if (constraintChoices.length === 0) { return }
+            let type: EditorDataType
+            if (value === null) {
+                const columnAffinity = (await useMainStore.getState().sql.getTableInfo(tableName)).find(({ name }) => name === column)?.type.toUpperCase() ?? "ANY"
+                // https://www.sqlite.org/datatype3.html#determination_of_column_affinity
+                if (columnAffinity.includes("INT") || columnAffinity.includes("REAL") || columnAffinity.includes("FLOR") || columnAffinity.includes("DOUB")) {
+                    type = "number"
+                } else if (columnAffinity.includes("CHAR") || columnAffinity.includes("CLOB") || columnAffinity.includes("TEXT")) {
+                    type = "string"
+                } else if (columnAffinity.includes("BLOB")) { // or columnAffinity === ""
+                    type = "blob"
+                } else {
+                    type = "null"
+                }
+            } else if (value instanceof Uint8Array) {
+                type = "blob"
+            } else if (typeof value === "number" || typeof value === "bigint") {
+                type = "number"
+            } else {
+                type = "string"
+            }
             set({
-                statement: "UPDATE", tableName, column, record, constraintChoices, row,
+                statement: "UPDATE", tableName, column, record, constraintChoices, row, type,
                 selectedConstraint: 0,
-                textareaValue: value instanceof Uint8Array ? "" : (value + ""),
+                textareaValue: value === null || value instanceof Uint8Array ? "" : (value + ""),
                 blobValue: value instanceof Uint8Array ? value : null,
-                type: value === null ? "null" : value instanceof Uint8Array ? "blob" : (typeof value === "number" || typeof value === "bigint") ? "number" : "string",
                 isTextareaDirty: false,
             })
         },
@@ -331,7 +350,7 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
             const columns = state.constraintChoices[state.selectedConstraint]!
             header = <>
                 FROM {escapeSQLIdentifier(state.tableName)} WHERE <select value={state.selectedConstraint} onInput={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
-                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${renderValue(state.record[column] as SQLite3Value)}`).join(" AND ")}</option>)
+                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>
             editor = <>
@@ -381,7 +400,7 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
         case "UPDATE": {
             header = <>
                 {escapeSQLIdentifier(state.tableName)} SET {escapeSQLIdentifier(state.column)} = ? WHERE <select value={state.selectedConstraint} onChange={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
-                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${renderValue(state.record[column] as SQLite3Value)}`).join(" AND ")}</option>)
+                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>
             editor = <>

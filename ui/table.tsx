@@ -153,13 +153,28 @@ const MountInput = (props: { element: HTMLTextAreaElement, onFocusOrMount: () =>
     return <span ref={ref}></span>
 }
 
+/** Not verified for safety. */
+export const unsafeEscapeValue = (value: SQLite3Value) => {
+    if (value instanceof Uint8Array) {
+        return `x'${blob2hex(value, undefined)}'`
+    } else if (value === null) {
+        return "NULL"
+    } else if (typeof value === "string") {
+        return `'${value.replaceAll("'", "''").replaceAll("\r", "\\r").replaceAll("\n", "\\n")}'`
+    } else if (typeof value === "number") {
+        return /^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value
+    } else {
+        return "" + value
+    }
+}
+
 export const renderValue = (value: SQLite3Value) => {
     if (value instanceof Uint8Array) {
         return `x'${blob2hex(value, 8)}'`
     } else if (value === null) {
         return "NULL"
     } else if (typeof value === "string") {
-        return typeof value === "string" ? `'${value.replaceAll("'", "''").replaceAll("\r", "\\r").replaceAll("\n", "\\n")}'` : value + ""
+        return value.replaceAll("'", "''").replaceAll("\r", "\\r").replaceAll("\n", "\\n")
     } else if (typeof value === "number") {
         return /^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value
     } else {
