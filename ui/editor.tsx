@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, Ref, useState, useRef } from "preact/hooks"
 import zustand from "zustand"
 import produce, { enableMapSet } from "immer"
 import type { JSXInternal } from "preact/src/jsx"
-import { SQLite3Value, TableInfo, TableListItem } from "./remote"
+import * as remote from "./remote"
 import { blob2hex, escapeSQLIdentifier, type2color, useMainStore } from "./main"
 import { Select } from "./components"
 import { renderValue, unsafeEscapeValue, useTableStore } from "./table"
@@ -24,7 +24,7 @@ type State =
         }
         | {
             statement: "DELETE"
-            record: Record<string, SQLite3Value>
+            record: Record<string, remote.SQLite3Value>
             constraintChoices: readonly (readonly string[])[]
             selectedConstraint: number
             row: number
@@ -37,7 +37,7 @@ type State =
         }
         | {
             statement: "INSERT"
-            tableInfo: TableInfo
+            tableInfo: remote.TableInfo
             textareaValues: string[]
             blobValues: (Uint8Array | null)[]
             dataTypes: EditorDataType[]
@@ -45,7 +45,7 @@ type State =
         | {
             statement: "UPDATE"
             column: string
-            record: Record<string, SQLite3Value>
+            record: Record<string, remote.SQLite3Value>
             textareaValue: string
             blobValue: Uint8Array | null
             type: EditorDataType
@@ -73,14 +73,14 @@ type State =
 export const useEditorStore = zustand<State & {
     alterTable: (tableName: string, column: string | undefined) => Promise<void>
     createTable: (tableName: string | undefined) => void
-    delete_: (tableName: string, record: Record<string, SQLite3Value>, row: number) => Promise<void>
+    delete_: (tableName: string, record: Record<string, remote.SQLite3Value>, row: number) => Promise<void>
     dropTable: (tableName: string) => void
     dropView: (tableName: string) => void
     insert: (tableName: string) => Promise<void>
     custom: (tableName: string | undefined) => void
-    update: (tableName: string, column: string, record: Record<string, SQLite3Value>, row: number) => Promise<void>
+    update: (tableName: string, column: string, record: Record<string, remote.SQLite3Value>, row: number) => Promise<void>
     switchTable: (tableName: string | undefined) => Promise<void>
-    commit: (query: string, params: SQLite3Value[], opts: OnWriteOptions) => Promise<void>
+    commit: (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions) => Promise<void>
     commitUpdate: () => Promise<void>
 }>()((setPartial, get) => {
     const set = (state: State) => { setPartial(state) }
@@ -102,19 +102,19 @@ export const useEditorStore = zustand<State & {
                 columnDef: { name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false },
                 newColumnName: column ?? "",
                 newTableName: tableName,
-                strict: !!(await useMainStore.getState().sql.getTableList()).find(({ name }) => name === tableName)?.strict,
+                strict: !!(await remote.getTableList()).find(({ name }) => name === tableName)?.strict,
             })
         },
         createTable: (tableName: string | undefined) => {
             set({ statement: "CREATE TABLE", strict: true, newTableName: "", tableConstraints: "", withoutRowId: false, columnDefs: [], tableName })
         },
-        delete_: async (tableName: string, record: Record<string, SQLite3Value>, row: number) => {
+        delete_: async (tableName: string, record: Record<string, remote.SQLite3Value>, row: number) => {
             set({
                 statement: "DELETE",
                 tableName,
                 record,
                 constraintChoices: ("rowid" in record ? [["rowid"]] : [])
-                    .concat((await useMainStore.getState().sql.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
+                    .concat((await remote.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
                         .map(({ columns }) => columns)
                         .filter((columns) => columns.every((column) => record[column] !== null))),
                 selectedConstraint: 0,
@@ -128,7 +128,7 @@ export const useEditorStore = zustand<State & {
             set({ statement: "DROP VIEW", tableName })
         },
         insert: async (tableName: string) => {
-            const tableInfo = await useMainStore.getState().sql.getTableInfo(tableName)
+            const tableInfo = await remote.getTableInfo(tableName)
             set({
                 statement: "INSERT",
                 tableName, tableInfo,
@@ -149,16 +149,16 @@ export const useEditorStore = zustand<State & {
             })
         },
         custom: (tableName: string | undefined) => { set({ statement: "custom", query: "", tableName }) },
-        update: async (tableName: string, column: string, record: Record<string, SQLite3Value>, row: number) => {
+        update: async (tableName: string, column: string, record: Record<string, remote.SQLite3Value>, row: number) => {
             const value = record[column]
             const constraintChoices = ("rowid" in record ? [["rowid"]] : [])
-                .concat((await useMainStore.getState().sql.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
+                .concat((await remote.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
                     .map(({ columns }) => columns)
                     .filter((columns) => columns.every((column) => record[column] !== null)))
             if (constraintChoices.length === 0) { return }
             let type: EditorDataType
             if (value === null) {
-                const columnAffinity = (await useMainStore.getState().sql.getTableInfo(tableName)).find(({ name }) => name === column)?.type.toUpperCase() ?? "ANY"
+                const columnAffinity = (await remote.getTableInfo(tableName)).find(({ name }) => name === column)?.type.toUpperCase() ?? "ANY"
                 // https://www.sqlite.org/datatype3.html#determination_of_column_affinity
                 if (columnAffinity.includes("INT") || columnAffinity.includes("REAL") || columnAffinity.includes("FLOR") || columnAffinity.includes("DOUB")) {
                     type = "number"
@@ -202,8 +202,8 @@ export const useEditorStore = zustand<State & {
                 }
             }
         },
-        commit: async (query: string, params: SQLite3Value[], opts: OnWriteOptions) => {
-            await useMainStore.getState().sql.query(query, params, "w+")
+        commit: async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions) => {
+            await remote.query(query, params, "w+")
             await useMainStore.getState().reload(opts)
             const state = get()
 
@@ -226,7 +226,7 @@ export const useEditorStore = zustand<State & {
             const state = get()
             if (state.statement !== "UPDATE" || !state.isTextareaDirty) { return }
             const columns = state.constraintChoices[state.selectedConstraint]!
-            await state.commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as SQLite3Value)], {})
+            await state.commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], {})
         }
     }
 })
@@ -238,7 +238,7 @@ export type OnWriteOptions = {
     scrollToBottom?: true
 }
 
-export const Editor = (props: { tableList: TableListItem[] }) => {
+export const Editor = (props: { tableList: remote.TableListItem[] }) => {
     const state = useEditorStore()
 
     useLayoutEffect(() => {
@@ -365,12 +365,12 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
             const columns = state.constraintChoices[state.selectedConstraint]!
             header = <>
                 FROM {escapeSQLIdentifier(state.tableName)} WHERE <select value={state.selectedConstraint} onInput={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
-                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as SQLite3Value)}`).join(" AND ")}</option>)
+                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as remote.SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>
             editor = <>
                 <Commit style={{ marginBottom: "10px" }} onClick={() => {
-                    state.commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as SQLite3Value)], {})
+                    state.commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as remote.SQLite3Value)], {})
                 }} />
             </>
             break
@@ -420,7 +420,7 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
         case "UPDATE": {
             header = <>
                 {escapeSQLIdentifier(state.tableName)} SET {escapeSQLIdentifier(state.column)} = ? WHERE <select value={state.selectedConstraint} onChange={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
-                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as SQLite3Value)}`).join(" AND ")}</option>)
+                    state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as remote.SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>
             editor = <>
@@ -501,8 +501,8 @@ const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, r
         return <div>
             <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} style={{ marginRight: "10px" }} />
             <input value={filename} placeholder={"tmp.dat"} onInput={(ev) => setFilename(ev.currentTarget.value)} />
-            <input type="button" value="Import" onClick={() => useMainStore.getState().sql.import(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
-            <input type="button" value="Export" onClick={() => useMainStore.getState().sql.export(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
+            <input type="button" value="Import" onClick={() => remote.import_(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
+            <input type="button" value="Export" onClick={() => remote.export_(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
         </div>
     }
     if (props.type === "string") {
@@ -525,7 +525,7 @@ const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, r
         tabIndex={props.tabIndex} />
 }
 
-const parseTextareaValue = (value: string, blobValue: Uint8Array | null, type: EditorDataType): SQLite3Value => {
+const parseTextareaValue = (value: string, blobValue: Uint8Array | null, type: EditorDataType): remote.SQLite3Value => {
     if (type === "null") {
         return null
     } else if (type === "number") {
