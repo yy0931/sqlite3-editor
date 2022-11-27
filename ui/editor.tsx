@@ -82,6 +82,7 @@ export const useEditorStore = zustand<State & {
     switchTable: (tableName: string | undefined) => Promise<void>
     commit: (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions) => Promise<void>
     commitUpdate: () => Promise<void>
+    clearInputs: () => Promise<void>
 }>()((setPartial, get) => {
     const set = (state: State) => { setPartial(state) }
     return {
@@ -205,9 +206,10 @@ export const useEditorStore = zustand<State & {
         commit: async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions) => {
             await remote.query(query, params, "w+")
             await useMainStore.getState().reload(opts)
+            await get().clearInputs()
+        },
+        clearInputs: async () => {
             const state = get()
-
-            // Clear inputs
             switch (state.statement) {
                 case "INSERT": setPartial({ textareaValues: state.textareaValues.map(() => ""), blobValues: state.blobValues.map(() => null) }); break
                 case "DROP TABLE": state.dropTable(state.tableName); break
