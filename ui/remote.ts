@@ -79,7 +79,6 @@ export const downloadState = (): Promise<void> =>
 type QueryResult<T extends string> = Promise<T extends `SELECT ${string}` | `PRAGMA pragma_list` ? Record<string, SQLite3Value>[] : Record<string, SQLite3Value>[] | undefined>
 
 export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): QueryResult<T> => {
-    console.log(query)
     return post(`/query`, { query, params, mode })
 }
 
