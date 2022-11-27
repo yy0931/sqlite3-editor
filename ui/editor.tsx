@@ -20,6 +20,7 @@ type State =
             columnDef: ColumnDef
             newTableName: string
             newColumnName: string
+            strict: boolean
         }
         | {
             statement: "DELETE"
@@ -70,7 +71,7 @@ type State =
     )
 
 export const useEditorStore = zustand<State & {
-    alterTable: (tableName: string, column: string | undefined) => void
+    alterTable: (tableName: string, column: string | undefined) => Promise<void>
     createTable: (tableName: string | undefined) => void
     delete_: (tableName: string, record: Record<string, SQLite3Value>, row: number) => Promise<void>
     dropTable: (tableName: string) => void
@@ -92,7 +93,7 @@ export const useEditorStore = zustand<State & {
         columnDefs: [],
         tableName: undefined,
 
-        alterTable: (tableName: string, column: string | undefined) => {
+        alterTable: async (tableName: string, column: string | undefined) => {
             set({
                 statement: "ALTER TABLE",
                 tableName,
@@ -101,6 +102,7 @@ export const useEditorStore = zustand<State & {
                 columnDef: { name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false },
                 newColumnName: column ?? "",
                 newTableName: tableName,
+                strict: !!(await useMainStore.getState().sql.getTableList()).find(({ name }) => name === tableName)?.strict,
             })
         },
         createTable: (tableName: string | undefined) => {
@@ -134,7 +136,7 @@ export const useEditorStore = zustand<State & {
                 blobValues: tableInfo.map(() => null),
                 dataTypes: tableInfo.map(({ type }) => {
                     type = type.toLowerCase()
-                    if (type === "numeric" || type === "real" || type === "int" || type === "integer") {
+                    if (type === "real" || type === "int" || type === "integer") {
                         return "number"
                     } else if (type === "text") {
                         return "string"
@@ -192,7 +194,7 @@ export const useEditorStore = zustand<State & {
                 case "INSERT": await state.insert(tableName); break
                 case "DROP TABLE": state.dropTable(tableName); break
                 case "DROP VIEW": state.dropView(tableName); break
-                case "ALTER TABLE": state.alterTable(tableName, undefined); break
+                case "ALTER TABLE": await state.alterTable(tableName, undefined); break
                 case "DELETE": case "UPDATE": await state.insert(tableName); break
                 case "CREATE TABLE": case "custom": setPartial({ tableName }); break
                 default: {
@@ -210,7 +212,7 @@ export const useEditorStore = zustand<State & {
                 case "INSERT": setPartial({ textareaValues: state.textareaValues.map(() => ""), blobValues: state.blobValues.map(() => null) }); break
                 case "DROP TABLE": state.dropTable(state.tableName); break
                 case "DROP VIEW": state.dropView(state.tableName); break
-                case "ALTER TABLE": state.alterTable(state.tableName, undefined); break
+                case "ALTER TABLE": await state.alterTable(state.tableName, undefined); break
                 case "DELETE": case "UPDATE": await state.insert(state.tableName); break
                 case "CREATE TABLE": state.createTable(state.tableName); break
                 case "custom": state.custom(state.tableName); break
@@ -324,7 +326,7 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
                 {state.statement2 === "RENAME COLUMN" && <>{" TO "}<input placeholder="column-name" value={state.newColumnName} onInput={(ev) => useEditorStore.setState({ newColumnName: ev.currentTarget.value })} /></>}
             </>
             editor = <>
-                {state.statement2 === "ADD COLUMN" && <ColumnDefEditor value={state.columnDef} onChange={(columnDef) => useEditorStore.setState({ columnDef })} />}
+                {state.statement2 === "ADD COLUMN" && <ColumnDefEditor value={state.columnDef} onChange={(columnDef) => useEditorStore.setState({ columnDef })} strict={state.strict} />}
                 <Commit disabled={
                     state.statement2 === "RENAME TO" ? state.newTableName === "" :
                         state.statement2 === "RENAME COLUMN" ? state.oldColumnName === "" || state.newColumnName === "" :
@@ -351,7 +353,7 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
                 <Checkbox checked={state.strict} onChange={(checked) => useEditorStore.setState({ strict: checked })} text="STRICT" />
             </>
             editor = <>
-                <MultiColumnDefEditor value={state.columnDefs} onChange={(columnDefs) => useEditorStore.setState({ columnDefs })} />
+                <MultiColumnDefEditor value={state.columnDefs} onChange={(columnDefs) => useEditorStore.setState({ columnDefs })} strict={state.strict} />
                 <textarea autocomplete="off" style={{ marginTop: "10px", height: "20vh" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
                 <Commit disabled={state.tableName === "" || state.columnDefs.length === 0} style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
                     state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.tableName })
@@ -410,7 +412,7 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
                     })}
                 </ul>
                 <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
-                    state.commit(buildQuery(), state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true })
+                    state.commit(`INSERT ${buildQuery()}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true })
                 }} />
             </>
             break
@@ -565,11 +567,11 @@ type ColumnDef = {
     notNull: boolean
 }
 
-const ColumnDefEditor = (props: { columnNameOnly?: boolean, value: ColumnDef, onChange: (columnDef: ColumnDef) => void }) => {
+const ColumnDefEditor = (props: { columnNameOnly?: boolean, value: ColumnDef, onChange: (columnDef: ColumnDef) => void, strict: boolean }) => {
     return <>
         <input tabIndex={0} placeholder="column-name" style={{ marginRight: "8px" }} value={props.value.name} onInput={(ev) => { props.onChange({ ...props.value, name: ev.currentTarget.value }) }}></input>
         {!props.columnNameOnly && <>
-            <Select tabIndex={0} style={{ marginRight: "8px" }} value={props.value.affinity} onChange={(value) => props.onChange({ ...props.value, affinity: value })} options={{ "TEXT": {}, "NUMERIC": {}, "INTEGER": {}, "REAL": {}, "BLOB": {}, "ANY": {} }} />
+            <Select tabIndex={0} style={{ marginRight: "8px" }} value={props.value.affinity} onChange={(value) => props.onChange({ ...props.value, affinity: value })} options={{ "TEXT": {}, "INTEGER": {}, "REAL": {}, "BLOB": {}, "ANY": { disabled: !props.strict, disabledReason: "STRICT tables only." }, "NUMERIC": { disabled: props.strict, disabledReason: "non-STRICT tables only." } }} />
             <Checkbox tabIndex={-1} checked={props.value.primary} onChange={(checked) => props.onChange({ ...props.value, primary: checked })} text="PRIMARY KEY" />
             <Checkbox tabIndex={-1} checked={props.value.autoIncrement} onChange={(checked) => props.onChange({ ...props.value, autoIncrement: checked })} text="AUTOINCREMENT" />
             <Checkbox tabIndex={-1} checked={props.value.unique} onChange={(checked) => props.onChange({ ...props.value, unique: checked })} text="UNIQUE" />
@@ -583,7 +585,7 @@ const printColumnDef = (def: ColumnDef) =>
     `${escapeSQLIdentifier(def.name)} ${def.affinity}${def.primary ? " PRIMARY KEY" : ""}${def.autoIncrement ? " AUTOINCREMENT" : ""}${def.unique ? " UNIQUE" : ""}${def.notNull ? " NOT NULL" : ""}`
 
 
-const MultiColumnDefEditor = (props: { value: ColumnDef[], onChange: (value: ColumnDef[]) => void }) => {
+const MultiColumnDefEditor = (props: { value: ColumnDef[], onChange: (value: ColumnDef[]) => void, strict: boolean }) => {
     const renderedColumnDefs = [...props.value]
     while (renderedColumnDefs.at(-1)?.name === "") { renderedColumnDefs.pop() }
     if (renderedColumnDefs.length === 0 || renderedColumnDefs.at(-1)!.name !== "") {
@@ -597,7 +599,7 @@ const MultiColumnDefEditor = (props: { value: ColumnDef[], onChange: (value: Col
                     d[i] = value
                     while (d.at(-1)?.name === "") { d.pop() }
                 }))
-            }} />
+            }} strict={props.strict} />
         </li>
     )}</ul>
 }
