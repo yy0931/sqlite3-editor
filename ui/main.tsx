@@ -223,7 +223,7 @@ const App = () => {
                     {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => {
                         useMainStore.setState({ tableName: value })
                         switchEditorTable(value)
-                    }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const))} className="primary" />}
+                    }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
                     {" "}
                 </>}
             </div>
