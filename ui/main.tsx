@@ -85,7 +85,7 @@ export const useMainStore = zustand<{
     rerender: () => void,
     getPageMax: () => bigint
     reload: (opts: editor.OnWriteOptions) => Promise<void>
-    setPaging: (opts: { page?: bigint, numRecords?: bigint, pageSize?: bigint }) => void
+    setPaging: (opts: { page?: bigint, numRecords?: bigint, pageSize?: bigint }) => Promise<void>
     addErrorMessage: (value: string) => void
     queryAndRenderTable: () => Promise<void>
 }>()((set, get) => {
@@ -107,7 +107,9 @@ export const useMainStore = zustand<{
         scrollerRef: { current: null },
         _rerender: {},
         requireReloading: () => { set({ reloadRequired: true }) },
-        setPaging: (opts) => {
+        setPaging: async (opts) => {
+            await editor.useEditorStore.getState().commitUpdate()
+            editor.useEditorStore.getState().clearInputs()
             const newValue = { ...get().paging, ...opts }
             newValue.pageSize = BigintMath.max(1n, newValue.pageSize)
 
