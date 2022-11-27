@@ -4,6 +4,10 @@ import { temporaryFile } from "tempy"
 import fs from "fs"
 import path from "path"
 import which from "which"
+import { Packr, Unpackr } from "msgpackr"
+
+const packr = new Packr({ useRecords: false, preserveNumericTypes: true })
+const unpackr = new Unpackr({ largeBigIntToFloat: false, int64AsNumber: false, mapsAsObjects: true, useRecords: true, preserveNumericTypes: true })
 
 class LocalPythonClient {
     readonly #p
@@ -35,7 +39,7 @@ class LocalPythonClient {
     }
 
     #queue = new Array<() => void>()
-    request(url: string, body: Buffer, resolve: (data: Buffer) => void, reject: (err: Error) => void) {
+    request(url: string, body: Buffer | Uint8Array, resolve: (data: Buffer) => void, reject: (err: Error) => void) {
         const job = () => {
             fs.writeFileSync(this.#requestBody, body)
             this.#resolve = (data) => { resolve(data); this.#queue.shift(); this.#queue[0]?.() }
@@ -110,7 +114,21 @@ export const activate = (context: vscode.ExtensionContext) => {
                         send: (buf: Buffer | Uint8Array) => { webviewPanel.webview.postMessage({ type: "sqlite3-editor-server", requestId, body: new Uint8Array(buf) }) },
                         status: (code: 400) => ({ send: (text: string) => { webviewPanel.webview.postMessage({ type: "sqlite3-editor-server", requestId, err: text }) } })
                     }
-                    document.conn.request(url, body as Buffer, (body) => res.send(body), (err) => { res.status(400).send((err as Error).message) })
+                    switch (url) {
+                        case "/setState": {
+                            const { key, value } = packr.unpack(body) as { key: string, value: unknown }
+                            context.workspaceState.update(key, value)
+                                .then(() => { res.send(packr.pack(null)) }, (err) => { res.status(400).send((err as Error).message) })
+                            break
+                        } case "/downloadState": {
+                            // TODO: return only this extension's state?
+                            console.log(context.workspaceState.keys())
+                            res.send(packr.pack(Object.fromEntries(context.workspaceState.keys().map((key) => [key, context.workspaceState.get(key)]))))
+                            break
+                        } default:
+                            document.conn.request(url, body, (body) => res.send(body), (err) => { res.status(400).send((err as Error).message) })
+                            break
+                    }
                 }))
 
                 document.watcher.on("change", () => {

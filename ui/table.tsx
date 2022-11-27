@@ -1,23 +1,25 @@
 import { useRef, Ref, useMemo, useLayoutEffect, useCallback, useState } from "preact/hooks"
-import { type2color, blob2hex } from "./main"
-import { SQLite3Value, TableInfo } from "./sql"
+import { type2color, blob2hex, useMainStore } from "./main"
+import * as remote from "./remote"
 import { useEditorStore } from "./editor"
 import zustand from "zustand"
+import type { ReadonlyDeep } from "type-fest"
+import produce from "immer"
 
 export const useTableStore = zustand<{
-    tableInfo: TableInfo
-    records: readonly { readonly [key in string]: Readonly<SQLite3Value> }[]
+    tableInfo: remote.TableInfo
+    records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[]
     rowStart: bigint
     autoIncrement: boolean
     input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null
-    update: (tableInfo: TableInfo | null, records: readonly { readonly [key in string]: Readonly<SQLite3Value> }[], rowStart: bigint, autoIncrement: boolean) => void
+    update: (tableInfo: remote.TableInfo | null, records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[], rowStart: bigint, autoIncrement: boolean) => void
 }>()((set) => ({
     records: [],
     rowStart: 0n,
     tableInfo: [],
     autoIncrement: false,
     input: null,
-    update: (tableInfo: TableInfo | null, records: readonly { readonly [key in string]: Readonly<SQLite3Value> }[], rowStart: bigint, autoIncrement: boolean) => {
+    update: (tableInfo: remote.TableInfo | null, records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[], rowStart: bigint, autoIncrement: boolean) => {
         set({
             tableInfo: tableInfo ?? Object.keys(records[0] ?? {}).map((name) => ({ name, notnull: 0n, pk: 0n, type: "", cid: 0n, dflt_value: 0n })),
             records,
@@ -27,12 +29,22 @@ export const useTableStore = zustand<{
     }
 }))
 
+const persistentRef = <T extends unknown>(key: string, defaultValue: T) => {
+    return useState(() => {
+        let value: ReadonlyDeep<T> = remote.getState(key) ?? defaultValue as ReadonlyDeep<T>
+        return {
+            get current(): ReadonlyDeep<T> { return value },
+            set current(newValue: ReadonlyDeep<T>) { remote.setState(key, value = newValue) },
+        }
+    })[0]
+}
+
 export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const alterTable = useEditorStore((state) => state.alterTable)
 
     const state = useTableStore()
 
-    const columnWidths = useRef<(number | null)[]>(Object.keys(state.records[0] ?? {}).map(() => null))
+    const columnWidths = persistentRef<Record<string, (number | undefined | null)[]>>("columnWidths_v3", {})
     const tableRef = useRef() as Ref<HTMLTableElement>
 
     const selectedRow = useEditorStore((state) => state.statement === "DELETE" ? state.row : null)
@@ -45,7 +57,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
             <tr>
                 <th></th>
                 {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
-                    style={{ width: columnWidths.current[i] }}
+                    style={{ width: columnWidths.current[tableName ?? ""]?.[i] }}
                     className={tableName !== undefined ? "clickable" : ""}
                     onMouseMove={(ev) => {
                         const rect = ev.currentTarget.getBoundingClientRect()
@@ -61,10 +73,15 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                             const rect = th.getBoundingClientRect()
                             if (rect.right - ev.clientX < 10) { // right
                                 const mouseMove = (ev: MouseEvent) => {
-                                    columnWidths.current[i] = Math.max(50, ev.clientX - rect.left)
-                                    th.style.width = columnWidths.current[i] + "px"
+                                    columnWidths.current = produce(columnWidths.current, (d) => {
+                                        if (!Array.isArray(d[tableName ?? ""])) {
+                                            d[tableName ?? ""] = []
+                                        }
+                                        d[tableName ?? ""]![i] = Math.max(50, ev.clientX - rect.left)
+                                    })
+                                    th.style.width = columnWidths.current[tableName ?? ""]![i]! + "px"
                                     for (const td of tableRef.current?.querySelectorAll<HTMLElement>(`td:nth-child(${i + 2})`) ?? []) {
-                                        td.style.maxWidth = columnWidths.current[i] + "px"
+                                        td.style.maxWidth = columnWidths.current[tableName ?? ""]![i]! + "px"
                                     }
                                 }
                                 document.body.classList.add("ew-resize")
@@ -92,12 +109,12 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
             {state.records.length === 0 && <tr>
                 <td className="no-hover" style={{ display: "inline-block", height: "1.2em", cursor: "default" }}></td>
             </tr>}
-            {state.records.map((record, i) => <TableRow selected={selectedRow === i} key={i} row={i} selectedColumn={selectedDataColumn} input={selectedDataRow === i ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidth={columnWidths.current[i]!} rowNumber={state.rowStart + BigInt(i) + 1n} />)}
+            {state.records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidths={columnWidths.current[tableName ?? ""] ?? []} rowNumber={state.rowStart + BigInt(row) + 1n} />)}
         </tbody>
     </table>
 }
 
-const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: TableInfo, record: { readonly [key in string]: Readonly<SQLite3Value> }, rowNumber: bigint, row: number, columnWidth: number }) => {
+const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: remote.TableInfo, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly (number | null | undefined)[] }) => {
     if (props.rowNumber <= 0) {
         throw new Error(props.rowNumber + "")
     }
@@ -116,11 +133,11 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                     if (props.tableName !== undefined) { delete_(props.tableName, props.record, props.row).catch(console.error) }
                 })
             }}>{props.rowNumber}</td>
-        {props.tableInfo.map(({ name }) => {
-            const value = props.record[name] as SQLite3Value
+        {props.tableInfo.map(({ name }, i) => {
+            const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
             return <td
-                style={{ maxWidth: props.columnWidth }}
+                style={{ maxWidth: props.columnWidths[i] }}
                 className={(props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 onMouseDown={(ev) => {
                     useEditorStore.getState().commitUpdate().then(() => {
@@ -154,7 +171,7 @@ const MountInput = (props: { element: HTMLTextAreaElement, onFocusOrMount: () =>
 }
 
 /** Not verified for safety. */
-export const unsafeEscapeValue = (value: SQLite3Value) => {
+export const unsafeEscapeValue = (value: remote.SQLite3Value) => {
     if (value instanceof Uint8Array) {
         return `x'${blob2hex(value, undefined)}'`
     } else if (value === null) {
@@ -168,7 +185,7 @@ export const unsafeEscapeValue = (value: SQLite3Value) => {
     }
 }
 
-export const renderValue = (value: SQLite3Value) => {
+export const renderValue = (value: remote.SQLite3Value) => {
     if (value instanceof Uint8Array) {
         return `x'${blob2hex(value, 8)}'`
     } else if (value === null) {
