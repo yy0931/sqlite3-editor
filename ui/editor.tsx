@@ -204,7 +204,20 @@ export const useEditorStore = zustand<State & {
             await useMainStore.getState().sql.query(query, params, "w+")
             await useMainStore.getState().reload(opts)
             const state = get()
-            await state.switchTable(state.tableName)  // clear inputs
+
+            // Clear inputs
+            switch (state.statement) {
+                case "INSERT": setPartial({ textareaValues: state.textareaValues.map(() => ""), blobValues: state.blobValues.map(() => null) }); break
+                case "DROP TABLE": state.dropTable(state.tableName); break
+                case "DROP VIEW": state.dropView(state.tableName); break
+                case "ALTER TABLE": state.alterTable(state.tableName, undefined); break
+                case "DELETE": case "UPDATE": await state.insert(state.tableName); break
+                case "CREATE TABLE": state.createTable(state.tableName); break
+                case "custom": state.custom(state.tableName); break
+                default: {
+                    const _: never = state
+                }
+            }
         },
         commitUpdate: async () => {
             // <textarea> replaces \r\n with \n
@@ -371,8 +384,13 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
             break
         }
         case "INSERT": {
-            const query = `INTO ${escapeSQLIdentifier(state.tableName)} (${state.tableInfo.map(({ name }) => name).map(escapeSQLIdentifier).join(", ")}) VALUES (${state.tableInfo.map(() => "?").join(", ")})`
-            header = <>{query}</>
+            const filterDefaults = <T extends unknown>(_: T, i: number) => state.dataTypes[i] !== "default"
+            const buildQuery = () => {
+                return state.dataTypes.every((d) => d === "default") ?
+                    `INTO ${escapeSQLIdentifier(state.tableName)} DEFAULT VALUES` :
+                    `INTO ${escapeSQLIdentifier(state.tableName)} (${state.tableInfo.filter(filterDefaults).map(({ name }) => name).map(escapeSQLIdentifier).join(", ")}) VALUES (${state.tableInfo.filter(filterDefaults).map(() => "?").join(", ")})`
+            }
+            header = <>{buildQuery()}</>
             editor = <>
                 <ul>
                     {state.tableInfo.map(({ name }, i) => {
@@ -392,7 +410,7 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
                     })}
                 </ul>
                 <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
-                    state.commit(`INSERT ${query}`, state.textareaValues.map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true })
+                    state.commit(buildQuery(), state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true })
                 }} />
             </>
             break
@@ -466,12 +484,17 @@ export const Editor = (props: { tableList: TableListItem[] }) => {
 }
 
 const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorDataType) => void }) =>
-    <Select value={props.value} onChange={props.onChange} tabIndex={-1} options={{ string: { text: "TEXT" }, number: { text: "NUMERIC" }, null: { text: "NULL" }, blob: { text: "BLOB" } }} />
+    <Select value={props.value} onChange={props.onChange} tabIndex={-1} options={{ string: { text: "TEXT" }, number: { text: "NUMERIC" }, null: { text: "NULL" }, blob: { text: "BLOB" }, default: { text: "DEFAULT" } }} />
 
-type EditorDataType = "string" | "number" | "null" | "blob"
+type EditorDataType = "string" | "number" | "null" | "blob" | "default"
 
 const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number }) => {
     const [filename, setFilename] = useState("")
+    if (props.type === "default") {
+        return <div>
+            <input disabled={true} style={{ marginRight: "10px" }} />
+        </div>
+    }
     if (props.type === "blob") {
         return <div>
             <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} style={{ marginRight: "10px" }} />
@@ -519,7 +542,7 @@ const parseTextareaValue = (value: string, blobValue: Uint8Array | null, type: E
 const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInternal.CSSProperties }) => {
     useEffect(() => {
         const handler = (ev: KeyboardEvent) => {
-            if (ev.ctrlKey && ev.code === "KeyS") {
+            if (ev.ctrlKey && ev.code === "KeyS" || ev.ctrlKey && ev.code === "Enter") {
                 props.onClick()
                 ev.preventDefault()
             }
@@ -527,7 +550,7 @@ const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInt
         window.addEventListener("keydown", handler)
         return () => { window.removeEventListener("keydown", handler) }
     }, [props.onClick])
-    return <input disabled={props.disabled} type="button" value="Commit" style={{ display: "block", ...props.style }} className={"primary"} onClick={props.onClick} title="Ctrl+S"></input>
+    return <input disabled={props.disabled} type="button" value="Commit" style={{ display: "block", ...props.style }} className={"primary"} onClick={props.onClick} title="Ctrl+S or Ctrl+Enter"></input>
 }
 
 const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: boolean, onChange: (value: boolean) => void, text: string, tabIndex?: number }) =>
@@ -551,6 +574,7 @@ const ColumnDefEditor = (props: { columnNameOnly?: boolean, value: ColumnDef, on
             <Checkbox tabIndex={-1} checked={props.value.autoIncrement} onChange={(checked) => props.onChange({ ...props.value, autoIncrement: checked })} text="AUTOINCREMENT" />
             <Checkbox tabIndex={-1} checked={props.value.unique} onChange={(checked) => props.onChange({ ...props.value, unique: checked })} text="UNIQUE" />
             <Checkbox tabIndex={-1} checked={props.value.notNull} onChange={(checked) => props.onChange({ ...props.value, notNull: checked })} text="NOT NULL" />
+            {/* <label style={{ marginRight: "8px" }}>DEFAULT</label><input placeholder="CURRENT_TIMESTAMP" /> */}
         </>}
     </>
 }
