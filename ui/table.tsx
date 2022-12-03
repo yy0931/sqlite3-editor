@@ -56,11 +56,11 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     }, [])
 
     return <>
-        <div style={{ maxWidth: "100%", overflowX: "auto", width: "max-content" }}>
-            <table ref={tableRef} className="viewer" style={{ paddingRight: scrollbarWidth, width: "max-content" }}>
-                <thead>
+        <div className="max-w-full overflow-x-auto w-max">
+            <table ref={tableRef} className="viewer w-max border-collapse table-fixed bg-white" style={{ paddingRight: scrollbarWidth, boxShadow: "0 0 0px 2px #000000ad" }}>
+                <thead className="text-black" style={{ background: "var(--gutter-color)", outline: "rgb(181, 181, 181) 1px solid" }}>
                     <tr>
-                        <th></th>
+                        <th className="font-normal select-none" style={{ paddingTop: "3px", paddingBottom: "3px", paddingLeft: "1em", paddingRight: "1em" }}></th>
                         {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
                             style={{ width: columnWidths.current[tableName ?? ""]?.[i] ?? defaultColumnWidth }}
                             className={tableName !== undefined ? "clickable" : ""}
@@ -103,16 +103,16 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                             onMouseLeave={(ev) => {
                                 ev.currentTarget.classList.remove("ew-resize")
                             }}>
-                            <code>
+                            <code className="inline-block" style={{ wordBreak: "break-word" }}>
                                 {name}
-                                <span className="type">{(type ? (" " + type) : "") + (pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
+                                <span className="italic opacity-70">{(type ? (" " + type) : "") + (pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
                             </code>
                         </th>)}
                     </tr>
                 </thead>
                 <tbody>
                     {state.records.length === 0 && <tr>
-                        <td className="no-hover" style={{ display: "inline-block", height: "1.2em", cursor: "default" }}></td>
+                        <td className="overflow-hidden no-hover inline-block cursor-default" style={{ height: "1.2em", paddingLeft: "10px", paddingRight: "10px", borderRight: "1px solid var(--td-border-color)" }}></td>
                     </tr>}
                     {state.records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidths={columnWidths.current[tableName ?? ""] ?? []} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
                 </tbody>
@@ -125,7 +125,8 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                 max={numRecords}
                 size={pageSize}
                 value={visibleAreaTop}
-                style={{ width: scrollbarWidth, height: "100%", right: 0, top: 0, position: "absolute" }}
+                className="h-full right-0 top-0 absolute"
+                style={{ width: scrollbarWidth }}
                 onChange={() => { useMainStore.getState().setPaging({ visibleAreaTop: BigInt(Math.round(scrollbarRef.current!.value)) }) }} />}
     </>
 }
@@ -143,7 +144,8 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
 
     return useMemo(() => <tr className={props.selected ? "editing" : ""}>
         <td
-            className={(props.tableName !== undefined ? "clickable" : "")}
+            className={"overflow-hidden sticky left-0 whitespace-nowrap text-right text-black " + (props.tableName !== undefined ? "clickable" : "")}
+            style={{ paddingLeft: "10px", paddingRight: "10px", borderRight: "1px solid var(--td-border-color)" }}
             onMouseDown={(ev) => {
                 useEditorStore.getState().commitUpdate().then(() => {
                     if (props.tableName !== undefined) { delete_(props.tableName, props.record, props.row).catch(console.error) }
@@ -153,14 +155,14 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
             return <td
-                style={{ maxWidth: props.columnWidths[i] ?? defaultColumnWidth }}
-                className={(props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
+                className={"overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
+                style={{ paddingLeft: "10px", paddingRight: "10px", borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i] ?? defaultColumnWidth }}
                 onMouseDown={(ev) => {
                     useEditorStore.getState().commitUpdate().then(() => {
                         if (props.tableName !== undefined) { update(props.tableName, name, props.record, props.row).catch(console.error) }
                     })
                 }}>
-                <pre className={input?.textarea && cursorVisibility ? "cursor-line" : ""} style={{ color: type2color(typeof value) }}>
+                <pre className={"overflow-hidden text-ellipsis whitespace-nowrap " + input?.textarea && cursorVisibility ? "cursor-line" : ""} style={{ color: type2color(typeof value), maxWidth: "50em" }}>
                     <span className="value">{input?.draftValue ?? renderValue(value)}</span>
                     {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
                 </pre>

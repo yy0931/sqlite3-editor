@@ -1,0 +1,7 @@
+{
+    "[typescriptreact]": {
+        "editor.quickSuggestions": {
+            "strings": true
+        }
+    },
+}

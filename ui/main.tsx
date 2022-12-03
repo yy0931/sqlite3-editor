@@ -43,7 +43,7 @@ const LoadingIndicator = () => {
         loop()
         return () => { canceled = true }
     }, [])
-    return <div className="progressbar" ref={ref} style={{ display: "inline-block", userSelect: "none", pointerEvents: "none", position: "absolute", zIndex: 100, width: width + "px", height: "5px", top: 0, background: "var(--button-primary-background)" }}></div>
+    return <div className="progressbar inline-block select-none pointer-events-none absolute top-0" ref={ref} style={{ zIndex: 100, width: width + "px", height: "5px", background: "var(--button-primary-background)" }}></div>
 }
 
 const BigintMath = {
@@ -227,8 +227,8 @@ const App = () => {
 
     return <>
         <LoadingIndicator />
-        <h2 className="first" style={{ display: "flex" }}>
-            <div style={{ whiteSpace: "pre" }}>
+        <h2 className="first flex">
+            <div className="whitespace-pre">
                 <Select value={state.viewerStatement} onChange={(value) => {
                     useMainStore.setState({ viewerStatement: value })
                     if (value === "PRAGMA") {
@@ -246,15 +246,15 @@ const App = () => {
                     {" "}
                 </>}
             </div>
-            <div style={{ flex: 1 }}>
-                {state.viewerStatement === "SELECT" && <input value={state.viewerConstraints} onBlur={(ev) => { useMainStore.setState({ viewerConstraints: ev.currentTarget.value }) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" style={{ width: "100%" }} />}
+            <div className="flex-1">
+                {state.viewerStatement === "SELECT" && <input value={state.viewerConstraints} onBlur={(ev) => { useMainStore.setState({ viewerConstraints: ev.currentTarget.value }) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" className="w-full" />}
                 {state.viewerStatement === "PRAGMA" && <Select value={state.pragma} onChange={(value) => useMainStore.setState({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
             </div>
         </h2>
-        <div style={{ position: "relative", width: "max-content", maxWidth: "100%" }}>
+        <div className="relative w-max max-w-full">
             <Table tableName={state.tableName} />
         </div>
-        {state.errorMessage && <p style={{ background: "rgb(14, 72, 117)", color: "white", padding: "10px" }}>
+        {state.errorMessage && <p className="text-white" style={{ background: "rgb(14, 72, 117)", padding: "10px" }}>
             <pre>{state.errorMessage}</pre>
             <input type="button" value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => useMainStore.setState({ errorMessage: "" })} />
         </p>}
