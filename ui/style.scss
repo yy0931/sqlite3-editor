@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
     /* https://github.com/microsoft/vscode-webview-ui-toolkit/blob/864372518fbb538c281ea5a503e08d3e4b8d0c2e/src/design-tokens.ts */
     --button-primary-background: #0e639c;
@@ -27,21 +31,24 @@
 }
 
 body {
-    padding: 0 !important;  // Override the VSCode's default
+    padding: 0 !important; // Override the VSCode's default
     overflow-x: hidden;
     background: #f0f0f0;
     font-family: monospace;
     color: black;
+    font-size: 12px;
 }
 
 code {
     word-break: break-word;
     color: inherit;
     font-family: inherit;
+    font-size: inherit;
 }
 
 pre {
     white-space: pre-wrap;
+    font-size: inherit;
 }
 
 h2 {
@@ -63,10 +70,6 @@ h2 {
 h2+div {
     padding-left: var(--page-padding);
     padding-right: var(--page-padding);
-}
-
-ul {
-    list-style: none;
 }
 
 li+li {
@@ -166,47 +169,13 @@ textarea {
 
 .progressbar {
     opacity: 0;
-    transition: opacity 0.5s
-        /* ease-in */
-        cubic-bezier(1.000, 0.060, 0.955, -0.120);
-    ;
-
+    transition: opacity 0.5s cubic-bezier(1.000, 0.060, 0.955, -0.120);
     .querying & {
         opacity: 1;
     }
 }
 
-.type {
-    font-style: italic;
-    opacity: 0.7;
-}
-
 table.viewer {
-    border-collapse: collapse;
-    table-layout: fixed;
-    background: white;
-    box-shadow: 0 0 0px 2px #000000ad;
-
-    thead {
-        background-color: var(--gutter-color);
-        color: black;
-        outline: rgb(181, 181, 181) 1px solid;
-    }
-
-    th {
-        font-weight: normal;
-        padding-top: 3px;
-        padding-bottom: 3px;
-        padding-left: 1em;
-        padding-right: 1em;
-        user-select: none;
-
-        code {
-            word-break: break-word;
-            display: inline-block;
-        }
-    }
-
     th.clickable:not(.ew-resize):hover {
         background-color: var(--td-border-color-hover);
         cursor: pointer;
@@ -216,29 +185,9 @@ table.viewer {
         cursor: ew-resize;
     }
 
-    td {
-        overflow: hidden;
-        border-right: 1px solid var(--td-border-color);
-        padding-right: 10px;
-        padding-left: 10px;
-
-        pre {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            max-width: 50em;
-        }
-    }
-
     td:nth-child(1) {
-        position: sticky;
-        left: 0;
-
-        white-space: nowrap;
         padding-left: 15px;
         padding-right: 5px;
-        text-align: right;
-        color: black;
         background-color: var(--gutter-color);
         border-right: rgb(181, 181, 181) 1px solid;
 
@@ -302,17 +251,19 @@ body.ew-resize * {
     cursor: ew-resize;
 }
 
-
 @keyframes cursor-line {
     0% {
         box-shadow: -1.5px 0px 0px 0px #6a6a6a;
     }
+
     50% {
         box-shadow: -1.5px 0px 0px 0px #6a6a6a;
     }
+
     51% {
         box-shadow: -1.5px 0px 0px 0px transparent;
     }
+
     100% {
         box-shadow: -1.5px 0px 0px 0px transparent;
     }

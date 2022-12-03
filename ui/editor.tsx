@@ -395,14 +395,15 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             }
             header = <>{buildQuery()}</>
             editor = <>
-                <ul>
+                <ul className="list-none">
                     {state.tableInfo.map(({ name }, i) => {
                         return <li>
                             <div style={{ marginRight: "1em" }}>{name}</div>
                             <DataEditor
                                 type={state.dataTypes[i]!}
                                 rows={1}
-                                style={{ width: "100%", resize: "vertical", display: "block", color: type2color(state.dataTypes[i]!) }}
+                                className="w-full resize-y block"
+                                style={{ color: type2color(state.dataTypes[i]!) }}
                                 textareaValue={state.textareaValues[i]!}
                                 onTextareaValueChange={(value) => { useEditorStore.setState({ textareaValues: produce(state.textareaValues, (d) => { d[i] = value }) }) }}
                                 blobValue={state.blobValues[i]!}
@@ -491,16 +492,16 @@ const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorD
 
 type EditorDataType = "string" | "number" | "null" | "blob" | "default"
 
-const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number }) => {
+const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, className?: string }) => {
     const [filename, setFilename] = useState("")
     if (props.type === "default") {
         return <div>
-            <input disabled={true} style={{ marginRight: "10px" }} />
+            <input disabled={true} style={{ marginRight: "10px" }} className={props.className} />
         </div>
     }
     if (props.type === "blob") {
         return <div>
-            <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} style={{ marginRight: "10px" }} />
+            <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} style={{ marginRight: "10px" }} className={props.className} />
             <input value={filename} placeholder={"tmp.dat"} onInput={(ev) => setFilename(ev.currentTarget.value)} />
             <input type="button" value="Import" onClick={() => remote.import_(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
             <input type="button" value="Export" onClick={() => remote.export_(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
@@ -512,6 +513,7 @@ const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, r
             rows={props.rows}
             autocomplete="off"
             style={{ color: type2color(props.type), resize: props.type === "string" ? "vertical" : "none", ...props.style }}
+            className={props.className}
             value={props.textareaValue}
             onInput={(ev) => props.onTextareaValueChange(ev.currentTarget.value)}
             tabIndex={props.tabIndex} />
@@ -519,7 +521,8 @@ const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, r
     return <input
         ref={props.ref}
         autocomplete="off"
-        style={{ color: type2color(props.type), display: "block" }}
+        className={"block " + props.className}
+        style={{ color: type2color(props.type) }}
         value={props.type === "null" ? "NULL" : props.textareaValue}
         onInput={(ev) => props.onTextareaValueChange(ev.currentTarget.value)}
         disabled={props.type === "null"}
@@ -553,7 +556,7 @@ const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInt
         window.addEventListener("keydown", handler)
         return () => { window.removeEventListener("keydown", handler) }
     }, [props.onClick])
-    return <input disabled={props.disabled} type="button" value="Commit" style={{ display: "block", ...props.style }} className={"primary"} onClick={props.onClick} title="Ctrl+S or Ctrl+Enter"></input>
+    return <input disabled={props.disabled} type="button" value="Commit" style={props.style} className="primary block" onClick={props.onClick} title="Ctrl+S or Ctrl+Enter"></input>
 }
 
 const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: boolean, onChange: (value: boolean) => void, text: string, tabIndex?: number }) =>
@@ -593,7 +596,7 @@ const MultiColumnDefEditor = (props: { value: ColumnDef[], onChange: (value: Col
         renderedColumnDefs.push({ name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false })
     }
 
-    return <ul>{renderedColumnDefs.map((columnDef, i) =>
+    return <ul className="list-none">{renderedColumnDefs.map((columnDef, i) =>
         <li key={i}>
             <ColumnDefEditor columnNameOnly={i === renderedColumnDefs.length - 1 && columnDef.name === ""} value={columnDef} onChange={(value) => {
                 props.onChange(produce(renderedColumnDefs, (d) => {

@@ -16,7 +16,7 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
         }</select>
 
         {/* Hidden replication for auto resizing */}
-        <span style={{ userSelect: "none", display: "inline-block", pointerEvents: "none", width: 0, height: 0, overflow: "hidden" }}>
+        <span className="select-none inline-block pointer-events-none w-0 h-0 overflow-hidden">
             <select autocomplete="off" value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style, visibility: "hidden" }} className={props.className} ref={ref2} onChange={(ev) => props.onChange(ev.currentTarget.value as T)}>
                 <option value={props.value} tabIndex={-1}>{props.options[props.value].text ?? props.value}</option>
             </select>
