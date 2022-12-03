@@ -101,6 +101,10 @@ select {
     }
 }
 
+label:focus {
+    outline: 2px solid rgb(142, 197, 226);
+}
+
 input[type=button],
 button {
     border: 0;
