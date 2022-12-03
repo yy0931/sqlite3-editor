@@ -63,7 +63,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                         <th className="font-normal select-none" style={{ paddingTop: "3px", paddingBottom: "3px", paddingLeft: "1em", paddingRight: "1em" }}></th>
                         {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
                             style={{ width: columnWidths.current[tableName ?? ""]?.[i] ?? defaultColumnWidth }}
-                            className={tableName !== undefined ? "clickable" : ""}
+                            className={"select-none " + (tableName !== undefined ? "clickable" : "")}
                             onMouseMove={(ev) => {
                                 const rect = ev.currentTarget.getBoundingClientRect()
                                 if (rect.right - ev.clientX < 10) {
@@ -76,7 +76,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                                 useEditorStore.getState().commitUpdate().then(() => {
                                     const th = ev.currentTarget
                                     const rect = th.getBoundingClientRect()
-                                    if (rect.right - ev.clientX < 10) { // right
+                                    if (rect.right - ev.clientX < 10) {
                                         const mouseMove = (ev: MouseEvent) => {
                                             columnWidths.current = produce(columnWidths.current, (d) => {
                                                 if (!Array.isArray(d[tableName ?? ""])) {
@@ -144,7 +144,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
 
     return useMemo(() => <tr className={props.selected ? "editing" : ""}>
         <td
-            className={"overflow-hidden sticky left-0 whitespace-nowrap text-right text-black " + (props.tableName !== undefined ? "clickable" : "")}
+            className={"overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (props.tableName !== undefined ? "clickable" : "")}
             style={{ paddingLeft: "10px", paddingRight: "10px", borderRight: "1px solid var(--td-border-color)" }}
             onMouseDown={(ev) => {
                 useEditorStore.getState().commitUpdate().then(() => {
@@ -163,7 +163,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                     })
                 }}>
                 <pre className={"overflow-hidden text-ellipsis whitespace-nowrap " + input?.textarea && cursorVisibility ? "cursor-line" : ""} style={{ color: type2color(typeof value), maxWidth: "50em" }}>
-                    <span className="value">{input?.draftValue ?? renderValue(value)}</span>
+                    <span className="select-none">{input?.draftValue ?? renderValue(value)}</span>
                     {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
                 </pre>
             </td>
