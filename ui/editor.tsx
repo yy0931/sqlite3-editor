@@ -4,7 +4,7 @@ import produce from "immer"
 import type { JSXInternal } from "preact/src/jsx"
 import * as remote from "./remote"
 import { useMainStore } from "./main"
-import { Select } from "./select"
+import { Button, Select } from "./components"
 import { blob2hex, escapeSQLIdentifier, renderValue, type2color, unsafeEscapeValue, useTableStore } from "./table"
 
 type State =
@@ -112,10 +112,7 @@ export const useEditorStore = zustand<State & {
                 statement: "DELETE",
                 tableName,
                 record,
-                constraintChoices: ("rowid" in record ? [["rowid"]] : [])
-                    .concat((await remote.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
-                        .map(({ columns }) => columns)
-                        .filter((columns) => columns.every((column) => record[column] !== null))),
+                constraintChoices: await getRecordSelectors(tableName, record),
                 selectedConstraint: 0,
                 row,
             })
@@ -150,10 +147,7 @@ export const useEditorStore = zustand<State & {
         custom: (tableName: string | undefined) => { set({ statement: "custom", query: "", tableName }) },
         update: async (tableName: string, column: string, record: Record<string, remote.SQLite3Value>, row: number) => {
             const value = record[column]
-            const constraintChoices = ("rowid" in record ? [["rowid"]] : [])
-                .concat((await remote.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
-                    .map(({ columns }) => columns)
-                    .filter((columns) => columns.every((column) => record[column] !== null)))
+            const constraintChoices = await getRecordSelectors(tableName, record)
             if (constraintChoices.length === 0) { return }
             let type: EditorDataType
             if (value === null) {
@@ -231,6 +225,15 @@ export const useEditorStore = zustand<State & {
         }
     }
 })
+
+/** Enumerates the column tuples that uniquely select the record. */
+const getRecordSelectors = async (tableName: string, record: Record<string, remote.SQLite3Value>): Promise<string[][]> => {
+    const constraintChoices = ("rowid" in record ? [["rowid"]] : [])
+        .concat((await remote.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
+            .map(({ columns }) => columns)
+            .filter((columns) => columns.every((column) => record[column] !== null)))
+    return [...new Set(constraintChoices.map((columns) => JSON.stringify(columns.sort((a, b) => a.localeCompare(b)))))].map((columns) => JSON.parse(columns))  // Remove duplicates
+}
 
 export type OnWriteOptions = {
     refreshTableList?: true
@@ -334,7 +337,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                             state.statement2 === "DROP COLUMN" ? state.oldColumnName === "" :
                                 state.statement2 === "ADD COLUMN" ? state.columnDef.name === "" :
                                     false
-                } style={{ marginBottom: "10px" }} onClick={() => {
+                } onClick={() => {
                     let query = `ALTER TABLE ${escapeSQLIdentifier(state.tableName)} ${state.statement2} `
                     switch (state.statement2) {
                         case "RENAME TO": query += escapeSQLIdentifier(state.newTableName); break
@@ -370,7 +373,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 }</select>
             </>
             editor = <>
-                <Commit style={{ marginBottom: "10px" }} onClick={() => {
+                <Commit onClick={() => {
                     state.commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as remote.SQLite3Value)], {})
                 }} />
             </>
@@ -378,12 +381,12 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         }
         case "DROP TABLE": {
             header = <>{escapeSQLIdentifier(state.tableName)}</>
-            editor = <><Commit style={{ marginBottom: "10px" }} onClick={() => state.commit(`DROP TABLE ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} /></>
+            editor = <><Commit onClick={() => state.commit(`DROP TABLE ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} /></>
             break
         }
         case "DROP VIEW": {
             header = <>{escapeSQLIdentifier(state.tableName)}</>
-            editor = <><Commit style={{ marginBottom: "10px" }} onClick={() => state.commit(`DROP VIEW ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} /></>
+            editor = <><Commit onClick={() => state.commit(`DROP VIEW ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} /></>
             break
         }
         case "INSERT": {
@@ -395,7 +398,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             }
             header = <>{buildQuery()}</>
             editor = <>
-                <ul className="list-none">
+                <ul className="list-none mb-2">
                     {state.tableInfo.map(({ name }, i) => {
                         return <li>
                             <div style={{ marginRight: "1em" }}>{name}</div>
@@ -413,7 +416,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                         </li>
                     })}
                 </ul>
-                <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
+                <Commit onClick={() => {
                     state.commit(`INSERT ${buildQuery()}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true })
                 }} />
             </>
@@ -436,15 +439,15 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 />
                 {"AS "}
                 <DataTypeInput value={state.type} onChange={(value) => useEditorStore.setState({ type: value })} />
-                <Commit style={{ marginTop: "10px", marginBottom: "10px" }} onClick={state.commitUpdate} />
+                <Commit onClick={state.commitUpdate} />
             </>
             break
         }
         case "custom": {
             header = <></>
             editor = <>
-                <textarea autocomplete="off" style={{ marginTop: "15px", height: "20vh" }} placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
-                <Commit style={{ marginBottom: "10px" }} onClick={() => state.commit(state.query, [], { refreshTableList: true })} />
+                <textarea autocomplete="off" className="mb-2" style={{ marginTop: "15px", height: "20vh" }} placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
+                <Commit onClick={() => state.commit(state.query, [], { refreshTableList: true })} />
             </>
             break
         }
@@ -488,7 +491,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
 }
 
 const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorDataType) => void }) =>
-    <Select value={props.value} onChange={props.onChange} tabIndex={-1} options={{ string: { text: "TEXT" }, number: { text: "NUMERIC" }, null: { text: "NULL" }, blob: { text: "BLOB" }, default: { text: "DEFAULT" } }} />
+    <Select className="mb-2" value={props.value} onChange={props.onChange} tabIndex={-1} options={{ string: { text: "TEXT" }, number: { text: "NUMERIC" }, null: { text: "NULL" }, blob: { text: "BLOB" }, default: { text: "DEFAULT" } }} />
 
 type EditorDataType = "string" | "number" | "null" | "blob" | "default"
 
@@ -503,8 +506,8 @@ const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, r
         return <div>
             <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} style={{ marginRight: "10px" }} className={props.className} />
             <input value={filename} placeholder={"tmp.dat"} onInput={(ev) => setFilename(ev.currentTarget.value)} />
-            <input type="button" value="Import" onClick={() => remote.import_(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
-            <input type="button" value="Export" onClick={() => remote.export_(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
+            <Button value="Import" onClick={() => remote.import_(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
+            <Button value="Export" onClick={() => remote.export_(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
         </div>
     }
     if (props.type === "string") {
@@ -521,7 +524,7 @@ const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, r
     return <input
         ref={props.ref}
         autocomplete="off"
-        className={"block " + props.className}
+        className={"block " + (props.className ?? "")}
         style={{ color: type2color(props.type) }}
         value={props.type === "null" ? "NULL" : props.textareaValue}
         onInput={(ev) => props.onTextareaValueChange(ev.currentTarget.value)}
@@ -556,7 +559,7 @@ const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInt
         window.addEventListener("keydown", handler)
         return () => { window.removeEventListener("keydown", handler) }
     }, [props.onClick])
-    return <input disabled={props.disabled} type="button" value="Commit" style={props.style} className="primary block" onClick={props.onClick} title="Ctrl+S or Ctrl+Enter"></input>
+    return <Button disabled={props.disabled} value="Commit" style={props.style} className="primary block mb-2" onClick={props.onClick} title="Ctrl+S or Ctrl+Enter" />
 }
 
 const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: boolean, onChange: (value: boolean) => void, text: string, tabIndex?: number }) =>

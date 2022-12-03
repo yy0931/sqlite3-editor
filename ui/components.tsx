@@ -23,3 +23,7 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
         </span>
     </>
 }
+
+export const Button = (props: { className?: string, disabled?: boolean, value?: string, style?: JSXInternal.CSSProperties, title?: string, onClick?: () => void }) => {
+    return <input type="button" disabled={props.disabled} value={props.value} style={props.style} className={"border-0 outline-0 pl-2 pr-2 cursor-pointer " + (props.className ?? "")} onClick={props.onClick} title={props.title}></input>
+}

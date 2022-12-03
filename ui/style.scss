@@ -34,7 +34,7 @@ body {
     padding: 0 !important; // Override the VSCode's default
     overflow-x: hidden;
     background: #f0f0f0;
-    font-family: monospace;
+    font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;
     color: black;
     font-size: 12px;
 }
@@ -105,18 +105,10 @@ label:focus {
     outline: 2px solid rgb(142, 197, 226);
 }
 
-input[type=button],
-button {
-    border: 0;
-    outline: 0;
-    padding-left: 1em;
-    padding-right: 1em;
+input[type=button] {
     background-color: var(--button-primary-background);
     color: var(--button-primary-foreground);
-    padding-top: 0.2em;
-    padding-bottom: 0.2em;
     font-family: inherit;
-    cursor: pointer;
 
     &:hover {
         background-color: var(--button-primary-hover-background);
@@ -139,8 +131,6 @@ input[type=text] {
     outline: 0;
     background-color: var(--input-background);
     color: var(--input-foreground);
-    padding-top: 0.2em;
-    padding-bottom: 0.2em;
     font-family: inherit;
     font-size: inherit;
     padding-left: 0.5em;
