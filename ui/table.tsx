@@ -63,10 +63,10 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                         <th className="font-normal select-none" style={{ paddingTop: "3px", paddingBottom: "3px", paddingLeft: "1em", paddingRight: "1em" }}></th>
                         {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
                             style={{ width: columnWidths.current[tableName ?? ""]?.[i] ?? defaultColumnWidth }}
-                            className={"select-none " + (tableName !== undefined ? "clickable" : "")}
+                            className={"font-normal select-none " + (tableName !== undefined ? "clickable" : "")}
                             onMouseMove={(ev) => {
                                 const rect = ev.currentTarget.getBoundingClientRect()
-                                if (rect.right - ev.clientX < 10) {
+                                if (rect.right - ev.clientX < 20) {
                                     ev.currentTarget.classList.add("ew-resize")
                                 } else {
                                     ev.currentTarget.classList.remove("ew-resize")
@@ -76,7 +76,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                                 useEditorStore.getState().commitUpdate().then(() => {
                                     const th = ev.currentTarget
                                     const rect = th.getBoundingClientRect()
-                                    if (rect.right - ev.clientX < 10) {
+                                    if (rect.right - ev.clientX < 20) {
                                         const mouseMove = (ev: MouseEvent) => {
                                             columnWidths.current = produce(columnWidths.current, (d) => {
                                                 if (!Array.isArray(d[tableName ?? ""])) {
