@@ -1,5 +1,5 @@
 import { useRef, Ref, useMemo, useLayoutEffect, useCallback, useState, useEffect } from "preact/hooks"
-import { type2color, blob2hex, useMainStore } from "./main"
+import { useMainStore } from "./main"
 import * as remote from "./remote"
 import { useEditorStore } from "./editor"
 import zustand from "zustand"
@@ -19,6 +19,7 @@ export const useTableStore = zustand<{
     input: null,
 }))
 
+/** useRef() but persists the value in the server. */
 const persistentRef = <T extends unknown>(key: string, defaultValue: T) => {
     return useState(() => {
         let value: ReadonlyDeep<T> = remote.getState(key) ?? defaultValue as ReadonlyDeep<T>
@@ -211,5 +212,24 @@ export const renderValue = (value: remote.SQLite3Value) => {
         return /^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value
     } else {
         return "" + value
+    }
+}
+
+/** https://stackoverflow.com/a/6701665/10710682, https://stackoverflow.com/a/51574648/10710682 */
+export const escapeSQLIdentifier = (ident: string) => {
+    if (ident.includes("\x00")) { throw new Error("Invalid identifier") }
+    return ident.includes('"') || /[^A-Za-z0-9_\$]/.test(ident) ? `"${ident.replaceAll('"', '""')}"` : ident
+}
+
+export const blob2hex = (blob: Uint8Array, maxLength?: number) =>
+    Array.from(blob.slice(0, maxLength), (x) => x.toString(16).padStart(2, "0")).join("") + (maxLength !== undefined && blob.length > maxLength ? "..." : "")
+
+export const type2color = (type: string) => {
+    if (type === "number" || type === "bigint") {
+        return "green"
+    } else if (type === "string") {
+        return "rgb(138, 4, 4)"
+    } else {
+        return "rgb(4, 63, 138)"
     }
 }

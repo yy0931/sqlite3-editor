@@ -1,10 +1,13 @@
+import { enableMapSet } from "immer"
+enableMapSet()
+
 import { render } from "preact"
 import * as editor from "./editor"
 import deepEqual from "fast-deep-equal"
 import { useEffect, useRef, Ref } from "preact/hooks"
 import * as remote from "./remote"
-import { Select } from "./components"
-import { Table, useTableStore } from "./table"
+import { Select } from "./select"
+import { escapeSQLIdentifier, Table, useTableStore } from "./table"
 import zustand from "zustand"
 import "./scrollbar"
 
@@ -20,26 +23,8 @@ declare global {
     }
 }
 
-/** https://stackoverflow.com/a/6701665/10710682, https://stackoverflow.com/a/51574648/10710682 */
-export const escapeSQLIdentifier = (ident: string) => {
-    if (ident.includes("\x00")) { throw new Error("Invalid identifier") }
-    return ident.includes('"') || /[^A-Za-z0-9_\$]/.test(ident) ? `"${ident.replaceAll('"', '""')}"` : ident
-}
-
-export const blob2hex = (blob: Uint8Array, maxLength?: number) =>
-    Array.from(blob.slice(0, maxLength), (x) => x.toString(16).padStart(2, "0")).join("") + (maxLength !== undefined && blob.length > maxLength ? "..." : "")
-
-export const type2color = (type: string) => {
-    if (type === "number" || type === "bigint") {
-        return "green"
-    } else if (type === "string") {
-        return "rgb(138, 4, 4)"
-    } else {
-        return "rgb(4, 63, 138)"
-    }
-}
-
-const ProgressBar = () => {
+/** Looping animation to indicate loading state, visible only when body.querying. */
+const LoadingIndicator = () => {
     const ref = useRef() as Ref<HTMLDivElement>
     let x = 0
     const width = 200
@@ -170,7 +155,7 @@ export const useMainStore = zustand<{
                 useTableStore.setState({
                     tableInfo: await remote.getTableInfo(state.tableName),
                     records,
-                    autoIncrement: state.tableName === null ? false : await remote.hasTableAutoincrement(state.tableName),
+                    autoIncrement: state.tableName === null ? false : await remote.hasTableAutoincrementColumn(state.tableName),
                 })
             } else {
                 const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM pragma_${state.pragma.toLowerCase()}`, [], "r"))[0]!.count
@@ -241,7 +226,7 @@ const App = () => {
     }, [])
 
     return <>
-        <ProgressBar />
+        <LoadingIndicator />
         <h2 className="first" style={{ display: "flex" }}>
             <div style={{ whiteSpace: "pre" }}>
                 <Select value={state.viewerStatement} onChange={(value) => {
