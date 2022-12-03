@@ -1,13 +1,11 @@
-import { useEffect, useLayoutEffect, Ref, useState, useRef } from "preact/hooks"
+import { useEffect, useLayoutEffect, Ref, useState } from "preact/hooks"
 import zustand from "zustand"
-import produce, { enableMapSet } from "immer"
+import produce from "immer"
 import type { JSXInternal } from "preact/src/jsx"
 import * as remote from "./remote"
-import { blob2hex, escapeSQLIdentifier, type2color, useMainStore } from "./main"
-import { Select } from "./components"
-import { renderValue, unsafeEscapeValue, useTableStore } from "./table"
-
-enableMapSet()
+import { useMainStore } from "./main"
+import { Select } from "./select"
+import { blob2hex, escapeSQLIdentifier, renderValue, type2color, unsafeEscapeValue, useTableStore } from "./table"
 
 type State =
     | {

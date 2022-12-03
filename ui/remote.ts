@@ -1,5 +1,6 @@
 import { Packr, Unpackr } from "msgpackr"
-import { escapeSQLIdentifier, useMainStore, VSCodeAPI } from "./main"
+import { useMainStore } from "./main"
+import { escapeSQLIdentifier } from "./table"
 
 export type TableInfo = { cid: bigint, dflt_value: bigint, name: string, notnull: bigint, type: string, pk: bigint }[]
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
@@ -15,6 +16,7 @@ const vscode = window.acquireVsCodeApi?.()
 
 const querying = new Set()
 
+/** Send the data to the server with fetch(), or to the extension host with vscode.postMessage(). */
 export const post = async (url: string, body: unknown) => {
     const id = {}
     querying.add(id)
@@ -72,29 +74,29 @@ export const setState = async <T>(key: string, value: T) => {
 export const getState = <T>(key: string): T | undefined => {
     return state[key] as T | undefined
 }
-export const downloadState = (): Promise<void> =>
-    post("/downloadState", {})
-        .then((value) => { state = value })
+/** Called only once, before any getState() or setState() calls. */
+export const downloadState = (): Promise<void> => post("/downloadState", {}).then((value) => { state = value })
 
 type QueryResult<T extends string> = Promise<T extends `SELECT ${string}` | `PRAGMA pragma_list` ? Record<string, SQLite3Value>[] : Record<string, SQLite3Value>[] | undefined>
 
-export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): QueryResult<T> => {
-    return post(`/query`, { query, params, mode })
-}
+export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): QueryResult<T> =>
+    post(`/query`, { query, params, mode })
 
+/** Imports a BLOB from a file. */
 export const import_ = (filepath: string) =>
     post(`/import`, { filepath }) as Promise<Uint8Array>
 
+/** Exports a BLOB to a file. */
 export const export_ = (filepath: string, data: Uint8Array) =>
     post(`/export`, { filepath, data }) as Promise<void>
 
 /** https://stackoverflow.com/a/1604121/10710682 */
-export const hasTable = async (tableName: string) =>
+export const existsTable = async (tableName: string) =>
     (await query(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName], "r")).length > 0
 
 /** https://stackoverflow.com/questions/20979239/how-to-tell-if-a-sqlite-column-is-autoincrement */
-export const hasTableAutoincrement = async (tableName: string) =>
-    await hasTable("sqlite_sequence") &&
+export const hasTableAutoincrementColumn = async (tableName: string) =>
+    await existsTable("sqlite_sequence") &&  // sqlite_sequence doesn't exist when the database is empty.
     !!((await query(`SELECT COUNT(*) AS count FROM sqlite_sequence WHERE name = ?`, [tableName], "r"))[0]?.count)
 
 export const listUniqueConstraints = async (tableName: string) => {
