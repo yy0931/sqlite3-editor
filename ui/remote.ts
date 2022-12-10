@@ -99,23 +99,18 @@ export const hasTableAutoincrementColumn = async (tableName: string) =>
     await existsTable("sqlite_sequence") &&  // sqlite_sequence doesn't exist when the database is empty.
     !!((await query(`SELECT COUNT(*) AS count FROM sqlite_sequence WHERE name = ?`, [tableName], "r"))[0]?.count)
 
-export const listUniqueConstraints = async (tableName: string) => {
-    const uniqueConstraints: { primary: boolean, columns: string[] }[] = []
-    for (const column of await getTableInfo(tableName)) {
-        if (column.pk) {
-            uniqueConstraints.push({ primary: true, columns: [column.name] })
-        }
-    }
-    for (const index of await query(`PRAGMA index_list(${escapeSQLIdentifier(tableName)})`, [], "r") as { seq: bigint, name: string, unique: 0n | 1n, origin: "c" | "u" | "pk", partial: 0n | 1n }[]) {
-        if (index.partial) { continue }
-        if (!index.unique) { continue }
-        const indexInfo = await query(`PRAGMA index_info(${escapeSQLIdentifier(index.name)})`, [], "r") as { seqno: bigint, cid: bigint, name: string }[]
-        uniqueConstraints.push({ primary: index.origin === "pk", columns: indexInfo.map(({ name }) => name) })
-    }
-    return uniqueConstraints
-}
+export type IndexInfo = { seqno: bigint, cid: bigint, name: string }[]
 
-export const getTableInfo = async (tableName: string) =>
+export const getIndexInfo = (indexName: string) =>
+    query(`PRAGMA index_info(${escapeSQLIdentifier(indexName)})`, [], "r") as Promise<IndexInfo>
+
+export type IndexList = { seq: bigint, name: string, unique: 0n | 1n, origin: "c" | "u" | "pk", partial: 0n | 1n }[]
+
+export const getIndexList = (tableName: string) =>
+    query(`PRAGMA index_list(${escapeSQLIdentifier(tableName)})`, [], "r") as Promise<IndexList>
+
+export const getTableInfo = (tableName: string) =>
     query(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r") as Promise<TableInfo>
 
-export const getTableList = async () => query("PRAGMA table_list", [], "r") as Promise<TableListItem[]>
+export const getTableList = () =>
+    query("PRAGMA table_list", [], "r") as Promise<TableListItem[]>

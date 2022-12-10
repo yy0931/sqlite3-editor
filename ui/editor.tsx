@@ -48,6 +48,7 @@ type State =
             blobValue: Uint8Array | null
             type: EditorDataType
             constraintChoices: readonly (readonly string[])[]
+            /** The row number relative to mainState.paging.visibleAreaTop */
             row: number
             selectedConstraint: number
             isTextareaDirty: boolean
@@ -76,7 +77,7 @@ export const useEditorStore = zustand<State & {
     dropView: (tableName: string) => void
     insert: (tableName: string) => Promise<void>
     custom: (tableName: string | undefined) => void
-    update: (tableName: string, column: string, record: Record<string, remote.SQLite3Value>, row: number) => Promise<void>
+    update: (tableName: string, column: string, row: number) => void
     switchTable: (tableName: string | undefined) => Promise<void>
     commit: (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions) => Promise<void>
     commitUpdate: () => Promise<void>
@@ -112,7 +113,7 @@ export const useEditorStore = zustand<State & {
                 statement: "DELETE",
                 tableName,
                 record,
-                constraintChoices: await getRecordSelectors(tableName, record),
+                constraintChoices: useTableStore.getState().getRecordSelectors(record),
                 selectedConstraint: 0,
                 row,
             })
@@ -145,13 +146,14 @@ export const useEditorStore = zustand<State & {
             })
         },
         custom: (tableName: string | undefined) => { set({ statement: "custom", query: "", tableName }) },
-        update: async (tableName: string, column: string, record: Record<string, remote.SQLite3Value>, row: number) => {
+        update: (tableName: string, column: string, row: number) => {
+            const record = useTableStore.getState().records[row]!
             const value = record[column]
-            const constraintChoices = await getRecordSelectors(tableName, record)
+            const constraintChoices = useTableStore.getState().getRecordSelectors(record)
             if (constraintChoices.length === 0) { return }
             let type: EditorDataType
             if (value === null) {
-                const columnAffinity = (await remote.getTableInfo(tableName)).find(({ name }) => name === column)?.type.toUpperCase() ?? "ANY"
+                const columnAffinity = useTableStore.getState().tableInfo.find(({ name }) => name === column)?.type.toUpperCase() ?? "ANY"
                 // https://www.sqlite.org/datatype3.html#determination_of_column_affinity
                 if (columnAffinity.includes("INT") || columnAffinity.includes("REAL") || columnAffinity.includes("FLOR") || columnAffinity.includes("DOUB")) {
                     type = "number"
@@ -225,15 +227,6 @@ export const useEditorStore = zustand<State & {
         }
     }
 })
-
-/** Enumerates the column tuples that uniquely select the record. */
-const getRecordSelectors = async (tableName: string, record: Record<string, remote.SQLite3Value>): Promise<string[][]> => {
-    const constraintChoices = ("rowid" in record ? [["rowid"]] : [])
-        .concat((await remote.listUniqueConstraints(tableName)).sort((a, b) => +b.primary - +a.primary)
-            .map(({ columns }) => columns)
-            .filter((columns) => columns.every((column) => record[column] !== null)))
-    return [...new Set(constraintChoices.map((columns) => JSON.stringify(columns.sort((a, b) => a.localeCompare(b)))))].map((columns) => JSON.parse(columns))  // Remove duplicates
-}
 
 export type OnWriteOptions = {
     refreshTableList?: true
