@@ -17,7 +17,7 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
 
         {/* Hidden replication for auto resizing */}
         <span className="select-none inline-block pointer-events-none w-0 h-0 overflow-hidden">
-            <select autocomplete="off" value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style, visibility: "hidden" }} className={props.className} ref={ref2} onChange={(ev) => props.onChange(ev.currentTarget.value as T)}>
+            <select autocomplete="off" tabIndex={-1} value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style, visibility: "hidden" }} className={props.className} ref={ref2} onChange={(ev) => props.onChange(ev.currentTarget.value as T)}>
                 <option value={props.value} tabIndex={-1}>{props.options[props.value].text ?? props.value}</option>
             </select>
         </span>
