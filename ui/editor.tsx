@@ -69,6 +69,52 @@ type State =
         }
     )
 
+let unmountInput: (() => void) | null = null
+const mountInput = () => {
+    unmountInput?.()
+    const state = useEditorStore.getState()
+    if (state.statement !== "UPDATE") { return }
+    if (state.type === "number" || state.type === "string") {
+        const textarea = document.createElement("textarea")
+        textarea.style.color = type2color(state.type)
+
+        unmountInput = () => {
+            unmountInput = null
+            useTableStore.setState({ input: null })
+        }
+
+        textarea.tabIndex = -1
+        textarea.classList.add("single-click")
+
+        textarea.value = state.textareaValue
+        textarea.addEventListener("input", (ev) => {
+            textarea.classList.remove("single-click")
+            useEditorStore.setState({ textareaValue: textarea.value, isTextareaDirty: true })
+        })
+        textarea.addEventListener("mousedown", () => {
+            textarea.classList.remove("single-click")
+        })
+
+        useTableStore.setState({
+            input: {
+                draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
+                textarea,
+            }
+        })
+    } else {
+        unmountInput = () => {
+            unmountInput = null
+            useTableStore.setState({ input: null })
+        }
+        useTableStore.setState({
+            input: {
+                draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
+                textarea: null,
+            }
+        })
+    }
+}
+
 export const useEditorStore = zustand<State & {
     alterTable: (tableName: string, column: string | undefined) => Promise<void>
     createTable: (tableName: string | undefined) => void
@@ -79,8 +125,8 @@ export const useEditorStore = zustand<State & {
     custom: (tableName: string | undefined) => void
     update: (tableName: string, column: string, row: number) => void
     switchTable: (tableName: string | undefined) => Promise<void>
-    commit: (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions) => Promise<void>
-    commitUpdate: () => Promise<void>
+    commit: (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => Promise<void>
+    commitUpdate: (preserveEditorState?: true) => Promise<void>
     clearInputs: () => Promise<void>
 }>()((setPartial, get) => {
     const set = (state: State) => { setPartial(state) }
@@ -94,6 +140,7 @@ export const useEditorStore = zustand<State & {
         tableName: undefined,
 
         alterTable: async (tableName: string, column: string | undefined) => {
+            unmountInput?.()
             set({
                 statement: "ALTER TABLE",
                 tableName,
@@ -106,9 +153,11 @@ export const useEditorStore = zustand<State & {
             })
         },
         createTable: (tableName: string | undefined) => {
+            unmountInput?.()
             set({ statement: "CREATE TABLE", strict: true, newTableName: "", tableConstraints: "", withoutRowId: false, columnDefs: [], tableName })
         },
         delete_: async (tableName: string, record: Record<string, remote.SQLite3Value>, row: number) => {
+            unmountInput?.()
             set({
                 statement: "DELETE",
                 tableName,
@@ -119,13 +168,16 @@ export const useEditorStore = zustand<State & {
             })
         },
         dropTable: (tableName: string) => {
+            unmountInput?.()
             set({ statement: "DROP TABLE", tableName })
         },
         dropView: (tableName: string) => {
+            unmountInput?.()
             set({ statement: "DROP VIEW", tableName })
         },
         insert: async (tableName: string) => {
-            const tableInfo = await remote.getTableInfo(tableName)
+            unmountInput?.()
+            const { tableInfo } = useTableStore.getState()
             set({
                 statement: "INSERT",
                 tableName, tableInfo,
@@ -145,8 +197,12 @@ export const useEditorStore = zustand<State & {
                 }),
             })
         },
-        custom: (tableName: string | undefined) => { set({ statement: "custom", query: "", tableName }) },
+        custom: (tableName: string | undefined) => {
+            unmountInput?.()
+            set({ statement: "custom", query: "", tableName })
+        },
         update: (tableName: string, column: string, row: number) => {
+            unmountInput?.()
             const record = useTableStore.getState().records[row]!
             const value = record[column]
             const constraintChoices = useTableStore.getState().getRecordSelectors(record)
@@ -178,6 +234,7 @@ export const useEditorStore = zustand<State & {
                 blobValue: value instanceof Uint8Array ? value : null,
                 isTextareaDirty: false,
             })
+            mountInput()
         },
         switchTable: async (tableName: string | undefined) => {
             const state = get()
@@ -197,10 +254,10 @@ export const useEditorStore = zustand<State & {
                 }
             }
         },
-        commit: async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions) => {
+        commit: async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => {
             await remote.query(query, params, "w+")
             await useMainStore.getState().reloadAllTables(opts)
-            await get().clearInputs()
+            if (!preserveEditorState) { await get().clearInputs() }
         },
         clearInputs: async () => {
             const state = get()
@@ -217,13 +274,13 @@ export const useEditorStore = zustand<State & {
                 }
             }
         },
-        commitUpdate: async () => {
+        commitUpdate: async (preserveEditorState?: true) => {
             // <textarea> replaces \r\n with \n
             const state = get()
             if (state.statement !== "UPDATE" || !state.isTextareaDirty) { return }
             setPartial({ isTextareaDirty: false })
             const columns = state.constraintChoices[state.selectedConstraint]!
-            await state.commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], {})
+            await state.commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], {}, preserveEditorState)
         }
     }
 })
@@ -237,62 +294,7 @@ export type OnWriteOptions = {
 
 export const Editor = (props: { tableList: remote.TableListItem[] }) => {
     const state = useEditorStore()
-
-    useLayoutEffect(() => {
-        if (state.statement !== "UPDATE") { return }
-        let unmount = () => { }
-        const mount = () => {
-            unmount()
-            if (state.type === "number" || state.type === "string") {
-                const textarea = document.createElement("textarea")
-                textarea.style.color = type2color(state.type)
-
-                const unsubscribe = useEditorStore.subscribe((state) => {
-                    if (state.statement !== "UPDATE") { return }
-                    textarea.style.color = type2color(state.type)
-                })
-
-                unmount = () => {
-                    unsubscribe()
-                    useTableStore.setState({ input: null })
-                }
-
-                textarea.classList.add("single-click")
-
-                textarea.value = state.textareaValue
-                textarea.addEventListener("input", () => {
-                    textarea.classList.remove("single-click")
-                    useEditorStore.setState({ textareaValue: textarea.value, isTextareaDirty: true })
-                })
-                textarea.addEventListener("click", () => {
-                    textarea.classList.remove("single-click")
-                })
-
-                useTableStore.setState({
-                    input: {
-                        draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
-                        textarea,
-                    }
-                })
-            } else {
-                unmount = () => {
-                    useTableStore.setState({ input: null })
-                }
-                useTableStore.setState({
-                    input: {
-                        draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
-                        textarea: null,
-                    }
-                })
-            }
-        }
-        mount()
-        useEditorStore.subscribe((state, prevState) => {
-            if (state.statement !== "UPDATE" || prevState.statement !== "UPDATE" || state.type === prevState.type) { return }
-            mount()
-        })
-        return unmount
-    }, state.statement === "UPDATE" ? [state.row, state.column] : [])
+    const { type } = props.tableList.find(({ name }) => name === state.tableName) ?? {}
 
     useLayoutEffect(() => {
         if (state.statement !== "UPDATE") { return }
@@ -303,8 +305,6 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         }
         useTableStore.setState({ input: { ...input, draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)) } })
     }, state.statement === "UPDATE" ? [state.textareaValue, state.blobValue, state.type] : [undefined, undefined, undefined])
-
-    const { type } = props.tableList.find(({ name }) => name === state.tableName) ?? {}
 
     let header: JSXInternal.Element
     let editor: JSXInternal.Element
@@ -352,8 +352,8 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             editor = <>
                 <MultiColumnDefEditor value={state.columnDefs} onChange={(columnDefs) => useEditorStore.setState({ columnDefs })} strict={state.strict} />
                 <textarea autocomplete="off" style={{ marginTop: "10px", height: "20vh" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
-                <Commit disabled={state.tableName === "" || state.columnDefs.length === 0} style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
-                    state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.tableName })
+                <Commit disabled={!state.newTableName || state.columnDefs.length === 0} style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
+                    state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.newTableName })
                 }} />
             </>
             break
@@ -431,7 +431,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                     onBlobValueChange={(value) => useEditorStore.setState({ blobValue: value })}
                 />
                 {"AS "}
-                <DataTypeInput value={state.type} onChange={(value) => useEditorStore.setState({ type: value })} />
+                <DataTypeInput value={state.type} onChange={(value) => { useEditorStore.setState({ type: value }); mountInput() }} />
                 <Commit onClick={state.commitUpdate} />
             </>
             break

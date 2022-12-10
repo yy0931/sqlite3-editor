@@ -85,7 +85,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
         tableRef.current?.addEventListener("wheel", (ev) => {
             ev.preventDefault()
             scrollbarRef.current!.wheel(ev.deltaY / 30)
-        })
+        }, { passive: false })
     }, [])
 
     return <>
@@ -191,7 +191,9 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                 className={"overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 style={{ paddingLeft: "10px", paddingRight: "10px", borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i] ?? defaultColumnWidth }}
                 onMouseDown={(ev) => {
-                    useEditorStore.getState().commitUpdate().then(() => {
+                    const editorState = useEditorStore.getState()
+                    if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
+                    editorState.commitUpdate().then(() => {
                         if (props.tableName !== undefined) { update(props.tableName, name, props.row) }
                     })
                 }}>
