@@ -70,7 +70,7 @@ export const useMainStore = zustand<{
     requireReloading: () => void
     rerender: () => void,
     getPageMax: () => bigint
-    setPaging: (opts: { visibleAreaTop?: bigint, numRecords?: bigint, pageSize?: bigint }) => Promise<void>
+    setPaging: (opts: { visibleAreaTop?: bigint, numRecords?: bigint, pageSize?: bigint }, preserveEditorState?: true) => Promise<void>
     reloadAllTables: (opts: editor.OnWriteOptions) => Promise<void>
     reloadCurrentTable: () => Promise<void>
     reloadVisibleArea: () => Promise<void>
@@ -94,12 +94,13 @@ export const useMainStore = zustand<{
         scrollerRef: { current: null },
         _rerender: {},
         requireReloading: () => { set({ reloadRequired: true }) },
-        setPaging: async (opts) => {
+        setPaging: async (opts, preserveEditorState) => {
             await editor.useEditorStore.getState().commitUpdate()
-            editor.useEditorStore.getState().clearInputs()
+            if (!preserveEditorState) { editor.useEditorStore.getState().clearInputs() }
             const paging = { ...get().paging, ...opts }
             paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.pageSize, paging.visibleAreaTop))
             set({ paging })
+            await get().reloadVisibleArea()
         },
         rerender: () => set({ _rerender: {} }),
         addErrorMessage: (value: string) => set((s) => ({ errorMessage: s.errorMessage + value + "\n" })),
@@ -152,10 +153,13 @@ export const useMainStore = zustand<{
                 await get().setPaging({ numRecords })
                 state = get() // state.paging will be updated
                 if (state.tableName === undefined) { return }
+                const indexList = await remote.getIndexList(state.tableName)
                 useTableStore.setState({
                     tableInfo: await remote.getTableInfo(state.tableName),
-                    records,
+                    indexList,
+                    indexInfo: await Promise.all(indexList.map((index) => remote.getIndexInfo(index.name))),
                     autoIncrement: state.tableName === null ? false : await remote.hasTableAutoincrementColumn(state.tableName),
+                    records,
                 })
             } else {
                 const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM pragma_${state.pragma.toLowerCase()}`, [], "r"))[0]!.count
@@ -165,8 +169,8 @@ export const useMainStore = zustand<{
                 if (state.tableName === undefined) { return }
                 useTableStore.setState({
                     tableInfo: await remote.getTableInfo(`pragma_${state.pragma.toLowerCase()}`),
-                    records: (await remote.query(`SELECT * FROM pragma_${state.pragma.toLowerCase()} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r")) ?? [],
                     autoIncrement: false,
+                    records: (await remote.query(`SELECT * FROM pragma_${state.pragma.toLowerCase()} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r")) ?? [],
                 })
             }
         },
@@ -177,9 +181,13 @@ export const useMainStore = zustand<{
             if (wr === undefined || type === undefined) { return }
             // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
             if (state.viewerStatement === "SELECT") {
-                useTableStore.setState({ records: await remote.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r") })
+                useTableStore.setState({
+                    records: await remote.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r"),
+                })
             } else {
-                useTableStore.setState({ records: (await remote.query(`SELECT * FROM pragma_${state.pragma.toLowerCase()} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r")) ?? [] })
+                useTableStore.setState({
+                    records: (await remote.query(`SELECT * FROM pragma_${state.pragma.toLowerCase()} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r")) ?? [],
+                })
             }
         },
     }
@@ -191,9 +199,6 @@ const App = () => {
     useEffect(() => {
         state.reloadCurrentTable().catch(console.error)
     }, [state.viewerStatement, state.pragma, state.tableName, state.viewerConstraints, state.tableList])
-    useEffect(() => {
-        state.reloadVisibleArea().catch(console.error)
-    }, [state.paging.visibleAreaTop, state.paging.pageSize])
 
     useEffect(() => {
         const handler = ({ data }: remote.Message) => {
@@ -206,12 +211,54 @@ const App = () => {
     }, [])
 
     useEffect(() => {
-        window.addEventListener("keydown", (ev) => {
-            if (ev.code === "Escape") {
+        window.addEventListener("keydown", async (ev) => {
+            try {
                 const editorState = editor.useEditorStore.getState()
-                if (editorState.statement === "UPDATE" || editorState.statement === "DELETE") {
-                    editorState.switchTable(editorState.tableName)  // clear selections
+                if (editorState.statement === "UPDATE") {
+                    const { tableInfo, records } = useTableStore.getState()
+                    const { paging, setPaging } = useMainStore.getState()
+                    const columnIndex = tableInfo.findIndex(({ name }) => name === editorState.column)
+                    const rowNumber = Number(paging.visibleAreaTop) + editorState.row
+                    switch (ev.code) {
+                        case "Escape": editorState.clearInputs(); break
+                        case "ArrowUp":
+                            if (rowNumber >= 1) {
+                                if (editorState.row === 0) {
+                                    await setPaging({ visibleAreaTop: paging.visibleAreaTop - 1n }, true)
+                                    editorState.update(editorState.tableName, editorState.column, 0)
+                                } else {
+                                    editorState.update(editorState.tableName, editorState.column, editorState.row - 1)
+                                }
+                            }
+                            break
+                        case "ArrowDown":
+                            if (rowNumber <= Number(paging.numRecords) - 2) {
+                                if (editorState.row === Number(paging.pageSize) - 1) {
+                                    await setPaging({ visibleAreaTop: paging.visibleAreaTop + 1n }, true)
+                                    editorState.update(editorState.tableName, editorState.column, Number(paging.pageSize) - 1)
+                                } else {
+                                    editorState.update(editorState.tableName, editorState.column, editorState.row + 1)
+                                }
+                            }
+                            break
+                        case "ArrowLeft":
+                            if (columnIndex >= 1) {
+                                editorState.update(editorState.tableName, tableInfo[columnIndex - 1]!.name, editorState.row)
+                            }
+                            break
+                        case "ArrowRight":
+                            if (columnIndex <= tableInfo.length - 2) {
+                                editorState.update(editorState.tableName, tableInfo[columnIndex + 1]!.name, editorState.row)
+                            }
+                            break
+                    }
+                } else if (editorState.statement === "DELETE") {
+                    switch (ev.code) {
+                        case "Escape": editorState.clearInputs(); break
+                    }
                 }
+            } catch (err) {
+                console.error(err)
             }
         })
     }, [])

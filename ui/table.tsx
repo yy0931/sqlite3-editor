@@ -9,14 +9,47 @@ import { scrollbarWidth, ScrollbarY } from "./scrollbar"
 
 export const useTableStore = zustand<{
     tableInfo: remote.TableInfo
-    records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[]
+    indexList: remote.IndexList
+    /** index_info for each index in indexList */
+    indexInfo: remote.IndexInfo[]
     autoIncrement: boolean
+    records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[]
     input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null
-}>()((set) => ({
-    records: [],
+    listUniqueConstraints: () => {
+        primary: boolean
+        columns: string[]
+    }[]
+    getRecordSelectors: (record: Record<string, remote.SQLite3Value>) => string[][]
+}>()((set, get) => ({
     tableInfo: [],
+    indexList: [],
+    indexInfo: [],
     autoIncrement: false,
+    records: [],
     input: null,
+    listUniqueConstraints: () => {
+        const uniqueConstraints: { primary: boolean, columns: string[] }[] = []
+        const { tableInfo, indexList, indexInfo } = get()
+        for (const column of tableInfo) {
+            if (column.pk) {
+                uniqueConstraints.push({ primary: true, columns: [column.name] })
+            }
+        }
+        for (const [i, index] of indexList.entries()) {
+            if (index.partial) { continue }
+            if (!index.unique) { continue }
+            uniqueConstraints.push({ primary: index.origin === "pk", columns: indexInfo[i]!.map(({ name }) => name) })
+        }
+        return uniqueConstraints
+    },
+    /** Enumerates the column tuples that uniquely select the record. */
+    getRecordSelectors: (record: Record<string, remote.SQLite3Value>): string[][] => {
+        const constraintChoices = ("rowid" in record ? [["rowid"]] : [])
+            .concat(get().listUniqueConstraints().sort((a, b) => +b.primary - +a.primary)
+                .map(({ columns }) => columns)
+                .filter((columns) => columns.every((column) => record[column] !== null)))
+        return [...new Set(constraintChoices.map((columns) => JSON.stringify(columns.sort((a, b) => a.localeCompare(b)))))].map((columns) => JSON.parse(columns))  // Remove duplicates
+    },
 }))
 
 /** useRef() but persists the value in the server. */
@@ -159,7 +192,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                 style={{ paddingLeft: "10px", paddingRight: "10px", borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i] ?? defaultColumnWidth }}
                 onMouseDown={(ev) => {
                     useEditorStore.getState().commitUpdate().then(() => {
-                        if (props.tableName !== undefined) { update(props.tableName, name, props.record, props.row).catch(console.error) }
+                        if (props.tableName !== undefined) { update(props.tableName, name, props.row) }
                     })
                 }}>
                 <pre className={"overflow-hidden text-ellipsis whitespace-nowrap " + input?.textarea && cursorVisibility ? "cursor-line" : ""} style={{ color: type2color(typeof value), maxWidth: "50em" }}>
