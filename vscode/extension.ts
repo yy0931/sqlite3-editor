@@ -141,7 +141,7 @@ export const activate = (context: vscode.ExtensionContext) => {
         }>, {
             supportsMultipleEditorsPerDocument: true,
             webviewOptions: {
-                enableFindWidget: true,
+                enableFindWidget: false,
                 retainContextWhenHidden: true,
             },
         }),
