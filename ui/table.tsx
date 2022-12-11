@@ -176,9 +176,19 @@ const FindWidget = () => {
     const wholeWord = useMainStore((state) => state.wholeWord)
     const regex = useMainStore((state) => state.regex)
     const setViewerQuery = useMainStore((state) => state.setViewerQuery)
+    const ref = useRef() as Ref<HTMLInputElement>
+
+    useEffect(() => {
+        window.addEventListener("keydown", (ev) => {
+            if (ev.ctrlKey && ev.code === "KeyF") {
+                ev.preventDefault()
+                ref.current!.focus()
+            }
+        })
+    }, [])
 
     return <div className="inline-block pl-1 pt-1 bg-gray-200 shadow-md whitespace-nowrap sticky right-3">
-        <input className="mr-1" placeholder="Find" value={searchTerm} onChange={(ev) => setViewerQuery({ searchTerm: ev.currentTarget.value })} />
+        <input ref={ref} className="mr-1" placeholder="Find" value={searchTerm} onChange={(ev) => setViewerQuery({ searchTerm: ev.currentTarget.value })} />
         <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setViewerQuery({ caseSensitive: !caseSensitive })}>
             <svg className="[width:1em] [height:1em]"><use xlinkHref="#case-sensitive" /></svg>
         </span>
