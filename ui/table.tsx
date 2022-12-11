@@ -136,7 +136,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                             onMouseLeave={(ev) => {
                                 ev.currentTarget.classList.remove("ew-resize")
                             }}>
-                            <code className="inline-block [word-break:break-word]">
+                            <code className="inline-block [word-break:break-word] [color:inherit] [font-family:inherit] [font-size:inherit]">
                                 {name}
                                 <span className="italic opacity-70">{(type ? (" " + type) : "") + (pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
                             </code>
@@ -234,7 +234,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                         if (props.tableName !== undefined) { update(props.tableName, name, props.row) }
                     })
                 }}>
-                <pre className={"overflow-hidden text-ellipsis whitespace-nowrap [max-width:50em] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: type2color(typeof value) }}>
+                <pre className={"overflow-hidden text-ellipsis whitespace-nowrap [max-width:50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: type2color(typeof value) }}>
                     <span className="select-none">{input?.draftValue ?? renderValue(value)}</span>
                     {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
                 </pre>

@@ -39,18 +39,6 @@ body {
     font-size: 12px;
 }
 
-code {
-    word-break: break-word;
-    color: inherit;
-    font-family: inherit;
-    font-size: inherit;
-}
-
-pre {
-    white-space: pre-wrap;
-    font-size: inherit;
-}
-
 h2 {
     font-weight: normal;
     margin-bottom: 5px;
@@ -60,11 +48,6 @@ h2 {
     border-top: 2px solid rgba(128, 128, 128, 0.147);
     padding-left: var(--page-padding);
     padding-right: var(--page-padding);
-
-    &.first {
-        padding-top: var(--page-padding);
-        border-top: 0;
-    }
 }
 
 li+li {
@@ -100,24 +83,8 @@ label:focus {
     outline: 2px solid rgb(142, 197, 226);
 }
 
-input[type=button] {
-    background-color: var(--button-primary-background);
-    color: var(--button-primary-foreground);
-    font-family: inherit;
-
-    &:hover {
-        background-color: var(--button-primary-hover-background);
-    }
-
-    &:focus {
-        outline: 2px solid rgb(142, 197, 226);
-    }
-
-    &:disabled {
-        background-color: #c1bbbb;
-        color: #737373;
-        cursor: not-allowed;
-    }
+input[type=button]:focus {
+    outline: 2px solid rgb(142, 197, 226);
 }
 
 input:not([type]),
@@ -156,34 +123,26 @@ textarea {
     color: var(--input-placeholder-foreground);
 }
 
-.progressbar {
-    opacity: 0;
-    transition: opacity 0.5s cubic-bezier(1.000, 0.060, 0.955, -0.120);
-
-    .querying & {
-        opacity: 1;
-    }
+.ew-resize,
+.ew-resize * {
+    cursor: ew-resize !important;
 }
 
 table.viewer {
-    th.ew-resize {
-        cursor: ew-resize;
-    }
-
     /* column */
-    th.clickable:not(.ew-resize):hover {
+    th.clickable:hover {
         background-color: var(--td-border-color-hover);
         cursor: pointer;
     }
 
     /* row */
-    td.clickable:nth-child(1):hover:not(.ew-resize):not(.no-hover) {
+    td.clickable:nth-child(1):hover:not(.no-hover) {
         background-color: var(--td-border-color-hover);
         cursor: pointer;
     }
 
     /* data */
-    td.clickable:hover:not(.ew-resize):not(.editing):not(:nth-child(1)) {
+    td.clickable:hover:not(.editing):not(:nth-child(1)) {
         background-color: rgba(207, 255, 255, 0.371);
         cursor: pointer;
     }
@@ -191,7 +150,7 @@ table.viewer {
     td.editing,
     tr.editing,
     tr.editing td:nth-child(1),
-    tr.editing td:nth-child(1):hover:not(.ew-resize):not(.no-hover) {
+    tr.editing td:nth-child(1):hover:not(.no-hover) {
         background-color: rgba(66, 159, 202, 0.384);
         outline: 1px solid rgb(142, 197, 226);
         cursor: default;
@@ -222,15 +181,6 @@ table.viewer {
             }
         }
     }
-
-    th pre {
-        font-size: 125%;
-    }
-}
-
-body.ew-resize,
-body.ew-resize * {
-    cursor: ew-resize;
 }
 
 @keyframes cursor-line {
