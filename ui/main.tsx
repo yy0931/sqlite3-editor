@@ -37,13 +37,16 @@ const LoadingIndicator = () => {
             if (document.body.classList.contains("querying")) {
                 ref.current!.style.left = `${x}px`
                 x = (Date.now() - t) % (window.innerWidth + width) - width
+                ref.current!.style.opacity = "1"
+            } else {
+                ref.current!.style.opacity = "0"
             }
             requestAnimationFrame(loop)
         }
         loop()
         return () => { canceled = true }
     }, [])
-    return <div className="progressbar inline-block select-none pointer-events-none absolute top-0 [z-index:100] [height:5px] [background:var(--button-primary-background)]" ref={ref} style={{ width: width + "px" }}></div>
+    return <div className="progressbar inline-block select-none pointer-events-none absolute top-0 [z-index:100] [height:5px] [background:var(--button-primary-background)] opacity-0" ref={ref} style={{ width: width + "px", transition: "opacity 0.5s cubic-bezier(1.000, 0.060, 0.955, -0.120)" }}></div>
 }
 
 const BigintMath = {
@@ -377,7 +380,7 @@ const App = () => {
 
     return <>
         <LoadingIndicator />
-        <h2 className="first flex">
+        <h2 className="flex [padding-top:var(--page-padding)] [border-top:0]">
             <div className="whitespace-pre">
                 <Select value={state.viewerStatement} onChange={(value) => { state.setViewerQuery({ viewerStatement: value }) }} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
                 {state.viewerStatement === "SELECT" && <> * FROM
@@ -395,7 +398,7 @@ const App = () => {
             <Table tableName={state.tableName} />
         </div>
         {state.errorMessage && <p className="text-white [background:rgb(14,72,117)] [padding:10px]">
-            <pre>{state.errorMessage}</pre>
+            <pre className="whitespace-pre-wrap [font-size:inherit]">{state.errorMessage}</pre>
             <Button value="Close" className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })} />
         </p>}
         <editor.Editor tableList={state.tableList} />
