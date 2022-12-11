@@ -63,8 +63,6 @@ const persistentRef = <T extends unknown>(key: string, defaultValue: T) => {
     })[0]
 }
 
-const defaultColumnWidth = 150
-
 export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const alterTable = useEditorStore((state) => state.alterTable)
     const visibleAreaTop = useMainStore((state) => Number(state.paging.visibleAreaTop))
@@ -73,7 +71,14 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
 
     const state = useTableStore()
 
-    const columnWidths = persistentRef<Record<string, (number | undefined | null)[]>>("columnWidths_v3", {})
+    const columnWidthCaches = persistentRef<Record<string, (number | undefined | null)[]>>("columnWidths_v3", {})
+    const getColumnWidths = () => {
+        const result: number[] = []
+        for (let i = 0; i < state.tableInfo.length; i++) {
+            result.push(columnWidthCaches.current[tableName ?? ""]?.[i] ?? (state.tableInfo.length === 1 ? 250 : 150))
+        }
+        return result
+    }
     const tableRef = useRef() as Ref<HTMLTableElement>
 
     const selectedRow = useEditorStore((state) => state.statement === "DELETE" ? state.row : null)
@@ -95,7 +100,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                     <tr>
                         <th className="font-normal select-none [padding-top:3px] [padding-bottom:3px] [padding-left:1em] [padding-right:1em]"></th>
                         {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
-                            style={{ width: columnWidths.current[tableName ?? ""]?.[i] ?? defaultColumnWidth }}
+                            style={{ width: getColumnWidths()[i]! }}
                             className={"font-normal select-none " + (tableName !== undefined ? "clickable" : "")}
                             onMouseMove={(ev) => {
                                 const rect = ev.currentTarget.getBoundingClientRect()
@@ -111,15 +116,15 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                                     const rect = th.getBoundingClientRect()
                                     if (rect.right - ev.clientX < 20) {
                                         const mouseMove = (ev: MouseEvent) => {
-                                            columnWidths.current = produce(columnWidths.current, (d) => {
+                                            columnWidthCaches.current = produce(columnWidthCaches.current, (d) => {
                                                 if (!Array.isArray(d[tableName ?? ""])) {
                                                     d[tableName ?? ""] = []
                                                 }
                                                 d[tableName ?? ""]![i] = Math.max(50, ev.clientX - rect.left)
                                             })
-                                            th.style.width = columnWidths.current[tableName ?? ""]![i]! + "px"
+                                            th.style.width = columnWidthCaches.current[tableName ?? ""]![i]! + "px"
                                             for (const td of tableRef.current?.querySelectorAll<HTMLElement>(`td:nth-child(${i + 2})`) ?? []) {
-                                                td.style.maxWidth = columnWidths.current[tableName ?? ""]![i]! + "px"
+                                                td.style.maxWidth = columnWidthCaches.current[tableName ?? ""]![i]! + "px"
                                             }
                                         }
                                         document.body.classList.add("ew-resize")
@@ -146,14 +151,14 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                 <tbody>
                     <tr>
                         <td className="[padding-left:10px] [padding-right:10px] [background-color:var(--gutter-color)]"></td>
-                        <td className="relative text-right" colSpan={state.tableInfo.length}>
+                        <td className="relative text-right" colSpan={state.tableInfo.length} style={{ maxWidth: getColumnWidths().reduce((a, b) => a + b, 0) }}>
                             <FindWidget />
                         </td>
                     </tr>
                     {state.records.length === 0 && <tr>
                         <td className="overflow-hidden no-hover inline-block cursor-default [height:1.2em] [padding-left:10px] [padding-right:10px]" style={{ borderRight: "1px solid var(--td-border-color)" }}></td>
                     </tr>}
-                    {state.records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidths={columnWidths.current[tableName ?? ""] ?? []} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
+                    {state.records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
                 </tbody>
             </table>
         </div>
@@ -201,7 +206,7 @@ const FindWidget = () => {
     </div>
 }
 
-const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: remote.TableInfo, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly (number | null | undefined)[] }) => {
+const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: remote.TableInfo, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly number[] }) => {
     if (props.rowNumber <= 0) {
         throw new Error(props.rowNumber + "")
     }
@@ -226,7 +231,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             const input = props.selectedColumn === name ? props.input : undefined
             return <td
                 className={"[padding-left:10px] [padding-right:10px] overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
-                style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i] ?? defaultColumnWidth, borderBottom: "1px solid var(--td-border-color)" }}
+                style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
                 onMouseDown={(ev) => {
                     const editorState = useEditorStore.getState()
                     if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
