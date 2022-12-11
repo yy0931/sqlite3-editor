@@ -62,40 +62,40 @@ const reloadTable = async (visibleAreaOnly: boolean) => {
     if (wr === undefined || type === undefined) { return }
     const tableName = viewerStatement === "SELECT" ? state.tableName : `pragma_${state.pragma.toLowerCase()}`
     const tableInfo = visibleAreaOnly ? useTableStore.getState().tableInfo : await remote.getTableInfo(tableName)
-    let searchQueryConstraints = ""
-    let searchTermParams: string[] = []
+    let findWidgetQuery = ""
+    let findWidgetParams: string[] = []
     if (state.searchTerm) {
         if (state.regex) {
-            searchQueryConstraints = tableInfo.map(({ name: column }) => `find_widget_regexp(${escapeSQLIdentifier(column)}, ?, ${state.wholeWord ? "1" : "0"}, ${state.caseSensitive ? "1" : "0"})`).join(" OR ")
+            findWidgetQuery = tableInfo.map(({ name: column }) => `find_widget_regexp(${escapeSQLIdentifier(column)}, ?, ${state.wholeWord ? "1" : "0"}, ${state.caseSensitive ? "1" : "0"})`).join(" OR ")
         } else {
             if (state.wholeWord) {
                 if (state.caseSensitive) {
-                    searchQueryConstraints = tableInfo.map(({ name: column }) => `${escapeSQLIdentifier(column)} = ?`).join(" OR ")
+                    findWidgetQuery = tableInfo.map(({ name: column }) => `${escapeSQLIdentifier(column)} = ?`).join(" OR ")
                 } else {
-                    searchQueryConstraints = tableInfo.map(({ name: column }) => `UPPER(${escapeSQLIdentifier(column)}) = UPPER(?)`).join(" OR ")
+                    findWidgetQuery = tableInfo.map(({ name: column }) => `UPPER(${escapeSQLIdentifier(column)}) = UPPER(?)`).join(" OR ")
                 }
             } else {
                 if (state.caseSensitive) {
-                    searchQueryConstraints = tableInfo.map(({ name: column }) => `INSTR(${escapeSQLIdentifier(column)}, ?) > 0`).join(" OR ")
+                    findWidgetQuery = tableInfo.map(({ name: column }) => `INSTR(${escapeSQLIdentifier(column)}, ?) > 0`).join(" OR ")
                 } else {
-                    searchQueryConstraints = tableInfo.map(({ name: column }) => `INSTR(UPPER(${escapeSQLIdentifier(column)}), UPPER(?)) > 0`).join(" OR ")
+                    findWidgetQuery = tableInfo.map(({ name: column }) => `INSTR(UPPER(${escapeSQLIdentifier(column)}), UPPER(?)) > 0`).join(" OR ")
                 }
             }
         }
-        searchTermParams = tableInfo.map(() => state.searchTerm)
+        findWidgetParams = tableInfo.map(() => state.searchTerm)
     }
-    const orderBy = /* without rowid */!wr && type === "table" ?
-        "rowid" :
-        tableInfo.find(({ pk }) => /* primary key */ pk)?.name ?? tableInfo[0]!.name
+    if (findWidgetQuery !== "") {
+        findWidgetQuery = ` WHERE ${findWidgetQuery}`
+    }
 
     if (!visibleAreaOnly) {
-        const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(tableName)}${searchQueryConstraints ? ` WHERE ${searchQueryConstraints}` : ""}`, searchTermParams, "r"))[0]!.count
+        const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(tableName)}${findWidgetQuery}`, findWidgetParams, "r"))[0]!.count
         if (typeof numRecords !== "bigint") { throw new Error(numRecords + "") }
         await state.setPaging({ numRecords }, undefined, true)
         state = useMainStore.getState() // state.paging will be updated
     }
 
-    const records = await remote.query(`SELECT ${orderBy === "rowid" ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(tableName)} ${searchQueryConstraints ? ` WHERE ${searchQueryConstraints}` : ""} LIMIT ? OFFSET ?`, [...searchTermParams, state.paging.pageSize, state.paging.visibleAreaTop], "r") ?? []
+    const records = await remote.query(`SELECT ${orderBy === "rowid" ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(tableName)}${findWidgetQuery} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.pageSize, state.paging.visibleAreaTop], "r") ?? []
 
     if (visibleAreaOnly) {
         useTableStore.setState({ records })
