@@ -95,7 +95,7 @@ const reloadTable = async (visibleAreaOnly: boolean) => {
         state = useMainStore.getState() // state.paging will be updated
     }
 
-    const records = await remote.query(`SELECT ${orderBy === "rowid" ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(tableName)}${findWidgetQuery} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.pageSize, state.paging.visibleAreaTop], "r") ?? []
+    const records = await remote.query(`SELECT${/* without rowid */!wr && type === "table" ? " rowid AS rowid," : ""} * FROM ${escapeSQLIdentifier(tableName)}${findWidgetQuery} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.pageSize, state.paging.visibleAreaTop], "r") ?? []
 
     if (visibleAreaOnly) {
         useTableStore.setState({ records })
