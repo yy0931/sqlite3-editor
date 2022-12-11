@@ -14,13 +14,22 @@ const unpackr = new Unpackr({ largeBigIntToFloat: false, int64AsNumber: false, m
 
 const vscode = window.acquireVsCodeApi?.()
 
-const querying = new Set()
+const queue: { start: number }[] = []
+
+const loop = () => {
+    if (queue.length > 0 && Date.now() - queue[0]!.start > 1000) {
+        document.body.classList.add("querying")
+    } else {
+        document.body.classList.remove("querying")
+    }
+    requestAnimationFrame(loop)
+}
+loop()
 
 /** Send the data to the server with fetch(), or to the extension host with vscode.postMessage(). */
 export const post = async (url: string, body: unknown) => {
-    const id = {}
-    querying.add(id)
-    document.body.classList.add("querying")
+    const id = { start: Date.now() }
+    queue.push(id)
     if (vscode !== undefined) {
         return new Promise<unknown>((resolve, reject) => {
             const requestId = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)
@@ -37,10 +46,7 @@ export const post = async (url: string, body: unknown) => {
             }
             window.addEventListener("message", callback)
         }).finally(() => {
-            querying.delete(id)
-            if (querying.size === 0) {
-                document.body.classList.remove("querying")
-            }
+            queue.splice(queue.indexOf(id)!, 1)
         })
     } else {
         try {
@@ -58,10 +64,7 @@ export const post = async (url: string, body: unknown) => {
             }
             return unpackr.unpack(new Uint8Array(await res.arrayBuffer()))
         } finally {
-            querying.delete(id)
-            if (querying.size === 0) {
-                document.body.classList.remove("querying")
-            }
+            queue.splice(queue.indexOf(id)!, 1)
         }
     }
 }

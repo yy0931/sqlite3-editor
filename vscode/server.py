@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import sqlite3
 import sys
 import traceback
@@ -8,10 +9,16 @@ import urllib.parse
 from umsgpack import pack, unpack
 
 
+def regexp(expr: str, item: str):
+    return re.match(expr, item) is not None
+
+
 class Server:
     def __init__(self, database_filepath, request_body_filepath, response_body_filepath, cwd):
         self.readonly_connection = sqlite3.connect("file:" + urllib.parse.quote(database_filepath) + "?mode=ro", uri=True)
         self.readwrite_connection = sqlite3.connect(database_filepath)
+        self.readonly_connection.create_function("regexp", 2, regexp)
+        self.readwrite_connection.create_function("regexp", 2, regexp)
         self.request_body_filepath = request_body_filepath
         self.response_body_filepath = response_body_filepath
         self.cwd = cwd

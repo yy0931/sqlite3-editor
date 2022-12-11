@@ -346,13 +346,13 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         case "CREATE TABLE": {
             header = <>
                 <input placeholder="table-name" value={state.newTableName} onInput={(ev) => useEditorStore.setState({ newTableName: ev.currentTarget.value })}></input>(...)
-                <Checkbox checked={state.withoutRowId} onChange={(checked) => useEditorStore.setState({ withoutRowId: checked })} style={{ marginLeft: "8px" }} text="WITHOUT ROWID" />
+                <Checkbox checked={state.withoutRowId} onChange={(checked) => useEditorStore.setState({ withoutRowId: checked })} className="[margin-left:8px]" text="WITHOUT ROWID" />
                 <Checkbox checked={state.strict} onChange={(checked) => useEditorStore.setState({ strict: checked })} text="STRICT" />
             </>
             editor = <>
                 <MultiColumnDefEditor value={state.columnDefs} onChange={(columnDefs) => useEditorStore.setState({ columnDefs })} strict={state.strict} />
-                <textarea autocomplete="off" style={{ marginTop: "10px", height: "20vh" }} placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
-                <Commit disabled={!state.newTableName || state.columnDefs.length === 0} style={{ marginTop: "10px", marginBottom: "10px" }} onClick={() => {
+                <textarea autocomplete="off" className="[margin-top:10px] [height:20vh]" placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
+                <Commit disabled={!state.newTableName || state.columnDefs.length === 0} className="[margin-top:10px] [margin-bottom:10px]" onClick={() => {
                     state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.newTableName })
                 }} />
             </>
@@ -394,7 +394,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 <ul className="list-none mb-2">
                     {state.tableInfo.map(({ name }, i) => {
                         return <li>
-                            <div style={{ marginRight: "1em" }}>{name}</div>
+                            <div className="[margin-right:1em]">{name}</div>
                             <DataEditor
                                 type={state.dataTypes[i]!}
                                 rows={1}
@@ -439,7 +439,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         case "custom": {
             header = <></>
             editor = <>
-                <textarea autocomplete="off" className="mb-2" style={{ marginTop: "15px", height: "20vh" }} placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
+                <textarea autocomplete="off" className="mb-2 [margin-top:15px] [height:20vh]" placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
                 <Commit onClick={() => state.commit(state.query, [], { refreshTableList: true })} />
             </>
             break
@@ -452,7 +452,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
 
     return <>
         <h2>
-            <Select value={state.statement} style={{ paddingLeft: "15px", paddingRight: "15px" }} className="primary" onChange={async (value) => {
+            <Select value={state.statement} className="primary [padding-left:15px] [padding-right:15px]" onChange={async (value) => {
                 switch (value) {
                     case "ALTER TABLE": state.alterTable(state.tableName!, undefined); break
                     case "CREATE TABLE": state.createTable(state.tableName); break
@@ -477,7 +477,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             {" "}
             {header}
         </h2>
-        <div>
+        <div className="[padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">
             {editor}
         </div>
     </>
@@ -492,12 +492,12 @@ const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, r
     const [filename, setFilename] = useState("")
     if (props.type === "default") {
         return <div>
-            <input disabled={true} style={{ marginRight: "10px" }} className={props.className} />
+            <input disabled={true} className={"[margin-right:10px] " + (props.className ?? "")} />
         </div>
     }
     if (props.type === "blob") {
         return <div>
-            <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} style={{ marginRight: "10px" }} className={props.className} />
+            <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} className={"[margin-right:10px] " + (props.className ?? "")} />
             <input value={filename} placeholder={"tmp.dat"} onInput={(ev) => setFilename(ev.currentTarget.value)} />
             <Button value="Import" onClick={() => remote.import_(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
             <Button value="Export" onClick={() => remote.export_(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
@@ -541,7 +541,7 @@ const parseTextareaValue = (value: string, blobValue: Uint8Array | null, type: E
     }
 }
 
-const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInternal.CSSProperties }) => {
+const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInternal.CSSProperties, className?: string }) => {
     useEffect(() => {
         const handler = (ev: KeyboardEvent) => {
             if (ev.ctrlKey && ev.code === "KeyS" || ev.ctrlKey && ev.code === "Enter") {
@@ -552,11 +552,11 @@ const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInt
         window.addEventListener("keydown", handler)
         return () => { window.removeEventListener("keydown", handler) }
     }, [props.onClick])
-    return <Button disabled={props.disabled} value="Commit" style={props.style} className="primary block mb-2" onClick={props.onClick} title="Ctrl+S or Ctrl+Enter" />
+    return <Button disabled={props.disabled} value="Commit" style={props.style} className={"primary block mb-2 " + (props.className ?? "")} onClick={props.onClick} title="Ctrl+S or Ctrl+Enter" />
 }
 
-const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: boolean, onChange: (value: boolean) => void, text: string, tabIndex?: number }) =>
-    <label className="select-none mr-2 cursor-pointer" tabIndex={0} style={{ borderBottom: "1px solid gray", color: props.checked ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)", ...props.style }} onClick={() => props.onChange(!props.checked)} onKeyDown={(ev) => { if (["Enter", "Space"].includes(ev.code)) { props.onChange(!props.checked) } }}>
+const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: boolean, onChange: (value: boolean) => void, text: string, tabIndex?: number, className?: string }) =>
+    <label className={"select-none mr-2 cursor-pointer " + (props.className ?? "")} tabIndex={0} style={{ borderBottom: "1px solid gray", color: props.checked ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)", ...props.style }} onClick={() => props.onChange(!props.checked)} onKeyDown={(ev) => { if (["Enter", "Space"].includes(ev.code)) { props.onChange(!props.checked) } }}>
         {props.text}
     </label>
 
@@ -571,14 +571,14 @@ type ColumnDef = {
 
 const ColumnDefEditor = (props: { columnNameOnly?: boolean, value: ColumnDef, onChange: (columnDef: ColumnDef) => void, strict: boolean }) => {
     return <>
-        <input tabIndex={0} placeholder="column-name" style={{ marginRight: "8px" }} value={props.value.name} onInput={(ev) => { props.onChange({ ...props.value, name: ev.currentTarget.value }) }}></input>
+        <input tabIndex={0} placeholder="column-name" className="[margin-right:8px]" value={props.value.name} onInput={(ev) => { props.onChange({ ...props.value, name: ev.currentTarget.value }) }}></input>
         {!props.columnNameOnly && <>
-            <Select tabIndex={0} style={{ marginRight: "8px" }} value={props.value.affinity} onChange={(value) => props.onChange({ ...props.value, affinity: value })} options={{ "TEXT": {}, "INTEGER": {}, "REAL": {}, "BLOB": {}, "ANY": { disabled: !props.strict, disabledReason: "STRICT tables only." }, "NUMERIC": { disabled: props.strict, disabledReason: "non-STRICT tables only." } }} />
+            <Select tabIndex={0} className="[margin-right:8px]" value={props.value.affinity} onChange={(value) => props.onChange({ ...props.value, affinity: value })} options={{ "TEXT": {}, "INTEGER": {}, "REAL": {}, "BLOB": {}, "ANY": { disabled: !props.strict, disabledReason: "STRICT tables only." }, "NUMERIC": { disabled: props.strict, disabledReason: "non-STRICT tables only." } }} />
             <Checkbox tabIndex={-1} checked={props.value.primary} onChange={(checked) => props.onChange({ ...props.value, primary: checked })} text="PRIMARY KEY" />
             <Checkbox tabIndex={-1} checked={props.value.autoIncrement} onChange={(checked) => props.onChange({ ...props.value, autoIncrement: checked })} text="AUTOINCREMENT" />
             <Checkbox tabIndex={-1} checked={props.value.unique} onChange={(checked) => props.onChange({ ...props.value, unique: checked })} text="UNIQUE" />
             <Checkbox tabIndex={-1} checked={props.value.notNull} onChange={(checked) => props.onChange({ ...props.value, notNull: checked })} text="NOT NULL" />
-            {/* <label style={{ marginRight: "8px" }}>DEFAULT</label><input placeholder="CURRENT_TIMESTAMP" /> */}
+            {/* <label className="[margin-right:8px]">DEFAULT</label><input placeholder="CURRENT_TIMESTAMP" /> */}
         </>}
     </>
 }

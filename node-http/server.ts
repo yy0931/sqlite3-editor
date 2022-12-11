@@ -12,6 +12,10 @@ const readWriteConnection = sqlite3("../samples/employees_db-full-1.0.6.db")
 readonlyConnection.defaultSafeIntegers()
 readWriteConnection.defaultSafeIntegers()
 
+const regexp = (a: string, b: string) => new RegExp(a).test(b) ? 1n : 0n
+readonlyConnection.function("regexp", { deterministic: true, varargs: false, safeIntegers: true }, regexp)
+readWriteConnection.function("regexp", { deterministic: true, varargs: false, safeIntegers: true }, regexp)
+
 const state: Record<string, unknown> = {}
 
 express()
