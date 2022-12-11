@@ -101,6 +101,7 @@ export const useMainStore = zustand<{
         _rerender: {},
         setViewerQuery: async (opts) => {
             set(opts)
+            remote.setState("tableName", get().tableName)
             if (opts.viewerStatement !== undefined || opts.tableName !== undefined || opts.viewerConstraints !== undefined) {  // TODO: this block should be located after reloadCurrentTable()
                 await editor.useEditorStore.getState().switchTable(opts.viewerStatement === "PRAGMA" ? undefined : get().tableName)
             }
@@ -374,7 +375,10 @@ const App = () => {
 (async () => {
     await remote.downloadState()
     const tableList = await remote.getTableList()
-    const tableName = tableList[0]?.name
+    const restoredTableName = remote.getState<string>("tableName")
+    const tableName = restoredTableName && tableList.some(({ name }) => name === restoredTableName) ?
+        restoredTableName :
+        tableList[0]?.name
     editor.useEditorStore.setState({ tableName })
     useMainStore.setState({
         tableList,
