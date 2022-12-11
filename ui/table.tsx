@@ -197,7 +197,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                         if (props.tableName !== undefined) { update(props.tableName, name, props.row) }
                     })
                 }}>
-                <pre className={"overflow-hidden text-ellipsis whitespace-nowrap " + input?.textarea && cursorVisibility ? "cursor-line" : ""} style={{ color: type2color(typeof value), maxWidth: "50em" }}>
+                <pre className={"overflow-hidden text-ellipsis whitespace-nowrap " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: type2color(typeof value), maxWidth: "50em" }}>
                     <span className="select-none">{input?.draftValue ?? renderValue(value)}</span>
                     {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
                 </pre>
