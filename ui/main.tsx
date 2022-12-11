@@ -398,7 +398,7 @@ const App = () => {
             <Table tableName={state.tableName} />
         </div>
         {state.errorMessage && <p className="text-white [background:rgb(14,72,117)] [padding:10px]">
-            <pre className="whitespace-pre-wrap [font-size:inherit]">{state.errorMessage}</pre>
+            <pre className="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{state.errorMessage}</pre>
             <Button value="Close" className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })} />
         </p>}
         <editor.Editor tableList={state.tableList} />
