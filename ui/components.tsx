@@ -11,13 +11,13 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
         ref1.current.style.width = ref2.current.offsetWidth + "px"
     })  // skip the second argument
     return <>
-        <select autocomplete="off" value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style }} className={props.className} ref={ref1} onChange={(ev) => props.onChange(ev.currentTarget.value as T)} tabIndex={props.tabIndex}>{
+        <select autocomplete="off" value={props.value} style={props.style} className={"[padding-left:15px] [padding-right:15px] " + (props.className ?? "")} ref={ref1} onChange={(ev) => props.onChange(ev.currentTarget.value as T)} tabIndex={props.tabIndex}>{
             (Object.keys(props.options) as T[]).map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].disabled ? props.options[value].disabledReason : undefined}>{props.options[value].text ?? value}</option>)
         }</select>
 
         {/* Hidden replication for auto resizing */}
         <span className="select-none inline-block pointer-events-none w-0 h-0 overflow-hidden">
-            <select autocomplete="off" tabIndex={-1} value={props.value} style={{ paddingLeft: "15px", paddingRight: "15px", ...props.style, visibility: "hidden" }} className={props.className} ref={ref2} onChange={(ev) => props.onChange(ev.currentTarget.value as T)}>
+            <select autocomplete="off" tabIndex={-1} value={props.value} style={{ ...props.style, visibility: "hidden" }} className={"[padding-left:15px] [padding-right:15px] " + (props.className ?? "")} ref={ref2} onChange={(ev) => props.onChange(ev.currentTarget.value as T)}>
                 <option value={props.value} tabIndex={-1}>{props.options[props.value].text ?? props.value}</option>
             </select>
         </span>

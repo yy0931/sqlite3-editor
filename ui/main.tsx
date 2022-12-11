@@ -43,7 +43,7 @@ const LoadingIndicator = () => {
         loop()
         return () => { canceled = true }
     }, [])
-    return <div className="progressbar inline-block select-none pointer-events-none absolute top-0" ref={ref} style={{ zIndex: 100, width: width + "px", height: "5px", background: "var(--button-primary-background)" }}></div>
+    return <div className="progressbar inline-block select-none pointer-events-none absolute top-0 [z-index:100] [height:5px] [background:var(--button-primary-background)]" ref={ref} style={{ width: width + "px" }}></div>
 }
 
 const BigintMath = {
@@ -361,12 +361,15 @@ const App = () => {
                 {state.viewerStatement === "PRAGMA" && <Select value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
             </div>
         </h2>
-        <div className="relative w-max max-w-full">
+        {/* <div className="[padding-left:var(--page-padding)] [padding-right:var(--page-padding)] float-right z-50">
+            <input placeholder="Find" autocomplete="off" />
+        </div> */}
+        <div className="relative w-max max-w-full [padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">
             <Table tableName={state.tableName} />
         </div>
-        {state.errorMessage && <p className="text-white" style={{ background: "rgb(14, 72, 117)", padding: "10px" }}>
+        {state.errorMessage && <p className="text-white [background:rgb(14,72,117)] [padding:10px]">
             <pre>{state.errorMessage}</pre>
-            <Button value="Close" className="primary" style={{ marginTop: "10px" }} onClick={() => useMainStore.setState({ errorMessage: "" })} />
+            <Button value="Close" className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })} />
         </p>}
         <editor.Editor tableList={state.tableList} />
     </>

@@ -91,9 +91,9 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     return <>
         <div className="max-w-full overflow-x-auto w-max">
             <table ref={tableRef} className="viewer w-max border-collapse table-fixed bg-white" style={{ paddingRight: scrollbarWidth, boxShadow: "0 0 0px 2px #000000ad" }}>
-                <thead className="text-black" style={{ background: "var(--gutter-color)", outline: "rgb(181, 181, 181) 1px solid" }}>
+                <thead className="text-black [background:var(--gutter-color)]" style={{ outline: "rgb(181, 181, 181) 1px solid" }}>
                     <tr>
-                        <th className="font-normal select-none" style={{ paddingTop: "3px", paddingBottom: "3px", paddingLeft: "1em", paddingRight: "1em" }}></th>
+                        <th className="font-normal select-none [padding-top:3px] [padding-bottom:3px] [padding-left:1em] [padding-right:1em]"></th>
                         {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
                             style={{ width: columnWidths.current[tableName ?? ""]?.[i] ?? defaultColumnWidth }}
                             className={"font-normal select-none " + (tableName !== undefined ? "clickable" : "")}
@@ -136,7 +136,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                             onMouseLeave={(ev) => {
                                 ev.currentTarget.classList.remove("ew-resize")
                             }}>
-                            <code className="inline-block" style={{ wordBreak: "break-word" }}>
+                            <code className="inline-block [word-break:break-word]">
                                 {name}
                                 <span className="italic opacity-70">{(type ? (" " + type) : "") + (pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
                             </code>
@@ -144,8 +144,17 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                     </tr>
                 </thead>
                 <tbody>
+                    <tr>
+                        <td className="[padding-left:10px] [padding-right:10px] [background-color:var(--gutter-color)]"></td>
+                        <td className="relative text-right" colSpan={state.tableInfo.length}>
+                            <div className="inline-block pl-1 pt-1 bg-gray-200 shadow-md whitespace-nowrap sticky right-0">
+                                <input className="mr-1" placeholder="Find" />
+                                <span className="[font-size:130%] pt-1 align-middle text-gray-600 hover:bg-gray-300 select-none pl-1 pr-3">×</span>
+                            </div>
+                        </td>
+                    </tr>
                     {state.records.length === 0 && <tr>
-                        <td className="overflow-hidden no-hover inline-block cursor-default" style={{ height: "1.2em", paddingLeft: "10px", paddingRight: "10px", borderRight: "1px solid var(--td-border-color)" }}></td>
+                        <td className="overflow-hidden no-hover inline-block cursor-default [height:1.2em] [padding-left:10px] [padding-right:10px]" style={{ borderRight: "1px solid var(--td-border-color)" }}></td>
                     </tr>}
                     {state.records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidths={columnWidths.current[tableName ?? ""] ?? []} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
                 </tbody>
@@ -177,8 +186,8 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
 
     return useMemo(() => <tr className={props.selected ? "editing" : ""}>
         <td
-            className={"overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (props.tableName !== undefined ? "clickable" : "")}
-            style={{ paddingLeft: "10px", paddingRight: "10px", borderRight: "1px solid var(--td-border-color)" }}
+            className={"[padding-left:10px] [padding-right:10px] [background-color:var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (props.tableName !== undefined ? "clickable" : "")}
+            style={{ borderRight: "1px solid var(--td-border-color)" }}
             onMouseDown={(ev) => {
                 useEditorStore.getState().commitUpdate().then(() => {
                     if (props.tableName !== undefined) { delete_(props.tableName, props.record, props.row).catch(console.error) }
@@ -188,8 +197,8 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
             return <td
-                className={"overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
-                style={{ paddingLeft: "10px", paddingRight: "10px", borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i] ?? defaultColumnWidth }}
+                className={"[padding-left:10px] [padding-right:10px] overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
+                style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i] ?? defaultColumnWidth, borderBottom: "1px solid var(--td-border-color)" }}
                 onMouseDown={(ev) => {
                     const editorState = useEditorStore.getState()
                     if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
@@ -197,7 +206,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                         if (props.tableName !== undefined) { update(props.tableName, name, props.row) }
                     })
                 }}>
-                <pre className={"overflow-hidden text-ellipsis whitespace-nowrap " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: type2color(typeof value), maxWidth: "50em" }}>
+                <pre className={"overflow-hidden text-ellipsis whitespace-nowrap [max-width:50em] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: type2color(typeof value) }}>
                     <span className="select-none">{input?.draftValue ?? renderValue(value)}</span>
                     {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
                 </pre>

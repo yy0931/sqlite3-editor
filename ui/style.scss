@@ -34,7 +34,7 @@ body {
     padding: 0 !important; // Override the VSCode's default
     overflow-x: hidden;
     background: #f0f0f0;
-    font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
     color: black;
     font-size: 12px;
 }
@@ -65,11 +65,6 @@ h2 {
         padding-top: var(--page-padding);
         border-top: 0;
     }
-}
-
-h2+div {
-    padding-left: var(--page-padding);
-    padding-right: var(--page-padding);
 }
 
 li+li {
@@ -164,40 +159,33 @@ textarea {
 .progressbar {
     opacity: 0;
     transition: opacity 0.5s cubic-bezier(1.000, 0.060, 0.955, -0.120);
+
     .querying & {
         opacity: 1;
     }
 }
 
 table.viewer {
+    th.ew-resize {
+        cursor: ew-resize;
+    }
+
+    /* column */
     th.clickable:not(.ew-resize):hover {
         background-color: var(--td-border-color-hover);
         cursor: pointer;
     }
 
-    th.ew-resize {
-        cursor: ew-resize;
-    }
-
-    td:nth-child(1) {
-        padding-left: 15px;
-        padding-right: 5px;
-        background-color: var(--gutter-color);
-        border-right: rgb(181, 181, 181) 1px solid;
-
-        &:hover:not(.ew-resize):not(.no-hover) {
-            background-color: var(--td-border-color-hover);
-            cursor: pointer;
-        }
-    }
-
-    td:hover:not(.ew-resize):not(.editing):not(:nth-child(1)) {
-        background-color: rgba(207, 255, 255, 0.371);
+    /* row */
+    td.clickable:nth-child(1):hover:not(.ew-resize):not(.no-hover) {
+        background-color: var(--td-border-color-hover);
         cursor: pointer;
     }
 
-    td+td {
-        border-bottom: 1px solid var(--td-border-color);
+    /* data */
+    td.clickable:hover:not(.ew-resize):not(.editing):not(:nth-child(1)) {
+        background-color: rgba(207, 255, 255, 0.371);
+        cursor: pointer;
     }
 
     td.editing,
