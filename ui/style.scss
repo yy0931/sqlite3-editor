@@ -250,3 +250,8 @@ body.ew-resize * {
         box-shadow: -1.5px 0px 0px 0px transparent;
     }
 }
+
+/* codicon */
+body > svg {
+    display: none;
+}
