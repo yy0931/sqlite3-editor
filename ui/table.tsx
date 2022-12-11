@@ -6,6 +6,8 @@ import zustand from "zustand"
 import type { ReadonlyDeep } from "type-fest"
 import produce from "immer"
 import { scrollbarWidth, ScrollbarY } from "./scrollbar"
+// @ts-ignore
+import codicon from "@vscode/codicons/dist/codicon.svg"
 
 export const useTableStore = zustand<{
     tableInfo: remote.TableInfo
@@ -147,10 +149,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                     <tr>
                         <td className="[padding-left:10px] [padding-right:10px] [background-color:var(--gutter-color)]"></td>
                         <td className="relative text-right" colSpan={state.tableInfo.length}>
-                            <div className="inline-block pl-1 pt-1 bg-gray-200 shadow-md whitespace-nowrap sticky right-0">
-                                <input className="mr-1" placeholder="Find" />
-                                <span className="[font-size:130%] pt-1 align-middle text-gray-600 hover:bg-gray-300 select-none pl-1 pr-3">×</span>
-                            </div>
+                            <FindWidget />
                         </td>
                     </tr>
                     {state.records.length === 0 && <tr>
@@ -171,6 +170,27 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                 style={{ width: scrollbarWidth }}
                 onChange={() => { useMainStore.getState().setPaging({ visibleAreaTop: BigInt(Math.round(scrollbarRef.current!.value)) }) }} />}
     </>
+}
+
+const FindWidget = () => {
+    const searchTerm = useMainStore((state) => state.searchTerm)
+    const caseSensitive = useMainStore((state) => state.caseSensitive)
+    const wholeWord = useMainStore((state) => state.wholeWord)
+    const regex = useMainStore((state) => state.regex)
+    const setViewerQuery = useMainStore((state) => state.setViewerQuery)
+
+    return <div className="inline-block pl-1 pt-1 bg-gray-200 shadow-md whitespace-nowrap sticky right-3">
+        <input className="mr-1" placeholder="Find" value={searchTerm} onChange={(ev) => setViewerQuery({ searchTerm: ev.currentTarget.value })} />
+        <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setViewerQuery({ caseSensitive: !caseSensitive })}>
+            <svg className="[width:1em] [height:1em]"><use xlinkHref={`${codicon}#case-sensitive`} /></svg>
+        </span>
+        <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={wholeWord ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setViewerQuery({ wholeWord: !wholeWord })}>
+            <svg className="[width:1em] [height:1em]"><use xlinkHref={`${codicon}#whole-word`} /></svg>
+        </span>
+        <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={regex ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setViewerQuery({ regex: !regex })}>
+            <svg className="[width:1em] [height:1em]"><use xlinkHref={`${codicon}#regex`} /></svg>
+        </span>
+    </div>
 }
 
 const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: remote.TableInfo, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly (number | null | undefined)[] }) => {
