@@ -51,6 +51,73 @@ const BigintMath = {
     min: (...args: bigint[]) => args.reduce((prev, curr) => curr < prev ? curr : prev),
 }
 
+const reloadTable = async (visibleAreaOnly: boolean) => {
+    let state = useMainStore.getState()
+    if (state.tableName === undefined) { return }
+    const { viewerStatement } = state
+    const { wr, type } = state.tableList.find(({ name }) => name === state.tableName) ?? {}
+    if (wr === undefined || type === undefined) { return }
+    const tableName = viewerStatement === "SELECT" ? state.tableName : `pragma_${state.pragma.toLowerCase()}`
+    const tableInfo = visibleAreaOnly ? useTableStore.getState().tableInfo : await remote.getTableInfo(tableName)
+    let searchQueryConstraints = ""
+    let searchTermParams: string[] = []
+    if (state.searchTerm) {
+        if (state.regex) {
+            searchQueryConstraints = tableInfo.map(({ name: column }) => `find_widget_regexp(${escapeSQLIdentifier(column)}, ?, ${state.wholeWord ? "1" : "0"}, ${state.caseSensitive ? "1" : "0"})`).join(" OR ")
+        } else {
+            if (state.wholeWord) {
+                if (state.caseSensitive) {
+                    searchQueryConstraints = tableInfo.map(({ name: column }) => `${escapeSQLIdentifier(column)} = ?`).join(" OR ")
+                } else {
+                    searchQueryConstraints = tableInfo.map(({ name: column }) => `UPPER(${escapeSQLIdentifier(column)}) = UPPER(?)`).join(" OR ")
+                }
+            } else {
+                if (state.caseSensitive) {
+                    searchQueryConstraints = tableInfo.map(({ name: column }) => `INSTR(${escapeSQLIdentifier(column)}, ?) > 0`).join(" OR ")
+                } else {
+                    searchQueryConstraints = tableInfo.map(({ name: column }) => `INSTR(UPPER(${escapeSQLIdentifier(column)}), UPPER(?)) > 0`).join(" OR ")
+                }
+            }
+        }
+        searchTermParams = tableInfo.map(() => state.searchTerm)
+    }
+    const orderBy = /* without rowid */!wr && type === "table" ?
+        "rowid" :
+        tableInfo.find(({ pk }) => /* primary key */ pk)?.name ?? tableInfo[0]!.name
+
+    if (!visibleAreaOnly) {
+        const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(tableName)}${searchQueryConstraints ? ` WHERE ${searchQueryConstraints}` : ""}`, searchTermParams, "r"))[0]!.count
+        if (typeof numRecords !== "bigint") { throw new Error(numRecords + "") }
+        await state.setPaging({ numRecords }, undefined, true)
+        state = useMainStore.getState() // state.paging will be updated
+    }
+
+    const records = await remote.query(`SELECT ${orderBy === "rowid" ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(tableName)} ${searchQueryConstraints ? ` WHERE ${searchQueryConstraints}` : ""} LIMIT ? OFFSET ?`, [...searchTermParams, state.paging.pageSize, state.paging.visibleAreaTop], "r") ?? []
+
+    if (visibleAreaOnly) {
+        useTableStore.setState({ records })
+    } else {
+        if (viewerStatement === "SELECT") {
+            // SELECT
+            const indexList = await remote.getIndexList(tableName)
+            useTableStore.setState({
+                tableInfo,
+                records,
+                autoIncrement: tableName === null ? false : await remote.hasTableAutoincrementColumn(tableName),
+                indexList,
+                indexInfo: await Promise.all(indexList.map((index) => remote.getIndexInfo(index.name))),
+            })
+        } else {
+            // PRAGMA
+            useTableStore.setState({
+                tableInfo,
+                records,
+                autoIncrement: false,
+            })
+        }
+    }
+}
+
 export const useMainStore = zustand<{
     reloadRequired: boolean
     paging: {
@@ -63,6 +130,10 @@ export const useMainStore = zustand<{
     pragma: string                        // set via setViewerQuery
     viewerConstraints: string             // set via setViewerQuery
     tableName: string | undefined         // set via setViewerQuery
+    searchTerm: string                    // set via setViewerQuery
+    caseSensitive: boolean                // set via setViewerQuery
+    wholeWord: boolean                    // set via setViewerQuery
+    regex: boolean                        // set via setViewerQuery
     tableList: remote.TableListItem[]
     pragmaList: string[]
     scrollerRef: { current: HTMLDivElement | null }
@@ -72,11 +143,15 @@ export const useMainStore = zustand<{
         pragma?: string
         tableName?: string
         viewerConstraints?: string
+        searchTerm?: string
+        caseSensitive?: boolean
+        wholeWord?: boolean
+        regex?: boolean
     }) => Promise<void>,
     requireReloading: () => void
     rerender: () => void,
     getPageMax: () => bigint
-    setPaging: (opts: { visibleAreaTop?: bigint, numRecords?: bigint, pageSize?: bigint }, preserveEditorState?: true) => Promise<void>
+    setPaging: (opts: { visibleAreaTop?: bigint, numRecords?: bigint, pageSize?: bigint }, preserveEditorState?: true, withoutTableReloading?: true) => Promise<void>
     reloadAllTables: (opts: editor.OnWriteOptions) => Promise<void>
     reloadCurrentTable: () => Promise<void>
     reloadVisibleArea: () => Promise<void>
@@ -95,20 +170,24 @@ export const useMainStore = zustand<{
         viewerStatement: "SELECT",
         pragma: "analysis_limit",
         viewerConstraints: "",
+        searchTerm: "",
         tableList: [],
         pragmaList: [],
         scrollerRef: { current: null },
+        caseSensitive: false,
+        wholeWord: false,
+        regex: false,
         _rerender: {},
         setViewerQuery: async (opts) => {
             set(opts)
             remote.setState("tableName", get().tableName)
-            if (opts.viewerStatement !== undefined || opts.tableName !== undefined || opts.viewerConstraints !== undefined) {  // TODO: this block should be located after reloadCurrentTable()
+            if (opts.viewerStatement !== undefined || opts.tableName !== undefined || opts.viewerConstraints !== undefined || opts.searchTerm !== undefined || opts.caseSensitive !== undefined || opts.wholeWord !== undefined || opts.regex !== undefined) {  // TODO: this block should be located after reloadCurrentTable()
                 await editor.useEditorStore.getState().switchTable(opts.viewerStatement === "PRAGMA" ? undefined : get().tableName)
             }
             await get().reloadCurrentTable()
         },
         requireReloading: () => { set({ reloadRequired: true }) },
-        setPaging: async (opts, preserveEditorState) => {
+        setPaging: async (opts, preserveEditorState, withoutTableReloading) => {
             const paging = { ...get().paging, ...opts }
             if (deepEqual(get().paging, paging)) { return }
 
@@ -116,7 +195,9 @@ export const useMainStore = zustand<{
             if (!preserveEditorState) { editor.useEditorStore.getState().clearInputs() }
             paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.pageSize, paging.visibleAreaTop))
             set({ paging })
-            await get().reloadVisibleArea()
+            if (!withoutTableReloading) {
+                await get().reloadVisibleArea()
+            }
         },
         rerender: () => set({ _rerender: {} }),
         addErrorMessage: (value: string) => set((s) => ({ errorMessage: s.errorMessage + value + "\n" })),
@@ -154,62 +235,14 @@ export const useMainStore = zustand<{
             }).catch(console.error))
             await Promise.all(handles)
         },
-        reloadCurrentTable: async () => {
-            let state = get()
-            if (state.tableName === undefined) { return }
-            const { wr, type } = state.tableList.find(({ name }) => name === state.tableName) ?? {}
-            if (wr === undefined || type === undefined) { return }
-
-            // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
-            if (state.viewerStatement === "SELECT") {
-                const records = await remote.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r")
-                const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints}`, [], "r"))[0]!.count
-                if (typeof numRecords !== "bigint") { throw new Error(numRecords + "") }
-                await get().setPaging({ numRecords })
-                state = get() // state.paging will be updated
-                if (state.tableName === undefined) { return }
-                const indexList = await remote.getIndexList(state.tableName)
-                useTableStore.setState({
-                    tableInfo: await remote.getTableInfo(state.tableName),
-                    indexList,
-                    indexInfo: await Promise.all(indexList.map((index) => remote.getIndexInfo(index.name))),
-                    autoIncrement: state.tableName === null ? false : await remote.hasTableAutoincrementColumn(state.tableName),
-                    records,
-                })
-            } else {
-                const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM pragma_${state.pragma.toLowerCase()}`, [], "r"))[0]!.count
-                if (typeof numRecords !== "bigint") { throw new Error(numRecords + "") }
-                await get().setPaging({ numRecords })
-                state = get() // state.paging will be updated
-                if (state.tableName === undefined) { return }
-                useTableStore.setState({
-                    tableInfo: await remote.getTableInfo(`pragma_${state.pragma.toLowerCase()}`),
-                    autoIncrement: false,
-                    records: (await remote.query(`SELECT * FROM pragma_${state.pragma.toLowerCase()} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r")) ?? [],
-                })
-            }
-        },
-        reloadVisibleArea: async () => {
-            let state = get()
-            if (state.tableName === undefined) { return }
-            const { wr, type } = state.tableList.find(({ name }) => name === state.tableName) ?? {}
-            if (wr === undefined || type === undefined) { return }
-            // `AS rowid` is required for tables with a primary key because rowid is an alias of the primary key in that case.
-            if (state.viewerStatement === "SELECT") {
-                useTableStore.setState({
-                    records: await remote.query(`SELECT ${(wr || type !== "table") ? "" : "rowid AS rowid, "}* FROM ${escapeSQLIdentifier(state.tableName)} ${state.viewerConstraints} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r"),
-                })
-            } else {
-                useTableStore.setState({
-                    records: (await remote.query(`SELECT * FROM pragma_${state.pragma.toLowerCase()} LIMIT ? OFFSET ?`, [state.paging.pageSize, state.paging.visibleAreaTop], "r")) ?? [],
-                })
-            }
-        },
+        reloadCurrentTable: async () => { await reloadTable(false) },
+        reloadVisibleArea: async () => { await reloadTable(true) },
     }
 })
 
 const App = () => {
-    const state = useMainStore()
+    const state = useMainStore(({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, viewerConstraints, pragma, pragmaList }) =>
+        ({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, viewerConstraints, pragma, pragmaList }))
 
     useEffect(() => {
         const handler = ({ data }: remote.Message) => {
@@ -355,10 +388,11 @@ const App = () => {
                     {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
                     {" "}
                 </>}
+                {state.viewerStatement === "PRAGMA" && <Select className="m-2" value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
             </div>
             <div className="flex-1">
-                {state.viewerStatement === "SELECT" && <input value={state.viewerConstraints} onBlur={(ev) => { state.setViewerQuery({ viewerConstraints: ev.currentTarget.value }) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" className="w-full" />}
-                {state.viewerStatement === "PRAGMA" && <Select value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
+                {/* {state.viewerStatement === "SELECT" && <input value={state.viewerConstraints} onBlur={(ev) => { state.setViewerQuery({ viewerConstraints: ev.currentTarget.value }) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" className="w-full" />} */}
+                <input type="button" value="Find" />
             </div>
         </h2>
         {/* <div className="[padding-left:var(--page-padding)] [padding-right:var(--page-padding)] float-right z-50">

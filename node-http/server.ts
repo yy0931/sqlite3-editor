@@ -12,9 +12,9 @@ const readWriteConnection = sqlite3("../samples/employees_db-full-1.0.6.db")
 readonlyConnection.defaultSafeIntegers()
 readWriteConnection.defaultSafeIntegers()
 
-const regexp = (a: string, b: string) => new RegExp(a).test(b) ? 1n : 0n
-readonlyConnection.function("regexp", { deterministic: true, varargs: false, safeIntegers: true }, regexp)
-readWriteConnection.function("regexp", { deterministic: true, varargs: false, safeIntegers: true }, regexp)
+const find_widget_regexp = (text: string, pattern: string, wholeWord: 0n | 1n, caseSensitive: 0n | 1n) => new RegExp(wholeWord ? `\\b(?:${pattern})\\b` : pattern, caseSensitive ? "" : "i").test(text) ? 1n : 0n
+readonlyConnection.function("find_widget_regexp", { deterministic: true, varargs: false, safeIntegers: true }, find_widget_regexp)
+readWriteConnection.function("find_widget_regexp", { deterministic: true, varargs: false, safeIntegers: true }, find_widget_regexp)
 
 const state: Record<string, unknown> = {}
 

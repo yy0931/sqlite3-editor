@@ -9,16 +9,16 @@ import urllib.parse
 from umsgpack import pack, unpack
 
 
-def regexp(expr: str, item: str):
-    return re.match(expr, item) is not None
+def find_widget_regexp(text: str, pattern: str, whole_word: int, case_sensitive: int):
+    return 0 if re.match(pattern, "\\b(?:{pattern})\\b" if whole_word else text, 0 if case_sensitive else re.RegexFlag.I) is None else 1
 
 
 class Server:
     def __init__(self, database_filepath, request_body_filepath, response_body_filepath, cwd):
         self.readonly_connection = sqlite3.connect("file:" + urllib.parse.quote(database_filepath) + "?mode=ro", uri=True)
         self.readwrite_connection = sqlite3.connect(database_filepath)
-        self.readonly_connection.create_function("regexp", 2, regexp)
-        self.readwrite_connection.create_function("regexp", 2, regexp)
+        self.readonly_connection.create_function("find_widget_regexp", 4, find_widget_regexp, deterministic=True)
+        self.readwrite_connection.create_function("find_widget_regexp", 4, find_widget_regexp, deterministic=True)
         self.request_body_filepath = request_body_filepath
         self.response_body_filepath = response_body_filepath
         self.cwd = cwd
