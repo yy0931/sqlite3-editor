@@ -128,7 +128,6 @@ export const useMainStore = zustand<{
     errorMessage: string
     viewerStatement: "SELECT" | "PRAGMA"  // set via setViewerQuery
     pragma: string                        // set via setViewerQuery
-    viewerConstraints: string             // set via setViewerQuery
     tableName: string | undefined         // set via setViewerQuery
     searchTerm: string                    // set via setViewerQuery
     caseSensitive: boolean                // set via setViewerQuery
@@ -142,7 +141,6 @@ export const useMainStore = zustand<{
         viewerStatement?: "SELECT" | "PRAGMA"
         pragma?: string
         tableName?: string
-        viewerConstraints?: string
         searchTerm?: string
         caseSensitive?: boolean
         wholeWord?: boolean
@@ -169,7 +167,6 @@ export const useMainStore = zustand<{
         errorMessage: "",
         viewerStatement: "SELECT",
         pragma: "analysis_limit",
-        viewerConstraints: "",
         searchTerm: "",
         tableList: [],
         pragmaList: [],
@@ -181,7 +178,7 @@ export const useMainStore = zustand<{
         setViewerQuery: async (opts) => {
             set(opts)
             remote.setState("tableName", get().tableName)
-            if (opts.viewerStatement !== undefined || opts.tableName !== undefined || opts.viewerConstraints !== undefined || opts.searchTerm !== undefined || opts.caseSensitive !== undefined || opts.wholeWord !== undefined || opts.regex !== undefined) {  // TODO: this block should be located after reloadCurrentTable()
+            if (opts.viewerStatement !== undefined || opts.tableName !== undefined || opts.searchTerm !== undefined || opts.caseSensitive !== undefined || opts.wholeWord !== undefined || opts.regex !== undefined) {  // TODO: this block should be located after reloadCurrentTable()
                 await editor.useEditorStore.getState().switchTable(opts.viewerStatement === "PRAGMA" ? undefined : get().tableName)
             }
             await get().reloadCurrentTable()
@@ -241,8 +238,8 @@ export const useMainStore = zustand<{
 })
 
 const App = () => {
-    const state = useMainStore(({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, viewerConstraints, pragma, pragmaList }) =>
-        ({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, viewerConstraints, pragma, pragmaList }))
+    const state = useMainStore(({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList }) =>
+        ({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList }))
 
     useEffect(() => {
         const handler = ({ data }: remote.Message) => {
@@ -389,10 +386,6 @@ const App = () => {
                     {" "}
                 </>}
                 {state.viewerStatement === "PRAGMA" && <Select className="m-2" value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
-            </div>
-            <div className="flex-1">
-                {/* {state.viewerStatement === "SELECT" && <input value={state.viewerConstraints} onBlur={(ev) => { state.setViewerQuery({ viewerConstraints: ev.currentTarget.value }) }} placeholder={"WHERE <column> = <value> ORDER BY <column> ..."} autocomplete="off" className="w-full" />} */}
-                <input type="button" value="Find" />
             </div>
         </h2>
         {/* <div className="[padding-left:var(--page-padding)] [padding-right:var(--page-padding)] float-right z-50">
