@@ -115,5 +115,13 @@ export const getIndexList = (tableName: string) =>
 export const getTableInfo = (tableName: string) =>
     query(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r") as Promise<TableInfo>
 
-export const getTableList = () =>
-    query("PRAGMA table_list", [], "r") as Promise<TableListItem[]>
+export const getTableList = async () => {
+    return (await query("PRAGMA table_list", [], "r") as TableListItem[])
+        // https://www.sqlite.org/schematab.html#alternative_names
+        .filter(({ name }) => !["sqlite_schema", "sqlite_temp_schema"].includes(name))
+}
+
+export const getTableSchema = async (tableName: string) => {
+    // TODO: view
+    return (await query(`SELECT sql FROM sqlite_schema WHERE type = 'TABLE' AND name = ?`, [tableName], "r"))[0]?.sql as string | undefined
+}

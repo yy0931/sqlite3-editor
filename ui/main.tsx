@@ -389,11 +389,11 @@ const App = () => {
                     {" "}
                 </>}
                 {state.viewerStatement === "PRAGMA" && <Select className="m-2" value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
+                <span className="align-middle hover:bg-gray-300 select-none [padding-right:3px] [padding-left:3px] [border-radius:1px] inline-block cursor-pointer" title="schema">
+                    <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#ellipsis" /></svg>
+                </span>
             </div>
         </h2>
-        {/* <div className="[padding-left:var(--page-padding)] [padding-right:var(--page-padding)] float-right z-50">
-            <input placeholder="Find" autocomplete="off" />
-        </div> */}
         <div className="relative w-max max-w-full [padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">
             <Table tableName={state.tableName} />
         </div>
