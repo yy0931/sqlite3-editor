@@ -95,7 +95,7 @@ const reloadTable = async (visibleAreaOnly: boolean) => {
         state = useMainStore.getState() // state.paging will be updated
     }
 
-    const records = await remote.query(`SELECT${/* without rowid */!wr && type === "table" ? " rowid AS rowid," : ""} * FROM ${escapeSQLIdentifier(tableName)}${findWidgetQuery} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.pageSize, state.paging.visibleAreaTop], "r") ?? []
+    const records = await remote.query(`SELECT${/* without rowid */!wr && type === "table" ? " rowid AS rowid," : ""} * FROM ${escapeSQLIdentifier(tableName)}${findWidgetQuery} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.visibleAreaSize, state.paging.visibleAreaTop], "r") ?? []
 
     if (visibleAreaOnly) {
         useTableStore.setState({ records })
@@ -128,7 +128,7 @@ export const useMainStore = zustand<{
     paging: {
         visibleAreaTop: bigint
         numRecords: bigint
-        pageSize: bigint
+        visibleAreaSize: bigint
     }
     errorMessage: string
     viewerStatement: "SELECT" | "PRAGMA"  // set via setViewerQuery
@@ -154,7 +154,7 @@ export const useMainStore = zustand<{
     requireReloading: () => void
     rerender: () => void,
     getPageMax: () => bigint
-    setPaging: (opts: { visibleAreaTop?: bigint, numRecords?: bigint, pageSize?: bigint }, preserveEditorState?: true, withoutTableReloading?: true) => Promise<void>
+    setPaging: (opts: { visibleAreaTop?: bigint, numRecords?: bigint, visibleAreaSize?: bigint }, preserveEditorState?: true, withoutTableReloading?: true) => Promise<void>
     reloadAllTables: (opts: editor.OnWriteOptions) => Promise<void>
     reloadCurrentTable: () => Promise<void>
     reloadVisibleArea: () => Promise<void>
@@ -162,12 +162,12 @@ export const useMainStore = zustand<{
 }>()((set, get) => {
     return {
         reloadRequired: false,
-        getPageMax: () => BigInt(Math.ceil(Number(get().paging.numRecords) / Number(get().paging.pageSize))),
+        getPageMax: () => BigInt(Math.ceil(Number(get().paging.numRecords) / Number(get().paging.visibleAreaSize))),
         tableName: undefined,
         paging: {
             visibleAreaTop: 0n,
             numRecords: 0n,
-            pageSize: 20n,
+            visibleAreaSize: 20n,
         },
         errorMessage: "",
         viewerStatement: "SELECT",
@@ -191,11 +191,13 @@ export const useMainStore = zustand<{
         requireReloading: () => { set({ reloadRequired: true }) },
         setPaging: async (opts, preserveEditorState, withoutTableReloading) => {
             const paging = { ...get().paging, ...opts }
+            paging.visibleAreaSize = BigintMath.max(1n, BigintMath.min(200n, paging.visibleAreaSize))
+            paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize, paging.visibleAreaTop))
             if (deepEqual(get().paging, paging)) { return }
 
             await editor.useEditorStore.getState().commitUpdate()
             if (!preserveEditorState) { editor.useEditorStore.getState().clearInputs() }
-            paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.pageSize, paging.visibleAreaTop))
+            paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize, paging.visibleAreaTop))
             set({ paging })
             if (!withoutTableReloading) {
                 await get().reloadVisibleArea()
@@ -213,7 +215,7 @@ export const useMainStore = zustand<{
                     .then(() => {
                         if (opts.scrollToBottom) {
                             const state = get()
-                            get().setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.pageSize, 0n) })
+                            get().setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.visibleAreaSize, 0n) })
                                 .then(() => {
                                     state.scrollerRef.current?.scrollBy({ behavior: "smooth", top: get().scrollerRef.current!.scrollHeight - get().scrollerRef.current!.offsetHeight })
                                 })
@@ -243,8 +245,8 @@ export const useMainStore = zustand<{
 })
 
 const App = () => {
-    const state = useMainStore(({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList }) =>
-        ({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList }))
+    const state = useMainStore(({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging }) =>
+        ({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging }))
 
     useEffect(() => {
         const handler = ({ data }: remote.Message) => {
@@ -291,9 +293,9 @@ const App = () => {
 
                     const moveSelectionDown = async () => {
                         if (rowNumber <= Number(paging.numRecords) - 2) {
-                            if (editorState.row === Number(paging.pageSize) - 1) {
+                            if (editorState.row === Number(paging.visibleAreaSize) - 1) {
                                 await setPaging({ visibleAreaTop: paging.visibleAreaTop + 1n }, true)
-                                editorState.update(editorState.tableName, editorState.column, Number(paging.pageSize) - 1)
+                                editorState.update(editorState.tableName, editorState.column, Number(paging.visibleAreaSize) - 1)
                             } else {
                                 editorState.update(editorState.tableName, editorState.column, editorState.row + 1)
                             }
@@ -384,7 +386,7 @@ const App = () => {
 
     return <>
         <LoadingIndicator />
-        <h2 className="[padding-top:var(--page-padding)] [border-top:0]">
+        <h2 className="[padding-top:var(--page-padding)]">
             <Select value={state.viewerStatement} onChange={(value) => { state.setViewerQuery({ viewerStatement: value }) }} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
             {state.viewerStatement === "SELECT" && <> * FROM
                 {" "}
@@ -405,6 +407,30 @@ const App = () => {
                 <pre className="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{state.errorMessage}</pre>
                 <Button value="Close" className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })} />
             </p>}
+            <div className="h-2 cursor-ns-resize select-none" onMouseDown={(ev) => {
+                ev.preventDefault()
+                document.body.classList.add("ns-resize")
+                let prev = ev.pageY
+                const onMouseMove = (ev: MouseEvent) => {
+                    const trHeight = 18  // TODO: measure the height of a tr
+                    let pageSizeDelta = 0n
+                    while (ev.pageY - prev > trHeight) {
+                        pageSizeDelta += 1n
+                        prev += trHeight
+                    }
+                    while (ev.pageY - prev < -trHeight) {
+                        pageSizeDelta -= 1n
+                        prev -= trHeight
+                    }
+                    state.setPaging({ visibleAreaSize: useMainStore.getState().paging.visibleAreaSize + pageSizeDelta })
+                        .catch(console.error)
+                }
+                window.addEventListener("mousemove", onMouseMove)
+                window.addEventListener("mouseup", () => {
+                    window.removeEventListener("mousemove", onMouseMove)
+                    document.body.classList.remove("ns-resize")
+                }, { once: true })
+            }}><hr className="mt-2 border-b-2 border-b-gray-400" /></div>
             <editor.Editor tableList={state.tableList} />
         </>}
     </>
