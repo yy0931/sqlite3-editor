@@ -125,9 +125,9 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                                             document.body.classList.remove("ew-resize")
                                         }, { once: true })
                                     } else if (tableName !== undefined) { // center
-                                        alterTable(tableName, name)
+                                        alterTable(tableName, name).catch(console.error)
                                     }
-                                })
+                                }).catch(console.error)
                             }}
                             onMouseLeave={(ev) => {
                                 ev.currentTarget.classList.remove("ew-resize")
@@ -162,7 +162,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                 value={visibleAreaTop}
                 className="h-full right-0 top-0 absolute"
                 style={{ width: scrollbarWidth }}
-                onChange={() => { useMainStore.getState().setPaging({ visibleAreaTop: BigInt(Math.round(scrollbarRef.current!.value)) }) }} />}
+                onChange={() => { useMainStore.getState().setPaging({ visibleAreaTop: BigInt(Math.round(scrollbarRef.current!.value)) }).catch(console.error) }} />}
     </>
 }
 
@@ -215,7 +215,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             onMouseDown={(ev) => {
                 useEditorStore.getState().commitUpdate().then(() => {
                     if (props.tableName !== undefined) { delete_(props.tableName, props.record, props.row).catch(console.error) }
-                })
+                }).catch(console.error)
             }}>{props.rowNumber}</td>
         {props.tableInfo.map(({ name }, i) => {
             const value = props.record[name] as remote.SQLite3Value
@@ -228,7 +228,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                     if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
                     editorState.commitUpdate().then(() => {
                         if (props.tableName !== undefined) { update(props.tableName, name, props.row) }
-                    })
+                    }).catch(console.error)
                 }}>
                 <pre className={"overflow-hidden text-ellipsis whitespace-nowrap [max-width:50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: type2color(typeof value) }}>
                     <span className="select-none">{input?.draftValue ?? renderValue(value)}</span>
