@@ -210,8 +210,8 @@ export const useEditorStore = zustand<State & {
                 tableName, tableInfo,
                 textareaValues: tableInfo.map(() => ""),
                 blobValues: tableInfo.map(() => null),
-                dataTypes: tableInfo.map(({ type, notnull }): EditorDataType => {
-                    if (notnull) {
+                dataTypes: tableInfo.map(({ type, notnull, dflt_value }): EditorDataType => {
+                    if (notnull && dflt_value === null) {
                         type = type.toLowerCase()
                         if (type === "real" || type === "int" || type === "integer") {
                             return "number"
