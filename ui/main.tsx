@@ -184,10 +184,10 @@ export const useMainStore = zustand<{
         setViewerQuery: async (opts) => {
             set(opts)
             await remote.setState("tableName", get().tableName)
-            if (opts.viewerStatement !== undefined || opts.tableName !== undefined || opts.searchTerm !== undefined || opts.caseSensitive !== undefined || opts.wholeWord !== undefined || opts.regex !== undefined) {  // TODO: this block should be located after reloadCurrentTable()
+            await get().reloadCurrentTable()
+            if (opts.viewerStatement !== undefined || opts.tableName !== undefined || opts.searchTerm !== undefined || opts.caseSensitive !== undefined || opts.wholeWord !== undefined || opts.regex !== undefined) {
                 await editor.useEditorStore.getState().switchTable(opts.viewerStatement === "PRAGMA" ? undefined : get().tableName)
             }
-            await get().reloadCurrentTable()
         },
         requireReloading: () => { set({ reloadRequired: true }) },
         setPaging: async (opts, preserveEditorState, withoutTableReloading) => {

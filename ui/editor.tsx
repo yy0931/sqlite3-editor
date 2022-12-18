@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, Ref, useState } from "preact/hooks"
+import { useEffect, useLayoutEffect, Ref, MutableRef, useState, useRef } from "preact/hooks"
 import zustand from "zustand"
 import produce from "immer"
 import type { JSXInternal } from "preact/src/jsx"
@@ -69,17 +69,36 @@ type State =
         }
     )
 
+const inferTypeFromInputAndColumnAffinity = (input: string, column: string): EditorDataType => {
+    const columnAffinity = useTableStore.getState().tableInfo.find(({ name }) => name === column)?.type.toUpperCase() ?? "ANY"
+    // https://www.sqlite.org/datatype3.html#determination_of_column_affinity
+    if (columnAffinity.includes("INT") || columnAffinity.includes("REAL") || columnAffinity.includes("FLOR") || columnAffinity.includes("DOUB")) {
+        return "number"
+    } else if (columnAffinity.includes("CHAR") || columnAffinity.includes("CLOB") || columnAffinity.includes("TEXT")) {
+        return "string"
+    } else {
+        return /^[+\-\d\.]/.test(input) ? "number" : "string"
+    }
+}
+
 let unmountInput: (() => void) | null = null
 const mountInput = () => {
     unmountInput?.()
     const state = useEditorStore.getState()
     if (state.statement !== "UPDATE") { return }
-    if (state.type === "number" || state.type === "string") {
+    if (state.type === "number" || state.type === "string" || state.type === "null") {
         const textarea = document.createElement("textarea")
+        textarea.style.resize = "none"
         textarea.style.color = type2color(state.type)
+        const unsubscribe = useEditorStore.subscribe((state) => {
+            if (state.statement === "UPDATE") {
+                textarea.style.color = type2color(state.type)
+            }
+        })
 
         unmountInput = () => {
             unmountInput = null
+            unsubscribe()
             useTableStore.setState({ input: null })
         }
 
@@ -89,7 +108,13 @@ const mountInput = () => {
         textarea.value = state.textareaValue
         textarea.addEventListener("input", (ev) => {
             textarea.classList.remove("single-click")
-            useEditorStore.setState({ textareaValue: textarea.value, isTextareaDirty: true })
+            const state = useEditorStore.getState()
+            if (state.statement !== "UPDATE") { return }
+            if (state.type === "null") {
+                useEditorStore.setState({ textareaValue: textarea.value, isTextareaDirty: true, type: inferTypeFromInputAndColumnAffinity(textarea.value, state.column) })
+            } else {
+                useEditorStore.setState({ textareaValue: textarea.value, isTextareaDirty: true })
+            }
         })
         textarea.addEventListener("mousedown", () => {
             textarea.classList.remove("single-click")
@@ -185,16 +210,20 @@ export const useEditorStore = zustand<State & {
                 tableName, tableInfo,
                 textareaValues: tableInfo.map(() => ""),
                 blobValues: tableInfo.map(() => null),
-                dataTypes: tableInfo.map(({ type }) => {
-                    type = type.toLowerCase()
-                    if (type === "real" || type === "int" || type === "integer") {
-                        return "number"
-                    } else if (type === "text") {
-                        return "string"
-                    } else if (type === "null" || type === "blob") {
-                        return type
+                dataTypes: tableInfo.map(({ type, notnull }): EditorDataType => {
+                    if (notnull) {
+                        type = type.toLowerCase()
+                        if (type === "real" || type === "int" || type === "integer") {
+                            return "number"
+                        } else if (type === "text") {
+                            return "string"
+                        } else if (type === "null" || type === "blob") {
+                            return type
+                        } else {
+                            return "string"
+                        }
                     } else {
-                        return "string"
+                        return "default"
                     }
                 }),
             })
@@ -211,17 +240,7 @@ export const useEditorStore = zustand<State & {
             if (constraintChoices.length === 0) { return }
             let type: EditorDataType
             if (value === null) {
-                const columnAffinity = useTableStore.getState().tableInfo.find(({ name }) => name === column)?.type.toUpperCase() ?? "ANY"
-                // https://www.sqlite.org/datatype3.html#determination_of_column_affinity
-                if (columnAffinity.includes("INT") || columnAffinity.includes("REAL") || columnAffinity.includes("FLOR") || columnAffinity.includes("DOUB")) {
-                    type = "number"
-                } else if (columnAffinity.includes("CHAR") || columnAffinity.includes("CLOB") || columnAffinity.includes("TEXT")) {
-                    type = "string"
-                } else if (columnAffinity.includes("BLOB")) { // or columnAffinity === ""
-                    type = "blob"
-                } else {
-                    type = "null"
-                }
+                type = "null"
             } else if (value instanceof Uint8Array) {
                 type = "blob"
             } else if (typeof value === "number" || typeof value === "bigint") {
@@ -398,14 +417,16 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                         return <li>
                             <div className="[margin-right:1em]">{name}</div>
                             <DataEditor
+                                column={name}
                                 type={state.dataTypes[i]!}
-                                rows={1}
+                                rows={2}
                                 className="w-full resize-y block"
                                 style={{ color: type2color(state.dataTypes[i]!) }}
                                 textareaValue={state.textareaValues[i]!}
                                 onTextareaValueChange={(value) => { useEditorStore.setState({ textareaValues: produce(state.textareaValues, (d) => { d[i] = value }) }) }}
                                 blobValue={state.blobValues[i]!}
                                 onBlobValueChange={(value) => { useEditorStore.setState({ blobValues: produce(state.blobValues, (d) => { d[i] = value }) }) }}
+                                onTypeChange={(type) => { useEditorStore.setState({ dataTypes: produce(state.dataTypes, (d) => { d[i] = type }) }) }}
                                 tabIndex={0} />
                             {"AS "}<DataTypeInput value={state.dataTypes[i]!} onChange={(value) => { useEditorStore.setState({ dataTypes: produce(state.dataTypes, (d) => { d[i] = value }) }) }} />
                         </li>
@@ -425,15 +446,17 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             </>
             editor = <>
                 <DataEditor
+                    column={state.column}
                     rows={5}
                     type={state.type}
                     textareaValue={state.textareaValue}
                     onTextareaValueChange={(value) => useEditorStore.setState({ textareaValue: value, isTextareaDirty: true })}
                     blobValue={state.blobValue}
                     onBlobValueChange={(value) => useEditorStore.setState({ blobValue: value })}
+                    onTypeChange={(type) => { useEditorStore.setState({ type }) }}
                 />
                 {"AS "}
-                <DataTypeInput value={state.type} onChange={(value) => { useEditorStore.setState({ type: value }); mountInput() }} />
+                <DataTypeInput value={state.type} onChange={(type) => { useEditorStore.setState({ type }); mountInput() }} />
                 <Commit onClick={() => state.commitUpdate(undefined, true)} />
             </>
             break
@@ -485,45 +508,51 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
     </>
 }
 
-const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorDataType) => void }) =>
-    <Select className="mb-2" value={props.value} onChange={props.onChange} tabIndex={-1} options={{ string: { text: "TEXT" }, number: { text: "NUMERIC" }, null: { text: "NULL" }, blob: { text: "BLOB" }, default: { text: "DEFAULT" } }} />
+const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorDataType) => void }) => {
+    const options = { string: "TEXT", number: "NUMERIC", null: "NULL", blob: "BLOB", default: "DEFAULT" }
+    return <>{
+        Object.entries(options)
+            .map(([k, v]) => <Checkbox text={v} checked={props.value === k} onChange={(value) => value ? props.onChange(k as keyof typeof options) : props.onChange("default")} />)
+    }</>
+}
 
 type EditorDataType = "string" | "number" | "null" | "blob" | "default"
 
-const DataEditor = (props: { rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, className?: string }) => {
+const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, className?: string, onTypeChange: (type: EditorDataType) => void }) => {
     const [filename, setFilename] = useState("")
-    if (props.type === "default") {
-        return <div>
-            <input disabled={true} className={"[margin-right:10px] " + (props.className ?? "")} />
-        </div>
-    }
     if (props.type === "blob") {
         return <div>
-            <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} className={"[margin-right:10px] " + (props.className ?? "")} />
+            <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} className={"w-40 inline [margin-right:10px] " + (props.className ?? "")} />
             <input value={filename} placeholder={"tmp.dat"} onInput={(ev) => setFilename(ev.currentTarget.value)} />
             <Button value="Import" onClick={() => remote.import_(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
             <Button value="Export" onClick={() => remote.export_(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
         </div>
     }
-    if (props.type === "string") {
-        return <textarea
-            ref={props.ref}
-            rows={props.rows}
-            autocomplete="off"
-            style={{ color: type2color(props.type), resize: props.type === "string" ? "vertical" : "none", ...props.style }}
-            className={props.className}
-            value={props.textareaValue}
-            onInput={(ev) => props.onTextareaValueChange(ev.currentTarget.value)}
-            tabIndex={props.tabIndex} />
-    }
-    return <input
-        ref={props.ref}
+
+    const ref = useRef() as Ref<HTMLTextAreaElement>
+    useLayoutEffect(() => {
+        ref.current!.style.height = ""  // Reset the height of the textarea
+    }, [props.type])
+    useEffect(() => {
+        if (props.ref) {
+            (props.ref as MutableRef<HTMLTextAreaElement>).current = ref.current!
+        }
+    }, [ref.current])
+
+    return <textarea
+        placeholder={props.type === "string" ? "<empty string>" : props.type === "number" ? "0" : "value"}
+        ref={ref}
+        rows={props.type === "string" ? props.rows : 1}
         autocomplete="off"
-        className={"block " + (props.className ?? "")}
-        style={{ color: type2color(props.type) }}
+        style={{ color: type2color(props.type), resize: props.type === "string" ? "vertical" : "none", ...props.style }}
+        className={props.className}
         value={props.type === "null" ? "NULL" : props.textareaValue}
-        onInput={(ev) => props.onTextareaValueChange(ev.currentTarget.value)}
-        disabled={props.type === "null"}
+        onInput={(ev) => {
+            if (props.type === "null" || props.type === "default") {
+                props.onTypeChange(inferTypeFromInputAndColumnAffinity(ev.currentTarget.value, props.column))
+            }
+            props.onTextareaValueChange(ev.currentTarget.value)
+        }}
         tabIndex={props.tabIndex} />
 }
 
@@ -531,7 +560,9 @@ const parseTextareaValue = (value: string, blobValue: Uint8Array | null, type: E
     if (type === "null") {
         return null
     } else if (type === "number") {
-        if (/^[+\-]?\d+$/.test(value.trim()) && -(2n ** 64n / 2n) <= BigInt(value) && BigInt(value) <= 2n ** 64n / 2n - 1n) {
+        if (value.trim() === "") {
+            return 0n
+        } else if (/^[+\-]?\d+$/.test(value.trim()) && -(2n ** 64n / 2n) <= BigInt(value) && BigInt(value) <= 2n ** 64n / 2n - 1n) {
             return BigInt(value)  // i64
         } else {
             return +value

@@ -106,12 +106,12 @@ textarea {
     outline: 0;
     background-color: var(--input-background);
     color: var(--input-foreground);
-    padding: 0.5em;
     width: 100%;
     resize: vertical;
     display: block;
-    min-height: 2em;
-    max-height: 30em;
+    font-family: inherit;
+    font-size: inherit;
+    padding-left: 0.5em;
 
     &:focus {
         outline: 2px solid rgb(142, 197, 226);
