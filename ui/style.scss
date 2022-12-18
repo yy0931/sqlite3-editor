@@ -42,10 +42,8 @@ body {
 h2 {
     font-weight: normal;
     margin-bottom: 5px;
-    padding-top: 6px;
     padding-bottom: 6px;
     font-size: inherit;
-    border-top: 2px solid rgba(128, 128, 128, 0.147);
     padding-left: var(--page-padding);
     padding-right: var(--page-padding);
 }
@@ -126,6 +124,11 @@ textarea {
 .ew-resize,
 .ew-resize * {
     cursor: ew-resize !important;
+}
+
+.ns-resize,
+.ns-resize * {
+    cursor: ns-resize !important;
 }
 
 table.viewer {

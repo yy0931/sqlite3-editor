@@ -57,7 +57,7 @@ export const useTableStore = zustand<{
 export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const alterTable = useEditorStore((state) => state.alterTable)
     const visibleAreaTop = useMainStore((state) => Number(state.paging.visibleAreaTop))
-    const pageSize = useMainStore((state) => Number(state.paging.pageSize))
+    const pageSize = useMainStore((state) => Number(state.paging.visibleAreaSize))
     const numRecords = useMainStore((state) => Number(state.paging.numRecords))
 
     const state = useTableStore()
