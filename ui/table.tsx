@@ -3,15 +3,16 @@ import { useMainStore } from "./main"
 import * as remote from "./remote"
 import { useEditorStore } from "./editor"
 import zustand from "zustand"
-import type { ReadonlyDeep } from "type-fest"
 import produce from "immer"
 import { scrollbarWidth, ScrollbarY } from "./scrollbar"
+import { persistentRef } from "./components"
 
 export const useTableStore = zustand<{
     tableInfo: remote.TableInfo
     indexList: remote.IndexList
     /** index_info for each index in indexList */
     indexInfo: remote.IndexInfo[]
+    tableSchema: string | undefined
     autoIncrement: boolean
     records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[]
     input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null
@@ -24,6 +25,7 @@ export const useTableStore = zustand<{
     tableInfo: [],
     indexList: [],
     indexInfo: [],
+    tableSchema: undefined,
     autoIncrement: false,
     records: [],
     input: null,
@@ -51,17 +53,6 @@ export const useTableStore = zustand<{
         return [...new Set(constraintChoices.map((columns) => JSON.stringify(columns.sort((a, b) => a.localeCompare(b)))))].map((columns) => JSON.parse(columns))  // Remove duplicates
     },
 }))
-
-/** useRef() but persists the value in the server. */
-const persistentRef = <T extends unknown>(key: string, defaultValue: T) => {
-    return useState(() => {
-        let value: ReadonlyDeep<T> = remote.getState(key) ?? defaultValue as ReadonlyDeep<T>
-        return {
-            get current(): ReadonlyDeep<T> { return value },
-            set current(newValue: ReadonlyDeep<T>) { remote.setState(key, value = newValue) },
-        }
-    })[0]
-}
 
 export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const alterTable = useEditorStore((state) => state.alterTable)

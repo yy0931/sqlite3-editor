@@ -6,7 +6,7 @@ import * as editor from "./editor"
 import deepEqual from "fast-deep-equal"
 import { useEffect, useRef, Ref } from "preact/hooks"
 import * as remote from "./remote"
-import { Button, Select } from "./components"
+import { Button, persistentUseState, Select } from "./components"
 import { escapeSQLIdentifier, Table, useTableStore } from "./table"
 import zustand from "zustand"
 import "./scrollbar"
@@ -109,6 +109,7 @@ const reloadTable = async (visibleAreaOnly: boolean) => {
                 autoIncrement: tableName === null ? false : await remote.hasTableAutoincrementColumn(tableName),
                 indexList,
                 indexInfo: await Promise.all(indexList.map((index) => remote.getIndexInfo(index.name))),
+                tableSchema: await remote.getTableSchema(tableName),
             })
         } else {
             // PRAGMA
@@ -116,6 +117,7 @@ const reloadTable = async (visibleAreaOnly: boolean) => {
                 tableInfo,
                 records,
                 autoIncrement: false,
+                tableSchema: await remote.getTableSchema(tableName),
             })
         }
     }
@@ -378,30 +380,44 @@ const App = () => {
         return () => { clearInterval(timer) }
     }, [])
 
+    const [isSettingsViewOpen, setIsSettingsViewOpen] = persistentUseState("isSettingsViewOpen", false)
+
     return <>
         <LoadingIndicator />
-        <h2 className="flex [padding-top:var(--page-padding)] [border-top:0]">
-            <div className="whitespace-pre">
-                <Select value={state.viewerStatement} onChange={(value) => { state.setViewerQuery({ viewerStatement: value }) }} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
-                {state.viewerStatement === "SELECT" && <> * FROM
-                    {" "}
-                    {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
-                    {" "}
-                </>}
-                {state.viewerStatement === "PRAGMA" && <Select className="m-2" value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
-                <span className="align-middle hover:bg-gray-300 select-none [padding-right:3px] [padding-left:3px] [border-radius:1px] inline-block cursor-pointer" title="schema">
-                    <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#ellipsis" /></svg>
-                </span>
-            </div>
+        <h2 className="[padding-top:var(--page-padding)] [border-top:0]">
+            <Select value={state.viewerStatement} onChange={(value) => { state.setViewerQuery({ viewerStatement: value }) }} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
+            {state.viewerStatement === "SELECT" && <> * FROM
+                {" "}
+                {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
+                {" "}
+            </>}
+            {state.viewerStatement === "PRAGMA" && <Select className="m-2" value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
+            <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none [padding-right:3px] [padding-left:3px] [border-radius:1px] inline-block cursor-pointer" title="schema" onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>
+                <svg className="inline [width:1em] [height:1em]"><use xlinkHref={isSettingsViewOpen ? "#close" : "#settings-gear"} /></svg>
+            </span>
         </h2>
-        <div className="relative w-max max-w-full [padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">
-            <Table tableName={state.tableName} />
-        </div>
-        {state.errorMessage && <p className="text-white [background:rgb(14,72,117)] [padding:10px]">
-            <pre className="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{state.errorMessage}</pre>
-            <Button value="Close" className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })} />
-        </p>}
-        <editor.Editor tableList={state.tableList} />
+        {isSettingsViewOpen && <SettingsView />}
+        {!isSettingsViewOpen && <>
+            <div className="relative w-max max-w-full [padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">
+                <Table tableName={state.tableName} />
+            </div>
+            {state.errorMessage && <p className="text-white [background:rgb(14,72,117)] [padding:10px]">
+                <pre className="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{state.errorMessage}</pre>
+                <Button value="Close" className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })} />
+            </p>}
+            <editor.Editor tableList={state.tableList} />
+        </>}
+    </>
+}
+
+const SettingsView = () => {
+    const schema = useTableStore((state) => state.tableSchema)
+
+    return <>
+        <h2 className="font-bold">Schema</h2>
+        <div className="[padding-left:var(--page-padding)]"><pre className="[font-size:inherit] overflow-x-auto">{schema}</pre></div>
+        <h2 className="font-bold">Indexes</h2>
+        <div className="[padding-left:var(--page-padding)]">TODO</div>
     </>
 }
 

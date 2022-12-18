@@ -1,5 +1,7 @@
-import { useLayoutEffect, useRef, Ref } from "preact/hooks"
+import { useLayoutEffect, useRef, Ref, useState } from "preact/hooks"
 import type { JSXInternal } from "preact/src/jsx"
+import type { ReadonlyDeep } from "type-fest"
+import * as remote from "./remote"
 
 /** Typed version of `<select>` */
 export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, className?: string }) => {
@@ -26,4 +28,20 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
 
 export const Button = (props: { className?: string, disabled?: boolean, value?: string, style?: JSXInternal.CSSProperties, title?: string, onClick?: () => void }) => {
     return <input type="button" disabled={props.disabled} value={props.value} style={props.style} className={"border-0 outline-0 pl-2 pr-2 cursor-pointer [font-family:inherit] [background-color:var(--button-primary-background)] [color:var(--button-primary-foreground)] hover:[background-color:var(--button-primary-hover-background)] disabled:cursor-not-allowed disabled:[color:#737373] disabled:[background-color:#c1bbbb] " + (props.className ?? "")} onClick={props.onClick} title={props.title}></input>
+}
+
+/** useRef() but persists the value in the server. */
+export const persistentRef = <T extends unknown>(key: string, defaultValue: T) => {
+    return useState(() => {
+        let value: ReadonlyDeep<T> = remote.getState(key) ?? defaultValue as ReadonlyDeep<T>
+        return {
+            get current(): ReadonlyDeep<T> { return value },
+            set current(newValue: ReadonlyDeep<T>) { remote.setState(key, value = newValue) },
+        }
+    })[0]
+}
+
+export const persistentUseState = <T extends unknown>(key: string, defaultValue: T) => {
+    const [state, setState] = useState<ReadonlyDeep<T>>(remote.getState(key) ?? defaultValue as ReadonlyDeep<T>)
+    return [state, (value: T) => { remote.setState(key, value); setState(value as ReadonlyDeep<T>) }] as const
 }

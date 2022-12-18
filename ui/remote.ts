@@ -121,7 +121,5 @@ export const getTableList = async () => {
         .filter(({ name }) => !["sqlite_schema", "sqlite_temp_schema"].includes(name))
 }
 
-export const getTableSchema = async (tableName: string) => {
-    // TODO: view
-    return (await query(`SELECT sql FROM sqlite_schema WHERE type = 'TABLE' AND name = ?`, [tableName], "r"))[0]?.sql as string | undefined
-}
+export const getTableSchema = async (tableName: string) =>
+    (await query(`SELECT sql FROM sqlite_schema WHERE name = ?`, [tableName], "r"))[0]?.sql as string | undefined
