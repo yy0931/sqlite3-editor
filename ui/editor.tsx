@@ -338,7 +338,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                         case "DROP COLUMN": query += escapeSQLIdentifier(state.oldColumnName); break
                         case "ADD COLUMN": query += `${printColumnDef(state.columnDef)}`; break
                     }
-                    state.commit(query, [], { refreshTableList: true, selectTable: state.statement2 === "RENAME TO" ? state.newTableName : undefined })
+                    state.commit(query, [], { refreshTableList: true, selectTable: state.statement2 === "RENAME TO" ? state.newTableName : undefined }).catch(console.error)
                 }} />
             </>
             break
@@ -353,7 +353,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 <MultiColumnDefEditor value={state.columnDefs} onChange={(columnDefs) => useEditorStore.setState({ columnDefs })} strict={state.strict} />
                 <textarea autocomplete="off" className="[margin-top:10px] [height:20vh]" placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
                 <Commit disabled={!state.newTableName || state.columnDefs.length === 0} className="[margin-top:10px] [margin-bottom:10px]" onClick={() => {
-                    state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.newTableName })
+                    state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.newTableName }).catch(console.error)
                 }} />
             </>
             break
@@ -367,7 +367,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             </>
             editor = <>
                 <Commit onClick={() => {
-                    state.commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as remote.SQLite3Value)], {})
+                    state.commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as remote.SQLite3Value)], {}).catch(console.error)
                 }} />
             </>
             break
@@ -410,7 +410,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                     })}
                 </ul>
                 <Commit onClick={() => {
-                    state.commit(`INSERT ${buildQuery()}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true })
+                    state.commit(`INSERT ${buildQuery()}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true }).catch(console.error)
                 }} />
             </>
             break
@@ -454,12 +454,12 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         <h2>
             <Select value={state.statement} className="primary [padding-left:15px] [padding-right:15px]" onChange={async (value) => {
                 switch (value) {
-                    case "ALTER TABLE": state.alterTable(state.tableName!, undefined); break
+                    case "ALTER TABLE": await state.alterTable(state.tableName!, undefined); break
                     case "CREATE TABLE": state.createTable(state.tableName); break
                     case "DELETE": throw new Error()
                     case "DROP TABLE": state.dropTable(state.tableName!); break
                     case "DROP VIEW": state.dropView(state.tableName!); break
-                    case "INSERT": state.insert(state.tableName!); break
+                    case "INSERT": await state.insert(state.tableName!); break
                     case "UPDATE": throw new Error()
                     case "custom": state.custom(state.tableName); break
                     default: const _: never = value

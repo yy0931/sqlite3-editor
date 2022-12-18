@@ -36,12 +36,15 @@ export const persistentRef = <T extends unknown>(key: string, defaultValue: T) =
         let value: ReadonlyDeep<T> = remote.getState(key) ?? defaultValue as ReadonlyDeep<T>
         return {
             get current(): ReadonlyDeep<T> { return value },
-            set current(newValue: ReadonlyDeep<T>) { remote.setState(key, value = newValue) },
+            set current(newValue: ReadonlyDeep<T>) { remote.setState(key, value = newValue).catch(console.error) },
         }
     })[0]
 }
 
 export const persistentUseState = <T extends unknown>(key: string, defaultValue: T) => {
     const [state, setState] = useState<ReadonlyDeep<T>>(remote.getState(key) ?? defaultValue as ReadonlyDeep<T>)
-    return [state, (value: T) => { remote.setState(key, value); setState(value as ReadonlyDeep<T>) }] as const
+    return [state, (value: T) => {
+        remote.setState(key, value).catch(console.error)
+        setState(value as ReadonlyDeep<T>)
+    }] as const
 }

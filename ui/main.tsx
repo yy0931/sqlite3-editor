@@ -141,7 +141,7 @@ export const useMainStore = zustand<{
     tableList: remote.TableListItem[]
     pragmaList: string[]
     scrollerRef: { current: HTMLDivElement | null }
-    _rerender: {},
+    _rerender: Record<string, never>,
     setViewerQuery: (opts: {
         viewerStatement?: "SELECT" | "PRAGMA"
         pragma?: string
@@ -182,7 +182,7 @@ export const useMainStore = zustand<{
         _rerender: {},
         setViewerQuery: async (opts) => {
             set(opts)
-            remote.setState("tableName", get().tableName)
+            await remote.setState("tableName", get().tableName)
             if (opts.viewerStatement !== undefined || opts.tableName !== undefined || opts.searchTerm !== undefined || opts.caseSensitive !== undefined || opts.wholeWord !== undefined || opts.regex !== undefined) {  // TODO: this block should be located after reloadCurrentTable()
                 await editor.useEditorStore.getState().switchTable(opts.viewerStatement === "PRAGMA" ? undefined : get().tableName)
             }
@@ -195,8 +195,9 @@ export const useMainStore = zustand<{
             paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize, paging.visibleAreaTop))
             if (deepEqual(get().paging, paging)) { return }
 
+            await remote.setState("visibleAreaSize", Number(paging.visibleAreaSize))
             await editor.useEditorStore.getState().commitUpdate()
-            if (!preserveEditorState) { editor.useEditorStore.getState().clearInputs() }
+            if (!preserveEditorState) { await editor.useEditorStore.getState().clearInputs() }
             paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize, paging.visibleAreaTop))
             set({ paging })
             if (!withoutTableReloading) {
@@ -219,6 +220,7 @@ export const useMainStore = zustand<{
                                 .then(() => {
                                     state.scrollerRef.current?.scrollBy({ behavior: "smooth", top: get().scrollerRef.current!.scrollHeight - get().scrollerRef.current!.offsetHeight })
                                 })
+                                .catch(console.error)
                         }
                     })
                     .catch(console.error))
@@ -235,7 +237,7 @@ export const useMainStore = zustand<{
                     newTableName = newTableList[0]?.name
                 }
                 set({ tableList: newTableList })
-                get().setViewerQuery({ tableName: newTableName })
+                get().setViewerQuery({ tableName: newTableName }).catch(console.error)
             }).catch(console.error))
             await Promise.all(handles)
         },
@@ -324,13 +326,13 @@ const App = () => {
                     switch (ev.code) {
                         case "Escape":
                             if (singleClick) {
-                                editorState.clearInputs()
+                                await editorState.clearInputs()
                             } else {
                                 editorState.update(editorState.tableName, editorState.column, editorState.row)
                             }
                             break
                         case "ArrowUp":
-                            if (!ev.ctrlKey && !ev.shiftKey && !ev.altKey && singleClick) { moveSelectionUp() }
+                            if (!ev.ctrlKey && !ev.shiftKey && !ev.altKey && singleClick) { await moveSelectionUp() }
                             break
                         case "ArrowDown":
                             if (!ev.ctrlKey && !ev.shiftKey && !ev.altKey && singleClick) { await moveSelectionDown() }
@@ -364,7 +366,7 @@ const App = () => {
                     }
                 } else if (editorState.statement === "DELETE") {
                     switch (ev.code) {
-                        case "Escape": editorState.clearInputs(); break
+                        case "Escape": await editorState.clearInputs(); break
                     }
                 }
             } catch (err) {
@@ -377,6 +379,7 @@ const App = () => {
         const timer = setInterval(() => {
             if (useMainStore.getState().reloadRequired) {
                 useMainStore.getState().reloadAllTables({ refreshTableList: true })
+                    .catch(console.error)
             }
         }, 1000)
         return () => { clearInterval(timer) }
@@ -387,10 +390,10 @@ const App = () => {
     return <>
         <LoadingIndicator />
         <h2 className="[padding-top:var(--page-padding)]">
-            <Select value={state.viewerStatement} onChange={(value) => { state.setViewerQuery({ viewerStatement: value }) }} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
+            <Select value={state.viewerStatement} onChange={(value) => { state.setViewerQuery({ viewerStatement: value }).catch(console.error) }} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
             {state.viewerStatement === "SELECT" && <> * FROM
                 {" "}
-                {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
+                {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
                 {" "}
             </>}
             {state.viewerStatement === "PRAGMA" && <Select className="m-2" value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
@@ -450,16 +453,22 @@ const SettingsView = () => {
 (async () => {
     await remote.downloadState()
     const tableList = await remote.getTableList()
-    const restoredTableName = remote.getState<string>("tableName")
-    const tableName = restoredTableName && tableList.some(({ name }) => name === restoredTableName) ?
-        restoredTableName :
-        tableList[0]?.name
+    const tableName = (() => {
+        const restored = remote.getState<string>("tableName")
+        return restored && tableList.some(({ name }) => name === restored) ?
+            restored :
+            tableList[0]?.name
+    })()
     editor.useEditorStore.setState({ tableName })
     useMainStore.setState({
         tableList,
         pragmaList: (await remote.query("PRAGMA pragma_list", [], "r")).map(({ name }) => name as string),
     })
-    useMainStore.getState().setViewerQuery({ tableName })
+    await useMainStore.getState().setViewerQuery({ tableName })
+    {
+        const restored = remote.getState<number>("visibleAreaSize")
+        await useMainStore.getState().setPaging({ visibleAreaSize: restored === undefined ? undefined : BigInt(restored) })
+    }
     render(<App />, document.body)
 })().catch((err) => {
     console.error(err)
