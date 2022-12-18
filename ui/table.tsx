@@ -15,7 +15,7 @@ export const useTableStore = zustand<{
     tableSchema: string | undefined
     autoIncrement: boolean
     records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[]
-    input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null
+    input: { readonly draftValue: string, readonly draftValueType: string, readonly textarea: HTMLTextAreaElement | null } | null
     listUniqueConstraints: () => {
         primary: boolean
         columns: string[]
@@ -197,7 +197,7 @@ const FindWidget = () => {
     </div>
 }
 
-const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: remote.TableInfo, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly number[] }) => {
+const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: string, readonly draftValueType: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: remote.TableInfo, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly number[] }) => {
     if (props.rowNumber <= 0) {
         throw new Error(props.rowNumber + "")
     }
@@ -230,7 +230,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                         if (props.tableName !== undefined) { update(props.tableName, name, props.row) }
                     }).catch(console.error)
                 }}>
-                <pre className={"overflow-hidden text-ellipsis whitespace-nowrap [max-width:50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: type2color(typeof value) }}>
+                <pre className={"overflow-hidden text-ellipsis whitespace-nowrap [max-width:50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: input?.draftValue ? type2color(input?.draftValueType) : type2color(typeof value) }}>
                     <span className="select-none">{input?.draftValue ?? renderValue(value)}</span>
                     {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
                 </pre>

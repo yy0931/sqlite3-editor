@@ -98,6 +98,7 @@ const mountInput = () => {
         useTableStore.setState({
             input: {
                 draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
+                draftValueType: state.type,
                 textarea,
             }
         })
@@ -109,6 +110,7 @@ const mountInput = () => {
         useTableStore.setState({
             input: {
                 draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
+                draftValueType: state.type,
                 textarea: null,
             }
         })
@@ -126,7 +128,7 @@ export const useEditorStore = zustand<State & {
     update: (tableName: string, column: string, row: number) => void
     switchTable: (tableName: string | undefined) => Promise<void>
     commit: (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => Promise<void>
-    commitUpdate: (preserveEditorState?: true) => Promise<void>
+    commitUpdate: (preserveEditorState?: true, explicit?: true) => Promise<void>
     clearInputs: () => Promise<void>
 }>()((setPartial, get) => {
     const set = (state: State) => { setPartial(state) }
@@ -274,10 +276,10 @@ export const useEditorStore = zustand<State & {
                 }
             }
         },
-        commitUpdate: async (preserveEditorState?: true) => {
+        commitUpdate: async (preserveEditorState?: true, explicit?: true) => {
             // <textarea> replaces \r\n with \n
             const state = get()
-            if (state.statement !== "UPDATE" || !state.isTextareaDirty) { return }
+            if (state.statement !== "UPDATE" || (!explicit && !state.isTextareaDirty)) { return }
             setPartial({ isTextareaDirty: false })
             const columns = state.constraintChoices[state.selectedConstraint]!
             await state.commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], {}, preserveEditorState)
@@ -303,7 +305,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         if (input.textarea !== null) {
             input.textarea.value = state.textareaValue
         }
-        useTableStore.setState({ input: { ...input, draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)) } })
+        useTableStore.setState({ input: { ...input, draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)), draftValueType: state.type } })
     }, state.statement === "UPDATE" ? [state.textareaValue, state.blobValue, state.type] : [undefined, undefined, undefined])
 
     let header: JSXInternal.Element
@@ -432,7 +434,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 />
                 {"AS "}
                 <DataTypeInput value={state.type} onChange={(value) => { useEditorStore.setState({ type: value }); mountInput() }} />
-                <Commit onClick={state.commitUpdate} />
+                <Commit onClick={() => state.commitUpdate(undefined, true)} />
             </>
             break
         }
