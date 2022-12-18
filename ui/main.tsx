@@ -10,6 +10,7 @@ import { Button, persistentUseState, Select } from "./components"
 import { escapeSQLIdentifier, Table, useTableStore } from "./table"
 import zustand from "zustand"
 import "./scrollbar"
+import { SettingsView } from "./settings_view"
 
 export type VSCodeAPI = {
     postMessage(data: unknown): void
@@ -436,17 +437,6 @@ const App = () => {
             }}><hr className="mt-2 border-b-2 border-b-gray-400" /></div>
             <editor.Editor tableList={state.tableList} />
         </>}
-    </>
-}
-
-const SettingsView = () => {
-    const schema = useTableStore((state) => state.tableSchema)
-
-    return <>
-        <h2 className="font-bold">Schema</h2>
-        <div className="[padding-left:var(--page-padding)]"><pre className="[font-size:inherit] overflow-x-auto">{schema}</pre></div>
-        <h2 className="font-bold">Indexes</h2>
-        <div className="[padding-left:var(--page-padding)]">TODO</div>
     </>
 }
 
