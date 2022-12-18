@@ -12,7 +12,14 @@ const readWriteConnection = sqlite3("../samples/employees_db-full-1.0.6.db")
 readonlyConnection.defaultSafeIntegers()
 readWriteConnection.defaultSafeIntegers()
 
-const find_widget_regexp = (text: string, pattern: string, wholeWord: 0n | 1n, caseSensitive: 0n | 1n) => new RegExp(wholeWord ? `\\b(?:${pattern})\\b` : pattern, caseSensitive ? "" : "i").test(text) ? 1n : 0n
+const find_widget_regexp = (text: string, pattern: string, wholeWord: 0n | 1n, caseSensitive: 0n | 1n) => {
+    try {
+        return new RegExp(wholeWord ? `\\b(?:${pattern})\\b` : pattern, caseSensitive ? "" : "i").test(text) ? 1n : 0n
+    } catch (err) {
+        if (err instanceof SyntaxError) { return 0n }
+        throw err
+    }
+}
 readonlyConnection.function("find_widget_regexp", { deterministic: true, varargs: false, safeIntegers: true }, find_widget_regexp)
 readWriteConnection.function("find_widget_regexp", { deterministic: true, varargs: false, safeIntegers: true }, find_widget_regexp)
 
