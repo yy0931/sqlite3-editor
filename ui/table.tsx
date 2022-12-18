@@ -90,7 +90,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                 <thead className="text-black [background:var(--gutter-color)]" style={{ outline: "rgb(181, 181, 181) 1px solid" }}>
                     <tr>
                         <th className="font-normal select-none [padding-top:3px] [padding-bottom:3px] [padding-left:1em] [padding-right:1em]"></th>
-                        {state.tableInfo.map(({ name, notnull, pk, type }, i) => <th
+                        {state.tableInfo.map(({ name, notnull, pk, type, dflt_value }, i) => <th
                             style={{ width: getColumnWidths()[i]! }}
                             className={"font-normal select-none " + (tableName !== undefined ? "clickable" : "")}
                             onMouseMove={(ev) => {
@@ -134,7 +134,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                             }}>
                             <code className="inline-block [word-break:break-word] [color:inherit] [font-family:inherit] [font-size:inherit]">
                                 {name}
-                                <span className="italic opacity-70">{(type ? (" " + type) : "") + (pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : "") + (notnull ? " NOT NULL" : "")}</span>
+                                <span className="italic opacity-70">{`${type ? (" " + type) : ""}${pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : ""}${notnull ? " NOT NULL" : ""}${dflt_value !== null ? ` DEFAULT ${dflt_value}` : ""}`}</span>
                             </code>
                         </th>)}
                     </tr>

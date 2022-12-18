@@ -2,7 +2,7 @@ import { Packr, Unpackr } from "msgpackr"
 import { useMainStore } from "./main"
 import { escapeSQLIdentifier } from "./table"
 
-export type TableInfo = { cid: bigint, dflt_value: bigint, name: string, notnull: bigint, type: string, pk: bigint }[]
+export type TableInfo = { cid: bigint, dflt_value: bigint | string, name: string, notnull: bigint, type: string, pk: bigint }[]
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
 export type SQLite3Value = string | number | bigint | Uint8Array | null
 export type TableListItem = { schema: string, name: string, type: "table" | "view" | "shadow" | "virtual", ncol: bigint, wr: bigint, strict: bigint }
