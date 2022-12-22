@@ -173,7 +173,7 @@ export const useEditorStore = zustand<State & {
                 tableName,
                 statement2: column ? "RENAME COLUMN" : "RENAME TO",
                 oldColumnName: column ?? "",
-                columnDef: { name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false },
+                columnDef: { name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false, default: "" },
                 newColumnName: column ?? "",
                 newTableName: tableName,
                 strict: !!(await remote.getTableList()).find(({ name }) => name === tableName)?.strict,
@@ -600,6 +600,7 @@ type ColumnDef = {
     autoIncrement: boolean
     unique: boolean
     notNull: boolean
+    default: string
 }
 
 const ColumnDefEditor = (props: { columnNameOnly?: boolean, value: ColumnDef, onChange: (columnDef: ColumnDef) => void, strict: boolean }) => {
@@ -611,20 +612,19 @@ const ColumnDefEditor = (props: { columnNameOnly?: boolean, value: ColumnDef, on
             <Checkbox tabIndex={-1} checked={props.value.autoIncrement} onChange={(checked) => props.onChange({ ...props.value, autoIncrement: checked })} text="AUTOINCREMENT" />
             <Checkbox tabIndex={-1} checked={props.value.unique} onChange={(checked) => props.onChange({ ...props.value, unique: checked })} text="UNIQUE" />
             <Checkbox tabIndex={-1} checked={props.value.notNull} onChange={(checked) => props.onChange({ ...props.value, notNull: checked })} text="NOT NULL" />
-            {/* <label className="[margin-right:8px]">DEFAULT</label><input placeholder="CURRENT_TIMESTAMP" /> */}
+            <label className="[margin-right:8px]" style={{ color: props.value.default ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)" }}>DEFAULT</label><input placeholder="CURRENT_TIMESTAMP" value={props.value.default} onChange={(el) => props.onChange({ ...props.value, default: el.currentTarget.value })} />
         </>}
     </>
 }
 
 const printColumnDef = (def: ColumnDef) =>
-    `${escapeSQLIdentifier(def.name)} ${def.affinity}${def.primary ? " PRIMARY KEY" : ""}${def.autoIncrement ? " AUTOINCREMENT" : ""}${def.unique ? " UNIQUE" : ""}${def.notNull ? " NOT NULL" : ""}`
-
+    `${escapeSQLIdentifier(def.name)} ${def.affinity}${def.primary ? " PRIMARY KEY" : ""}${def.autoIncrement ? " AUTOINCREMENT" : ""}${def.unique ? " UNIQUE" : ""}${def.notNull ? " NOT NULL" : ""}${def.default ? ` DEFAULT (${def.default})` : ""}`  // TODO: don't enclose with () when def.default is a literal
 
 const MultiColumnDefEditor = (props: { value: ColumnDef[], onChange: (value: ColumnDef[]) => void, strict: boolean }) => {
     const renderedColumnDefs = [...props.value]
     while (renderedColumnDefs.at(-1)?.name === "") { renderedColumnDefs.pop() }
     if (renderedColumnDefs.length === 0 || renderedColumnDefs.at(-1)!.name !== "") {
-        renderedColumnDefs.push({ name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false })
+        renderedColumnDefs.push({ name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false, default: "" })
     }
 
     return <ul className="list-none">{renderedColumnDefs.map((columnDef, i) =>
