@@ -64,7 +64,7 @@ type State =
             columnDefs: ColumnDef[]
         }
         | {
-            statement: "custom"
+            statement: "Custom Query"
             query: string
         }
     )
@@ -155,6 +155,7 @@ export const useEditorStore = zustand<State & {
     commit: (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => Promise<void>
     commitUpdate: (preserveEditorState?: true, explicit?: true) => Promise<void>
     clearInputs: () => Promise<void>
+    cancel: () => Promise<void>
 }>()((setPartial, get) => {
     const set = (state: State) => { setPartial(state) }
     return {
@@ -230,7 +231,7 @@ export const useEditorStore = zustand<State & {
         },
         custom: (tableName: string | undefined) => {
             unmountInput?.()
-            set({ statement: "custom", query: "", tableName })
+            set({ statement: "Custom Query", query: "", tableName })
         },
         update: (tableName: string, column: string, row: number) => {
             unmountInput?.()
@@ -269,7 +270,13 @@ export const useEditorStore = zustand<State & {
                 case "DROP VIEW": state.dropView(tableName); break
                 case "ALTER TABLE": await state.alterTable(tableName, undefined); break
                 case "DELETE": case "UPDATE": await state.insert(tableName); break
-                case "CREATE TABLE": case "custom": setPartial({ tableName }); break
+                case "CREATE TABLE": case "Custom Query":
+                    if (state.tableName === undefined) {
+                        await state.insert(tableName)
+                    } else {
+                        setPartial({ tableName })
+                    }
+                    break
                 default: {
                     const _: never = state
                 }
@@ -289,10 +296,18 @@ export const useEditorStore = zustand<State & {
                 case "ALTER TABLE": await state.alterTable(state.tableName, undefined); break
                 case "DELETE": case "UPDATE": await state.insert(state.tableName); break
                 case "CREATE TABLE": state.createTable(state.tableName); break
-                case "custom": state.custom(state.tableName); break
+                case "Custom Query": state.custom(state.tableName); break
                 default: {
                     const _: never = state
                 }
+            }
+        },
+        cancel: async () => {
+            const state = get()
+            if (state.tableName === undefined) {
+                state.createTable(state.tableName)
+            } else {
+                await state.insert(state.tableName)
             }
         },
         commitUpdate: async (preserveEditorState?: true, explicit?: true) => {
@@ -315,7 +330,6 @@ export type OnWriteOptions = {
 
 export const Editor = (props: { tableList: remote.TableListItem[] }) => {
     const state = useEditorStore()
-    const { type } = props.tableList.find(({ name }) => name === state.tableName) ?? {}
 
     useLayoutEffect(() => {
         if (state.statement !== "UPDATE") { return }
@@ -345,22 +359,25 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             </>
             editor = <>
                 {state.statement2 === "ADD COLUMN" && <ColumnDefEditor value={state.columnDef} onChange={(columnDef) => useEditorStore.setState({ columnDef })} strict={state.strict} />}
-                <Commit disabled={
-                    state.statement2 === "RENAME TO" ? state.newTableName === "" :
-                        state.statement2 === "RENAME COLUMN" ? state.oldColumnName === "" || state.newColumnName === "" :
-                            state.statement2 === "DROP COLUMN" ? state.oldColumnName === "" :
-                                state.statement2 === "ADD COLUMN" ? state.columnDef.name === "" :
-                                    false
-                } onClick={() => {
-                    let query = `ALTER TABLE ${escapeSQLIdentifier(state.tableName)} ${state.statement2} `
-                    switch (state.statement2) {
-                        case "RENAME TO": query += escapeSQLIdentifier(state.newTableName); break
-                        case "RENAME COLUMN": query += `${escapeSQLIdentifier(state.oldColumnName)} TO ${escapeSQLIdentifier(state.newColumnName)}`; break
-                        case "DROP COLUMN": query += escapeSQLIdentifier(state.oldColumnName); break
-                        case "ADD COLUMN": query += `${printColumnDef(state.columnDef)}`; break
-                    }
-                    state.commit(query, [], { refreshTableList: true, selectTable: state.statement2 === "RENAME TO" ? state.newTableName : undefined }).catch(console.error)
-                }} />
+                <div className="mt-2">
+                    <Commit disabled={
+                        state.statement2 === "RENAME TO" ? state.newTableName === "" :
+                            state.statement2 === "RENAME COLUMN" ? state.oldColumnName === "" || state.newColumnName === "" :
+                                state.statement2 === "DROP COLUMN" ? state.oldColumnName === "" :
+                                    state.statement2 === "ADD COLUMN" ? state.columnDef.name === "" :
+                                        false
+                    } onClick={() => {
+                        let query = `ALTER TABLE ${escapeSQLIdentifier(state.tableName)} ${state.statement2} `
+                        switch (state.statement2) {
+                            case "RENAME TO": query += escapeSQLIdentifier(state.newTableName); break
+                            case "RENAME COLUMN": query += `${escapeSQLIdentifier(state.oldColumnName)} TO ${escapeSQLIdentifier(state.newColumnName)}`; break
+                            case "DROP COLUMN": query += escapeSQLIdentifier(state.oldColumnName); break
+                            case "ADD COLUMN": query += `${printColumnDef(state.columnDef)}`; break
+                        }
+                        state.commit(query, [], { refreshTableList: true, selectTable: state.statement2 === "RENAME TO" ? state.newTableName : undefined }).catch(console.error)
+                    }} />
+                    <Cancel />
+                </div>
             </>
             break
         }
@@ -373,9 +390,12 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             editor = <>
                 <MultiColumnDefEditor value={state.columnDefs} onChange={(columnDefs) => useEditorStore.setState({ columnDefs })} strict={state.strict} />
                 <textarea autocomplete="off" className="[margin-top:10px] [height:20vh]" placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
-                <Commit disabled={!state.newTableName || state.columnDefs.length === 0} className="[margin-top:10px] [margin-bottom:10px]" onClick={() => {
-                    state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.newTableName }).catch(console.error)
-                }} />
+                <div className="mt-2">
+                    <Commit disabled={!state.newTableName || state.columnDefs.length === 0} className="[margin-top:10px] [margin-bottom:10px]" onClick={() => {
+                        state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.newTableName }).catch(console.error)
+                    }} />
+                    <Cancel />
+                </div>
             </>
             break
         }
@@ -387,20 +407,33 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 }</select>
             </>
             editor = <>
-                <Commit onClick={() => {
-                    state.commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as remote.SQLite3Value)], {}).catch(console.error)
-                }} />
+                <div>
+                    <Commit onClick={() => {
+                        state.commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as remote.SQLite3Value)], {}).catch(console.error)
+                    }} />
+                    <Cancel />
+                </div>
             </>
             break
         }
         case "DROP TABLE": {
             header = <>{escapeSQLIdentifier(state.tableName)}</>
-            editor = <><Commit onClick={() => state.commit(`DROP TABLE ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} /></>
+            editor = <>
+                <div>
+                    <Commit onClick={() => state.commit(`DROP TABLE ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} />
+                    <Cancel />
+                </div>
+            </>
             break
         }
         case "DROP VIEW": {
             header = <>{escapeSQLIdentifier(state.tableName)}</>
-            editor = <><Commit onClick={() => state.commit(`DROP VIEW ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} /></>
+            editor = <>
+                <div>
+                    <Commit onClick={() => state.commit(`DROP VIEW ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} />
+                    <Cancel />
+                </div>
+            </>
             break
         }
         case "INSERT": {
@@ -412,7 +445,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             }
             header = <>{buildQuery()}</>
             editor = <>
-                <ul className="list-none mb-2">
+                <ul className="list-none">
                     {state.tableInfo.map(({ name }, i) => {
                         return <li>
                             <div className="[margin-right:1em]">{name}</div>
@@ -432,7 +465,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                         </li>
                     })}
                 </ul>
-                <Commit onClick={() => {
+                <Commit className="mt-2" onClick={() => {
                     state.commit(`INSERT ${buildQuery()}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true }).catch(console.error)
                 }} />
             </>
@@ -457,15 +490,21 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 />
                 {"AS "}
                 <DataTypeInput value={state.type} onChange={(type) => { useEditorStore.setState({ type }); mountInput() }} />
-                <Commit onClick={() => state.commitUpdate(undefined, true)} />
+                <div className="mt-2">
+                    <Commit onClick={() => state.commitUpdate(undefined, true)} />
+                    <Cancel />
+                </div>
             </>
             break
         }
-        case "custom": {
+        case "Custom Query": {
             header = <></>
             editor = <>
-                <textarea autocomplete="off" className="mb-2 [margin-top:15px] [height:20vh]" placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
-                <Commit onClick={() => state.commit(state.query, [], { refreshTableList: true })} />
+                <textarea autocomplete="off" className="mb-2 [height:20vh]" placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
+                <div className="mt-2">
+                    <Commit onClick={() => state.commit(state.query, [], { refreshTableList: true })} />
+                    <Cancel />
+                </div>
             </>
             break
         }
@@ -477,28 +516,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
 
     return <>
         <h2>
-            <Select value={state.statement} className="primary [padding-left:15px] [padding-right:15px]" onChange={async (value) => {
-                switch (value) {
-                    case "ALTER TABLE": await state.alterTable(state.tableName!, undefined); break
-                    case "CREATE TABLE": state.createTable(state.tableName); break
-                    case "DELETE": throw new Error()
-                    case "DROP TABLE": state.dropTable(state.tableName!); break
-                    case "DROP VIEW": state.dropView(state.tableName!); break
-                    case "INSERT": await state.insert(state.tableName!); break
-                    case "UPDATE": throw new Error()
-                    case "custom": state.custom(state.tableName); break
-                    default: const _: never = value
-                }
-            }} options={{
-                "ALTER TABLE": { disabled: type !== "table" && type !== "virtual", disabledReason: "Select a table or a virtual table." },
-                "CREATE TABLE": {},
-                DELETE: { disabled: true, disabledReason: "Click a row number." },
-                "DROP TABLE": { disabled: type !== "table", disabledReason: "Select a table." },
-                "DROP VIEW": { disabled: type !== "view", disabledReason: "Select a view." },
-                INSERT: { disabled: type !== "table" && type !== "virtual", disabledReason: "Select a table or a virtual table." },
-                UPDATE: { disabled: true, disabledReason: "Click a cell." },
-                custom: {},
-            }} />
+            <span className="[color:var(--button-primary-background)]">{state.statement}</span>
             {" "}
             {header}
         </h2>
@@ -524,8 +542,8 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
         return <div>
             <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} className={"w-40 inline [margin-right:10px] " + (props.className ?? "")} />
             <input value={filename} placeholder={"tmp.dat"} onInput={(ev) => setFilename(ev.currentTarget.value)} />
-            <Button value="Import" onClick={() => remote.import_(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""} />
-            <Button value="Export" onClick={() => remote.export_(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null} />
+            <Button onClick={() => remote.import_(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""}>Import</Button>
+            <Button onClick={() => remote.export_(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null}>Export</Button>
         </div>
     }
 
@@ -577,7 +595,7 @@ const parseTextareaValue = (value: string, blobValue: Uint8Array | null, type: E
 const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInternal.CSSProperties, className?: string }) => {
     useEffect(() => {
         const handler = (ev: KeyboardEvent) => {
-            if (ev.ctrlKey && ev.code === "KeyS" || ev.ctrlKey && ev.code === "Enter") {
+            if (ev.ctrlKey && ev.code === "Enter") {
                 props.onClick()
                 ev.preventDefault()
             }
@@ -585,7 +603,15 @@ const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInt
         window.addEventListener("keydown", handler)
         return () => { window.removeEventListener("keydown", handler) }
     }, [props.onClick])
-    return <Button disabled={props.disabled} value="Commit" style={props.style} className={"primary block mb-2 " + (props.className ?? "")} onClick={props.onClick} title="Ctrl+S or Ctrl+Enter" />
+    return <Button disabled={props.disabled} style={props.style} className={"mb-2 " + (props.className ?? "")} onClick={props.onClick}>
+        Commit<span className="opacity-60 ml-2 [font-size:70%]">Ctrl+Enter</span>
+    </Button>
+}
+
+const Cancel = (props: { disabled?: boolean, style?: JSXInternal.CSSProperties, className?: string }) => {
+    return <Button disabled={props.disabled} style={props.style} className={"mb-2 ml-2 [background-color:var(--dropdown-background)] [color:var(--dropdown-foreground)] hover:[background-color:#8e8e8e] " + (props.className ?? "")} onClick={() => { useEditorStore.getState().cancel().catch(console.error) }}>
+        Cancel
+    </Button>
 }
 
 const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: boolean, onChange: (value: boolean) => void, text: string, tabIndex?: number, className?: string }) =>

@@ -251,6 +251,8 @@ const App = () => {
     const state = useMainStore(({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging }) =>
         ({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging }))
 
+    const editorStatement = editor.useEditorStore((state) => state.statement)
+
     useEffect(() => {
         const handler = ({ data }: remote.Message) => {
             if (data.type === "sqlite3-editor-server" && data.requestId === undefined) {
@@ -387,6 +389,7 @@ const App = () => {
     }, [])
 
     const [isSettingsViewOpen, setIsSettingsViewOpen] = persistentUseState("isSettingsViewOpen", false)
+    const tableType = state.tableList.find(({ name }) => name === state.tableName)?.type
 
     return <>
         <LoadingIndicator />
@@ -397,10 +400,75 @@ const App = () => {
                 {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
                 {" "}
             </>}
-            {state.viewerStatement === "PRAGMA" && <Select className="m-2" value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
-            <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none [padding-right:3px] [padding-left:3px] [border-radius:1px] inline-block cursor-pointer" title="schema" onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>
-                <svg className="inline [width:1em] [height:1em]"><use xlinkHref={isSettingsViewOpen ? "#close" : "#settings-gear"} /></svg>
-            </span>
+            {state.viewerStatement === "PRAGMA" && <Select value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
+            {state.viewerStatement === "SELECT" && (() => {
+                return <div className="ml-0 block lg:ml-2 lg:inline">
+                    <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer" style={{ background: isSettingsViewOpen ? "rgba(100, 100, 100)" : "", color: isSettingsViewOpen ? "white" : "" }} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>
+                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref={isSettingsViewOpen ? "#close" : "#settings-gear"} /></svg>
+                        <span className="ml-1">{"Schema & Indices"}</span>
+                    </span>
+                    <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer ml-2" style={{ background: editorStatement === "ALTER TABLE" ? "rgba(100, 100, 100)" : "", color: editorStatement === "ALTER TABLE" ? "white" : "" }}
+                        onClick={() => {
+                            if (editorStatement === "ALTER TABLE") {
+                                editor.useEditorStore.getState().cancel().catch(console.error)
+                            } else if (state.tableName !== undefined) {
+                                editor.useEditorStore.getState().alterTable(state.tableName, undefined).catch(console.error)
+                            }
+                        }}>
+                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#edit" /></svg>
+                        <span className="ml-1">{"Alter Table"}</span>
+                    </span>
+                    {tableType === "table" && <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer ml-2" style={{ background: editorStatement === "DROP TABLE" ? "rgba(100, 100, 100)" : "", color: editorStatement === "DROP TABLE" ? "white" : "" }}
+                        onClick={() => {
+                            if (editorStatement === "DROP TABLE") {
+                                editor.useEditorStore.getState().cancel().catch(console.error)
+                            } else if (state.tableName !== undefined) {
+                                editor.useEditorStore.getState().dropTable(state.tableName)
+                            }
+                        }}>
+                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#trash" /></svg>
+                        <span className="ml-1">{"Drop Table"}</span>
+                    </span>}
+                    {tableType === "view" && <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer ml-2" style={{ background: editorStatement === "DROP VIEW" ? "rgba(100, 100, 100)" : "", color: editorStatement === "DROP VIEW" ? "white" : "" }}
+                        onClick={() => {
+                            if (editorStatement === "DROP VIEW") {
+                                editor.useEditorStore.getState().cancel().catch(console.error)
+                            } else if (state.tableName !== undefined) {
+                                editor.useEditorStore.getState().dropView(state.tableName)
+                            }
+                        }}>
+                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#trash" /></svg>
+                        <span className="ml-1">{"Drop View"}</span>
+                    </span>}
+                    <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer ml-2" style={{ background: editorStatement === "CREATE TABLE" ? "rgba(100, 100, 100)" : "", color: editorStatement === "CREATE TABLE" ? "white" : "" }}
+                        onClick={() => {
+                            if (editorStatement === "CREATE TABLE") {
+                                editor.useEditorStore.getState().cancel().catch(console.error)
+                            } else {
+                                editor.useEditorStore.getState().createTable(state.tableName)
+                            }
+                        }}>
+                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#add" /></svg>
+                        <span className="ml-1">{"Create Table"}</span>
+                    </span>
+                    <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer ml-2" style={{ background: editorStatement === "Custom Query" ? "rgba(100, 100, 100)" : "", color: editorStatement === "Custom Query" ? "white" : "" }}
+                        onClick={() => {
+                            if (editorStatement === "Custom Query") {
+                                editor.useEditorStore.getState().cancel().catch(console.error)
+                            } else {
+                                editor.useEditorStore.getState().custom(state.tableName)
+                            }
+                        }}>
+                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#terminal" /></svg>
+                        <span className="ml-1">{"Custom Query"}</span>
+                    </span>
+                    <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer ml-2"
+                        onClick={() => { alert("TODO") }}>
+                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#tools" /></svg>
+                        <span className="ml-1">{"Tools…"}</span>
+                    </span>
+                </div>
+            })()}
         </h2>
         {isSettingsViewOpen && <SettingsView />}
         {!isSettingsViewOpen && <>
@@ -409,7 +477,7 @@ const App = () => {
             </div>
             {state.errorMessage && <p className="text-white [background:rgb(14,72,117)] [padding:10px]">
                 <pre className="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{state.errorMessage}</pre>
-                <Button value="Close" className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })} />
+                <Button className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })}>Close</Button>
             </p>}
             <div className="h-2 cursor-ns-resize select-none" onMouseDown={(ev) => {
                 ev.preventDefault()
@@ -449,7 +517,6 @@ const App = () => {
             restored :
             tableList[0]?.name
     })()
-    editor.useEditorStore.setState({ tableName })
     useMainStore.setState({
         tableList,
         pragmaList: (await remote.query("PRAGMA pragma_list", [], "r")).map(({ name }) => name as string),
@@ -459,6 +526,7 @@ const App = () => {
         const restored = remote.getState<number>("visibleAreaSize")
         await useMainStore.getState().setPaging({ visibleAreaSize: restored === undefined ? undefined : BigInt(restored) })
     }
+    await editor.useEditorStore.getState().switchTable(tableName)
     render(<App />, document.body)
 })().catch((err) => {
     console.error(err)
