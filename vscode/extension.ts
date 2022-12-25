@@ -88,20 +88,33 @@ export const activate = (context: vscode.ExtensionContext) => {
                     vscode.window.showErrorMessage(msg)
                     throw new Error(msg)
                 }
-                const conn = new LocalPythonClient(pythonPath, context.asAbsolutePath("server.py"), uri.fsPath, path.dirname(uri.fsPath))
-                const watcher = fs.watch(uri.fsPath)
-                return {
-                    uri,
-                    dispose: () => {
-                        conn.close()
-                        watcher.removeAllListeners()
-                        watcher.close()
-                    },
-                    conn,
-                    watcher,
+                if (uri.scheme === "file") {
+                    const conn = new LocalPythonClient(pythonPath, context.asAbsolutePath("server.py"), uri.fsPath, path.dirname(uri.fsPath))
+                    const watcher = fs.watch(uri.fsPath)
+                    return {
+                        uri,
+                        unsupportedScheme: false,
+                        dispose: () => {
+                            conn.close()
+                            watcher.removeAllListeners()
+                            watcher.close()
+                        },
+                        conn,
+                        watcher,
+                    }
+                } else {  // unsupportedScheme diff view etc.
+                    return {
+                        uri,
+                        unsupportedScheme: true,
+                        dispose: () => { },
+                    }
                 }
             },
             async resolveCustomEditor(document, webviewPanel, token) {
+                if (document.unsupportedScheme) {
+                    webviewPanel.webview.html = `Unsupported file scheme: ${escapeHTML(document.uri.scheme)}`
+                    return
+                }
                 webviewPanel.webview.options = {
                     enableScripts: true,
                     localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, "webview")],
@@ -134,11 +147,18 @@ export const activate = (context: vscode.ExtensionContext) => {
                     webviewPanel.webview.postMessage({ type: "sqlite3-editor-server" })
                 })
             },
-        } as vscode.CustomReadonlyEditorProvider<vscode.Disposable & {
-            uri: vscode.Uri
-            conn: LocalPythonClient,
-            watcher: fs.FSWatcher
-        }>, {
+        } /* satisfies */ as vscode.CustomReadonlyEditorProvider<vscode.Disposable & (
+            | {
+                uri: vscode.Uri
+                unsupportedScheme: false
+                conn: LocalPythonClient
+                watcher: fs.FSWatcher
+            }
+            | {
+                uri: vscode.Uri
+                unsupportedScheme: true
+            }
+        )>, {
             supportsMultipleEditorsPerDocument: true,
             webviewOptions: {
                 enableFindWidget: false,
@@ -149,3 +169,10 @@ export const activate = (context: vscode.ExtensionContext) => {
 }
 
 export const deactivate = () => { }
+
+const escapeHTML = (t: string) => t
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;")
