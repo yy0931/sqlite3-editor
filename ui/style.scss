@@ -24,9 +24,13 @@
     --gutter-color: #f0f0f0;
 
     --data-string: rgb(138, 4, 4);
+    --data-string-placeholder: rgba(138, 4, 4, 0.6);
     --data-number: rgb(0, 128, 0);
+    --data-number-placeholder: rgba(0, 128, 0, 0.6);
     --data-null: rgb(4, 63, 138);
+    --data-null-placeholder: rgba(4, 63, 138, 0.6);
     --data-default: rgb(4, 63, 138);
+    --data-default-placeholder: rgba(4, 63, 138, 0.6);
 }
 
 * {
@@ -128,19 +132,19 @@ textarea {
 }
 
 .data-editor-string::placeholder {
-    color: var(--data-string);
+    color: var(--data-string-placeholder);
     font-style: italic;
 }
 .data-editor-number::placeholder {
-    color: var(--data-number);
+    color: var(--data-number-placeholder);
     font-style: italic;
 }
 .data-editor-null::placeholder {
-    color: var(--data-null);
+    color: var(--data-null-placeholder);
     font-style: italic;
 }
 .data-editor-default::placeholder {
-    color: var(--data-default);
+    color: var(--data-default-placeholder);
     font-style: italic;
 }
 
