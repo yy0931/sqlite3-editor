@@ -65,25 +65,25 @@ const reloadTable = async (visibleAreaOnly: boolean) => {
     const tableInfo = visibleAreaOnly ? useTableStore.getState().tableInfo : await remote.getTableInfo(tableName)
     let findWidgetQuery = ""
     let findWidgetParams: string[] = []
-    if (state.searchTerm) {
-        if (state.regex) {
-            findWidgetQuery = tableInfo.map(({ name: column }) => `find_widget_regexp(${escapeSQLIdentifier(column)}, ?, ${state.wholeWord ? "1" : "0"}, ${state.caseSensitive ? "1" : "0"})`).join(" OR ")
+    if (state.findWidget.value) {
+        if (state.findWidget.regex) {
+            findWidgetQuery = tableInfo.map(({ name: column }) => `find_widget_regexp(IFNULL(${escapeSQLIdentifier(column)}, 'NULL'), ?, ${state.findWidget.wholeWord ? "1" : "0"}, ${state.findWidget.caseSensitive ? "1" : "0"})`).join(" OR ")
         } else {
-            if (state.wholeWord) {
-                if (state.caseSensitive) {
-                    findWidgetQuery = tableInfo.map(({ name: column }) => `${escapeSQLIdentifier(column)} = ?`).join(" OR ")
+            if (state.findWidget.wholeWord) {
+                if (state.findWidget.caseSensitive) {
+                    findWidgetQuery = tableInfo.map(({ name: column }) => `IFNULL(${escapeSQLIdentifier(column)}, 'NULL') = ?`).join(" OR ")
                 } else {
-                    findWidgetQuery = tableInfo.map(({ name: column }) => `UPPER(${escapeSQLIdentifier(column)}) = UPPER(?)`).join(" OR ")
+                    findWidgetQuery = tableInfo.map(({ name: column }) => `UPPER(IFNULL(${escapeSQLIdentifier(column)}, 'NULL')) = UPPER(?)`).join(" OR ")
                 }
             } else {
-                if (state.caseSensitive) {
-                    findWidgetQuery = tableInfo.map(({ name: column }) => `INSTR(${escapeSQLIdentifier(column)}, ?) > 0`).join(" OR ")
+                if (state.findWidget.caseSensitive) {
+                    findWidgetQuery = tableInfo.map(({ name: column }) => `INSTR(IFNULL(${escapeSQLIdentifier(column)}, 'NULL'), ?) > 0`).join(" OR ")
                 } else {
-                    findWidgetQuery = tableInfo.map(({ name: column }) => `INSTR(UPPER(${escapeSQLIdentifier(column)}), UPPER(?)) > 0`).join(" OR ")
+                    findWidgetQuery = tableInfo.map(({ name: column }) => `INSTR(UPPER(IFNULL(${escapeSQLIdentifier(column)}, 'NULL')), UPPER(?)) > 0`).join(" OR ")
                 }
             }
         }
-        findWidgetParams = tableInfo.map(() => state.searchTerm)
+        findWidgetParams = tableInfo.map(() => state.findWidget.value)
     }
     if (findWidgetQuery !== "") {
         findWidgetQuery = ` WHERE ${findWidgetQuery}`
@@ -136,10 +136,12 @@ export const useMainStore = zustand<{
     viewerStatement: "SELECT" | "PRAGMA"  // set via setViewerQuery
     pragma: string                        // set via setViewerQuery
     tableName: string | undefined         // set via setViewerQuery
-    searchTerm: string                    // set via setViewerQuery
-    caseSensitive: boolean                // set via setViewerQuery
-    wholeWord: boolean                    // set via setViewerQuery
-    regex: boolean                        // set via setViewerQuery
+    findWidget: {  // set via setFindWidgetState
+        value: string
+        caseSensitive: boolean
+        wholeWord: boolean
+        regex: boolean
+    }
     tableList: remote.TableListItem[]
     pragmaList: string[]
     scrollerRef: { current: HTMLDivElement | null }
@@ -148,11 +150,13 @@ export const useMainStore = zustand<{
         viewerStatement?: "SELECT" | "PRAGMA"
         pragma?: string
         tableName?: string
-        searchTerm?: string
+    }) => Promise<void>,
+    setFindWidgetState: (opts: {
+        value?: string
         caseSensitive?: boolean
         wholeWord?: boolean
         regex?: boolean
-    }) => Promise<void>,
+    }) => Promise<void>
     requireReloading: () => void
     rerender: () => void,
     getPageMax: () => bigint
@@ -174,21 +178,30 @@ export const useMainStore = zustand<{
         errorMessage: "",
         viewerStatement: "SELECT",
         pragma: "analysis_limit",
-        searchTerm: "",
+        findWidget: {
+            value: "",
+            caseSensitive: false,
+            wholeWord: false,
+            regex: false,
+        },
         tableList: [],
         pragmaList: [],
         scrollerRef: { current: null },
-        caseSensitive: false,
-        wholeWord: false,
-        regex: false,
         _rerender: {},
         setViewerQuery: async (opts) => {
             set(opts)
             await remote.setState("tableName", get().tableName)
             await get().reloadCurrentTable()
-            if (opts.viewerStatement !== undefined || opts.tableName !== undefined || opts.searchTerm !== undefined || opts.caseSensitive !== undefined || opts.wholeWord !== undefined || opts.regex !== undefined) {
+            if (opts.viewerStatement !== undefined || opts.tableName !== undefined) {
                 await editor.useEditorStore.getState().switchTable(opts.viewerStatement === "PRAGMA" ? undefined : get().tableName)
             }
+        },
+        setFindWidgetState: async (opts) => {
+            const oldState = get().findWidget
+            const newState = { ...oldState, ...opts }
+            if (deepEqual(oldState, newState)) { return }
+            set({ findWidget: newState })
+            await get().reloadVisibleArea()
         },
         requireReloading: () => { set({ reloadRequired: true }) },
         setPaging: async (opts, preserveEditorState, withoutTableReloading) => {

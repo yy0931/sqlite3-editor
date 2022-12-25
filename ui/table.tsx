@@ -170,11 +170,8 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
 }
 
 const FindWidget = () => {
-    const searchTerm = useMainStore((state) => state.searchTerm)
-    const caseSensitive = useMainStore((state) => state.caseSensitive)
-    const wholeWord = useMainStore((state) => state.wholeWord)
-    const regex = useMainStore((state) => state.regex)
-    const setViewerQuery = useMainStore((state) => state.setViewerQuery)
+    const { value, caseSensitive, wholeWord, regex } = useMainStore((state) => state.findWidget)
+    const setFindWidgetState = useMainStore((state) => state.setFindWidgetState)
     const ref = useRef() as Ref<HTMLInputElement>
 
     useEffect(() => {
@@ -182,19 +179,20 @@ const FindWidget = () => {
             if (ev.ctrlKey && ev.code === "KeyF") {
                 ev.preventDefault()
                 ref.current!.focus()
+                ref.current!.select()
             }
         })
     }, [])
 
     return <div className="inline-block pl-1 pt-1 bg-gray-200 shadow-md whitespace-nowrap sticky right-3">
-        <input ref={ref} className="mr-1" placeholder="Find" value={searchTerm} onChange={(ev) => setViewerQuery({ searchTerm: ev.currentTarget.value })} />
-        <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setViewerQuery({ caseSensitive: !caseSensitive })}>
+        <input ref={ref} className="mr-1" placeholder="Find" value={value} onChange={(ev) => setFindWidgetState({ value: ev.currentTarget.value })} />
+        <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
             <svg className="[width:1em] [height:1em]"><use xlinkHref="#case-sensitive" /></svg>
         </span>
-        <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={wholeWord ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setViewerQuery({ wholeWord: !wholeWord })}>
+        <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={wholeWord ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ wholeWord: !wholeWord })}>
             <svg className="[width:1em] [height:1em]"><use xlinkHref="#whole-word" /></svg>
         </span>
-        <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={regex ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setViewerQuery({ regex: !regex })}>
+        <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={regex ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ regex: !regex })}>
             <svg className="[width:1em] [height:1em]"><use xlinkHref="#regex" /></svg>
         </span>
     </div>
