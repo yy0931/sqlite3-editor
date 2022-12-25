@@ -277,9 +277,6 @@ export const useEditorStore = zustand<State & {
                         setPartial({ tableName })
                     }
                     break
-                default: {
-                    const _: never = state
-                }
             }
         },
         commit: async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => {
@@ -297,9 +294,6 @@ export const useEditorStore = zustand<State & {
                 case "DELETE": case "UPDATE": await state.insert(state.tableName); break
                 case "CREATE TABLE": state.createTable(state.tableName); break
                 case "Custom Query": state.custom(state.tableName); break
-                default: {
-                    const _: never = state
-                }
             }
         },
         cancel: async () => {
@@ -508,10 +502,6 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             </>
             break
         }
-        default: {
-            const _: never = state
-            throw new Error()
-        }
     }
 
     return <>
@@ -566,9 +556,6 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
             case "null": return "NULL"
             case "string": return "<empty string>"
             case "number": return "0"
-            default:
-                const _: never = props.type
-                throw new Error()
         }
     })()
     return <textarea
