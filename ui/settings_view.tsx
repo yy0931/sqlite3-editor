@@ -24,7 +24,7 @@ export const SettingsView = () => {
                         {!indexSchema[i] && <>
                             {index.unique ? "UNIQUE " : ""}({indexInfo[i]!
                                 .sort((a, b) => Number(a.seqno - b.seqno))
-                                .map((info) => info.cid === -2n ? "<expression>" : info.cid === -1n ? "rowid" : info.cid === 0n ? info.name : "Parse Error").join(", ")})
+                                .map((info) => info.cid === -2n ? "<expression>" : info.cid === -1n ? "rowid" : info.name).join(", ")})
                         </>}
                     </li>
                 })}
