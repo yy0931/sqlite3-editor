@@ -50,12 +50,12 @@ const LoadingIndicator = () => {
     return <div className="progressbar inline-block select-none pointer-events-none absolute top-0 [z-index:100] [height:5px] [background:var(--button-primary-background)] opacity-0" ref={ref} style={{ width: width + "px", transition: "opacity 0.5s cubic-bezier(1.000, 0.060, 0.955, -0.120)" }}></div>
 }
 
-const BigintMath = {
+export const BigintMath = {
     max: (...args: bigint[]) => args.reduce((prev, curr) => curr > prev ? curr : prev),
     min: (...args: bigint[]) => args.reduce((prev, curr) => curr < prev ? curr : prev),
 }
 
-const reloadTable = async (reloadSchema: boolean, reloadRecordCount: boolean) => {
+export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: boolean) => {
     let state = useMainStore.getState()
     if (state.tableName === undefined) { return }
     const { viewerStatement } = state
@@ -161,7 +161,7 @@ export const useMainStore = zustand<{
     rerender: () => void,
     getPageMax: () => bigint
     setPaging: (opts: { visibleAreaTop?: bigint, numRecords?: bigint, visibleAreaSize?: bigint }, preserveEditorState?: true, withoutTableReloading?: true) => Promise<void>
-    reloadAllTables: (opts: editor.OnWriteOptions) => Promise<void>
+    reloadAllTables: (selectTable?: string) => Promise<void>
     addErrorMessage: (value: string) => void
 }>()((set, get) => {
     return {
@@ -219,40 +219,25 @@ export const useMainStore = zustand<{
         },
         rerender: () => set({ _rerender: {} }),
         addErrorMessage: (value: string) => set((s) => ({ errorMessage: s.errorMessage + value + "\n" })),
-        reloadAllTables: async (opts: editor.OnWriteOptions) => {
+        reloadAllTables: async (selectTable?: string) => {
             set({ reloadRequired: false })
             const state = get()
-            const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
-            const handles = new Array<Promise<void>>()
-            if (!skipTableRefresh) {
-                handles.push(reloadTable(true, true)
-                    .then(() => {
-                        if (opts.scrollToBottom) {
-                            const state = get()
-                            get().setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.visibleAreaSize, 0n) })
-                                .then(() => {
-                                    state.scrollerRef.current?.scrollBy({ behavior: "smooth", top: get().scrollerRef.current!.scrollHeight - get().scrollerRef.current!.offsetHeight })
-                                })
-                                .catch(console.error)
-                        }
-                    })
-                    .catch(console.error))
-            }
-            handles.push(remote.getTableList().then((newTableList) => {
-                if (deepEqual(newTableList, state.tableList)) {
-                    if (skipTableRefresh) {
-                        reloadTable(true, true).catch(console.error)
-                    }
-                    return
-                }
-                let newTableName = opts.selectTable ?? state.tableName
+
+            // List tables
+            const newTableList = await remote.getTableList()
+
+            if (!deepEqual(newTableList, state.tableList)) {
+                // If the list of tables is changed
+                let newTableName = selectTable ?? state.tableName
                 if (!newTableList.some((table) => table.name === newTableName)) {
                     newTableName = newTableList[0]?.name
                 }
                 set({ tableList: newTableList })
-                get().setViewerQuery({ tableName: newTableName }).catch(console.error)
-            }).catch(console.error))
-            await Promise.all(handles)
+                await get().setViewerQuery({ tableName: newTableName })
+            } else {
+                // If the list of tables is not changed
+                await reloadTable(true, true)
+            }
         },
     }
 })
@@ -391,7 +376,7 @@ const App = () => {
     useEffect(() => {
         const timer = setInterval(() => {
             if (useMainStore.getState().reloadRequired) {
-                useMainStore.getState().reloadAllTables({ refreshTableList: true })
+                useMainStore.getState().reloadAllTables()
                     .catch(console.error)
             }
         }, 1000)
