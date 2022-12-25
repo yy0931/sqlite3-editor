@@ -3,7 +3,7 @@ import zustand from "zustand"
 import produce from "immer"
 import type { JSXInternal } from "preact/src/jsx"
 import * as remote from "./remote"
-import { useMainStore } from "./main"
+import { BigintMath, reloadTable, useMainStore } from "./main"
 import { Button, Select } from "./components"
 import { blob2hex, escapeSQLIdentifier, renderValue, type2color, unsafeEscapeValue, useTableStore } from "./table"
 
@@ -281,7 +281,17 @@ export const useEditorStore = zustand<State & {
         },
         commit: async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => {
             await remote.query(query, params, "w+")
-            await useMainStore.getState().reloadAllTables(opts)
+            if (opts.reload === "allTables") {
+                await useMainStore.getState().reloadAllTables(opts.selectTable)
+            } else {
+                await reloadTable(true, true)
+                if (opts.scrollToBottom) {
+                    let state = useMainStore.getState()
+                    await state.setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.visibleAreaSize, 0n) })
+                    state = useMainStore.getState()
+                    state.scrollerRef.current?.scrollBy({ behavior: "smooth", top: state.scrollerRef.current!.scrollHeight - state.scrollerRef.current!.offsetHeight })
+                }
+            }
             if (!preserveEditorState) { await get().clearInputs() }
         },
         clearInputs: async () => {
@@ -310,15 +320,17 @@ export const useEditorStore = zustand<State & {
             if (state.statement !== "UPDATE" || (!explicit && !state.isTextareaDirty)) { return }
             setPartial({ isTextareaDirty: false })
             const columns = state.constraintChoices[state.selectedConstraint]!
-            await state.commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], {}, preserveEditorState)
+            await state.commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], { reload: "currentTable" }, preserveEditorState)
         }
     }
 })
 
 export type OnWriteOptions = {
-    refreshTableList?: true
+    reload: "allTables"
+    /** Select the table if it exists */
     selectTable?: string
-    /** refreshTableList and selectTable should be undefined */
+} | {
+    reload: "currentTable"
     scrollToBottom?: true
 }
 
@@ -368,7 +380,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                             case "DROP COLUMN": query += escapeSQLIdentifier(state.oldColumnName); break
                             case "ADD COLUMN": query += `${printColumnDef(state.columnDef)}`; break
                         }
-                        state.commit(query, [], { refreshTableList: true, selectTable: state.statement2 === "RENAME TO" ? state.newTableName : undefined }).catch(console.error)
+                        state.commit(query, [], { reload: "allTables", selectTable: state.statement2 === "RENAME TO" ? state.newTableName : undefined }).catch(console.error)
                     }} />
                     <Cancel />
                 </div>
@@ -386,7 +398,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 <textarea autocomplete="off" className="[margin-top:10px] [height:20vh]" placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
                 <div className="mt-2">
                     <Commit disabled={!state.newTableName || state.columnDefs.length === 0} className="[margin-top:10px] [margin-bottom:10px]" onClick={() => {
-                        state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { refreshTableList: true, selectTable: state.newTableName }).catch(console.error)
+                        state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { reload: "allTables", selectTable: state.newTableName }).catch(console.error)
                     }} />
                     <Cancel />
                 </div>
@@ -403,7 +415,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             editor = <>
                 <div>
                     <Commit onClick={() => {
-                        state.commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as remote.SQLite3Value)], {}).catch(console.error)
+                        state.commit(`DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [...columns.map((column) => state.record[column] as remote.SQLite3Value)], { reload: "currentTable" }).catch(console.error)
                     }} />
                     <Cancel />
                 </div>
@@ -414,7 +426,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             header = <>{escapeSQLIdentifier(state.tableName)}</>
             editor = <>
                 <div>
-                    <Commit onClick={() => state.commit(`DROP TABLE ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} />
+                    <Commit onClick={() => state.commit(`DROP TABLE ${escapeSQLIdentifier(state.tableName)}`, [], { reload: "allTables" })} />
                     <Cancel />
                 </div>
             </>
@@ -424,7 +436,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             header = <>{escapeSQLIdentifier(state.tableName)}</>
             editor = <>
                 <div>
-                    <Commit onClick={() => state.commit(`DROP VIEW ${escapeSQLIdentifier(state.tableName)}`, [], { refreshTableList: true })} />
+                    <Commit onClick={() => state.commit(`DROP VIEW ${escapeSQLIdentifier(state.tableName)}`, [], { reload: "allTables" })} />
                     <Cancel />
                 </div>
             </>
@@ -460,7 +472,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                     })}
                 </ul>
                 <Commit className="mt-2" onClick={() => {
-                    state.commit(`INSERT ${buildQuery()}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { scrollToBottom: true }).catch(console.error)
+                    state.commit(`INSERT ${buildQuery()}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { reload: "currentTable", scrollToBottom: true }).catch(console.error)
                 }} />
             </>
             break
@@ -496,7 +508,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             editor = <>
                 <textarea autocomplete="off" className="mb-2 [height:20vh]" placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
                 <div className="mt-2">
-                    <Commit onClick={() => state.commit(state.query, [], { refreshTableList: true })} />
+                    <Commit onClick={() => state.commit(state.query, [], { reload: "allTables" })} />
                     <Cancel />
                 </div>
             </>
