@@ -530,7 +530,7 @@ const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorD
     const options = { string: "TEXT", number: "NUMERIC", null: "NULL", blob: "BLOB", default: "DEFAULT" }
     return <>{
         Object.entries(options)
-            .map(([k, v]) => <Checkbox text={v} checked={props.value === k} onChange={(value) => value ? props.onChange(k as keyof typeof options) : props.onChange("default")} />)
+            .map(([k, v]) => <Checkbox tabIndex={-1} text={v} checked={props.value === k} onChange={(value) => value ? props.onChange(k as keyof typeof options) : props.onChange("default")} />)
     }</>
 }
 
