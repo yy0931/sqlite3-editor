@@ -82,6 +82,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const scrollbarRef = useRef() as Ref<ScrollbarY>
     useEffect(() => {
         tableRef.current?.addEventListener("wheel", (ev) => {
+            if (ev.deltaY === 0) { return }  // Scroll horizontally
             ev.preventDefault()
             scrollbarRef.current!.wheel(ev.deltaY / 30)
         }, { passive: false })
