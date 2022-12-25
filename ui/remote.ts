@@ -82,8 +82,10 @@ export const downloadState = (): Promise<void> => post("/downloadState", {}).the
 
 type QueryResult<T extends string> = Promise<T extends `SELECT ${string}` | `PRAGMA pragma_list` ? Record<string, SQLite3Value>[] : Record<string, SQLite3Value>[] | undefined>
 
-export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): QueryResult<T> =>
-    post(`/query`, { query, params, mode })
+export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): QueryResult<T> => {
+    console.log(query, params)
+    return post(`/query`, { query, params, mode })
+}
 
 /** Imports a BLOB from a file. */
 export const import_ = (filepath: string) =>
@@ -123,3 +125,6 @@ export const getTableList = async () => {
 
 export const getTableSchema = async (tableName: string) =>
     (await query(`SELECT sql FROM sqlite_schema WHERE name = ?`, [tableName], "r"))[0]?.sql as string | undefined
+
+export const getIndexSchema = async (indexName: string) =>
+    (await query(`SELECT sql FROM sqlite_schema WHERE type = ? AND name = ?`, ["index", indexName], "r"))[0]?.sql as string | null | undefined
