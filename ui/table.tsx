@@ -12,6 +12,8 @@ export const useTableStore = zustand<{
     indexList: remote.IndexList
     /** index_info for each index in indexList */
     indexInfo: remote.IndexInfo[]
+    /** sqlite_schema.sql for each in dex in indexList */
+    indexSchema: (string | null)[]
     tableSchema: string | undefined
     autoIncrement: boolean
     records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[]
@@ -25,6 +27,7 @@ export const useTableStore = zustand<{
     tableInfo: [],
     indexList: [],
     indexInfo: [],
+    indexSchema: [],
     tableSchema: undefined,
     autoIncrement: false,
     records: [],

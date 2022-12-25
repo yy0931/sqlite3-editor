@@ -110,6 +110,7 @@ const reloadTable = async (visibleAreaOnly: boolean) => {
                 autoIncrement: tableName === null ? false : await remote.hasTableAutoincrementColumn(tableName),
                 indexList,
                 indexInfo: await Promise.all(indexList.map((index) => remote.getIndexInfo(index.name))),
+                indexSchema: await Promise.all(indexList.map((index) => remote.getIndexSchema(index.name).then((x) => x ?? null))),
                 tableSchema: await remote.getTableSchema(tableName),
             })
         } else {
