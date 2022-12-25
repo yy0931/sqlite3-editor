@@ -278,7 +278,7 @@ export const renderValue = (value: remote.SQLite3Value) => {
     } else if (value === null) {
         return "NULL"
     } else if (typeof value === "string") {
-        return value.replaceAll("'", "''").replaceAll("\r", "\\r").replaceAll("\n", "\\n") || "\u00a0"
+        return value.replaceAll("\r", "\\r").replaceAll("\n", "\\n") || /* nbsp */"\u00a0"
     } else if (typeof value === "number") {
         return /^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value
     } else {
