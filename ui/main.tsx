@@ -471,7 +471,10 @@ const App = () => {
                 </div>
             })()}
         </h2>
-        {isSettingsViewOpen && <SettingsView />}
+        {isSettingsViewOpen && <div>
+            <SettingsView />
+            <hr className="mt-2 border-b-2 border-b-gray-400" />
+        </div>}
         {!isSettingsViewOpen && <>
             <div className="relative w-max max-w-full [padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">
                 <Table tableName={state.tableName} />
@@ -503,9 +506,11 @@ const App = () => {
                     window.removeEventListener("mousemove", onMouseMove)
                     document.body.classList.remove("ns-resize")
                 }, { once: true })
-            }}><hr className="mt-2 border-b-2 border-b-gray-400" /></div>
-            <editor.Editor tableList={state.tableList} />
+            }}>
+                <hr className="mt-2 border-b-2 border-b-gray-400" />
+            </div>
         </>}
+        <editor.Editor tableList={state.tableList} />
     </>
 }
 
