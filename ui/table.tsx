@@ -296,10 +296,10 @@ export const blob2hex = (blob: Uint8Array, maxLength?: number) =>
 
 export const type2color = (type: string) => {
     if (type === "number" || type === "bigint") {
-        return "green"
+        return "var(--data-number)"
     } else if (type === "string") {
-        return "rgb(138, 4, 4)"
+        return "var(--data-string)"
     } else {
-        return "rgb(4, 63, 138)"
+        return "var(--data-null)"
     }
 }

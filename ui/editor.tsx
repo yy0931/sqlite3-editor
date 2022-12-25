@@ -557,14 +557,28 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
         }
     }, [ref.current])
 
+    const placeholder = ((): string => {
+        switch (props.type) {
+            case "default":
+                const dflt_value = useTableStore.getState().tableInfo.find(({ name }) => name === props.column)?.dflt_value
+                if (dflt_value === undefined || dflt_value === null) { return "NULL" }
+                return dflt_value + ""
+            case "null": return "NULL"
+            case "string": return "<empty string>"
+            case "number": return "0"
+            default:
+                const _: never = props.type
+                throw new Error()
+        }
+    })()
     return <textarea
-        placeholder={props.type === "string" ? "<empty string>" : props.type === "number" ? "0" : "value"}
+        placeholder={placeholder}
         ref={ref}
         rows={props.type === "string" ? props.rows : 1}
         autocomplete="off"
         style={{ color: type2color(props.type), resize: props.type === "string" ? "vertical" : "none", ...props.style }}
-        className={props.className}
-        value={props.type === "null" ? "NULL" : props.textareaValue}
+        className={`data-editor-${props.type} ` + (props.className ?? "")}
+        value={props.type === "null" || props.type === "default" ? "" : props.textareaValue}
         onInput={(ev) => {
             if (props.type === "null" || props.type === "default") {
                 props.onTypeChange(inferTypeFromInputAndColumnAffinity(ev.currentTarget.value, props.column))
