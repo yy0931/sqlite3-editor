@@ -55,14 +55,14 @@ const BigintMath = {
     min: (...args: bigint[]) => args.reduce((prev, curr) => curr < prev ? curr : prev),
 }
 
-const reloadTable = async (visibleAreaOnly: boolean) => {
+const reloadTable = async (reloadSchema: boolean, reloadRecordCount: boolean) => {
     let state = useMainStore.getState()
     if (state.tableName === undefined) { return }
     const { viewerStatement } = state
     const { wr, type } = state.tableList.find(({ name }) => name === state.tableName) ?? {}
     if (wr === undefined || type === undefined) { return }
     const tableName = viewerStatement === "SELECT" ? state.tableName : `pragma_${state.pragma.toLowerCase()}`
-    const tableInfo = visibleAreaOnly ? useTableStore.getState().tableInfo : await remote.getTableInfo(tableName)
+    const tableInfo = reloadSchema ? await remote.getTableInfo(tableName) : useTableStore.getState().tableInfo
     let findWidgetQuery = ""
     let findWidgetParams: string[] = []
     if (state.findWidget.value) {
@@ -89,7 +89,7 @@ const reloadTable = async (visibleAreaOnly: boolean) => {
         findWidgetQuery = ` WHERE ${findWidgetQuery}`
     }
 
-    if (!visibleAreaOnly) {
+    if (reloadRecordCount) {
         const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(tableName)}${findWidgetQuery}`, findWidgetParams, "r"))[0]!.count
         if (typeof numRecords !== "bigint") { throw new Error(numRecords + "") }
         await state.setPaging({ numRecords }, undefined, true)
@@ -98,7 +98,7 @@ const reloadTable = async (visibleAreaOnly: boolean) => {
 
     const records = await remote.query(`SELECT${/* without rowid */!wr && type === "table" ? " rowid AS rowid," : ""} * FROM ${escapeSQLIdentifier(tableName)}${findWidgetQuery} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.visibleAreaSize, state.paging.visibleAreaTop], "r") ?? []
 
-    if (visibleAreaOnly) {
+    if (!reloadSchema) {
         useTableStore.setState({ records })
     } else {
         if (viewerStatement === "SELECT") {
@@ -162,8 +162,6 @@ export const useMainStore = zustand<{
     getPageMax: () => bigint
     setPaging: (opts: { visibleAreaTop?: bigint, numRecords?: bigint, visibleAreaSize?: bigint }, preserveEditorState?: true, withoutTableReloading?: true) => Promise<void>
     reloadAllTables: (opts: editor.OnWriteOptions) => Promise<void>
-    reloadCurrentTable: () => Promise<void>
-    reloadVisibleArea: () => Promise<void>
     addErrorMessage: (value: string) => void
 }>()((set, get) => {
     return {
@@ -191,7 +189,7 @@ export const useMainStore = zustand<{
         setViewerQuery: async (opts) => {
             set(opts)
             await remote.setState("tableName", get().tableName)
-            await get().reloadCurrentTable()
+            await reloadTable(true, true)
             if (opts.viewerStatement !== undefined || opts.tableName !== undefined) {
                 await editor.useEditorStore.getState().switchTable(opts.viewerStatement === "PRAGMA" ? undefined : get().tableName)
             }
@@ -201,7 +199,7 @@ export const useMainStore = zustand<{
             const newState = { ...oldState, ...opts }
             if (deepEqual(oldState, newState)) { return }
             set({ findWidget: newState })
-            await get().reloadVisibleArea()
+            await reloadTable(false, true)
         },
         requireReloading: () => { set({ reloadRequired: true }) },
         setPaging: async (opts, preserveEditorState, withoutTableReloading) => {
@@ -216,7 +214,7 @@ export const useMainStore = zustand<{
             paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize, paging.visibleAreaTop))
             set({ paging })
             if (!withoutTableReloading) {
-                await get().reloadVisibleArea()
+                await reloadTable(false, false)
             }
         },
         rerender: () => set({ _rerender: {} }),
@@ -227,7 +225,7 @@ export const useMainStore = zustand<{
             const skipTableRefresh = opts.refreshTableList || opts.selectTable !== undefined
             const handles = new Array<Promise<void>>()
             if (!skipTableRefresh) {
-                handles.push(state.reloadCurrentTable()
+                handles.push(reloadTable(true, true)
                     .then(() => {
                         if (opts.scrollToBottom) {
                             const state = get()
@@ -243,7 +241,7 @@ export const useMainStore = zustand<{
             handles.push(remote.getTableList().then((newTableList) => {
                 if (deepEqual(newTableList, state.tableList)) {
                     if (skipTableRefresh) {
-                        state.reloadCurrentTable().catch(console.error)
+                        reloadTable(true, true).catch(console.error)
                     }
                     return
                 }
@@ -256,8 +254,6 @@ export const useMainStore = zustand<{
             }).catch(console.error))
             await Promise.all(handles)
         },
-        reloadCurrentTable: async () => { await reloadTable(false) },
-        reloadVisibleArea: async () => { await reloadTable(true) },
     }
 })
 
