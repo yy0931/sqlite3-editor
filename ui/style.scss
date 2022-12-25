@@ -22,6 +22,11 @@
     --page-padding: 5px;
 
     --gutter-color: #f0f0f0;
+
+    --data-string: rgb(138, 4, 4);
+    --data-number: rgb(0, 128, 0);
+    --data-null: rgb(4, 63, 138);
+    --data-default: rgb(4, 63, 138);
 }
 
 * {
@@ -120,6 +125,23 @@ textarea {
 
 ::placeholder {
     color: var(--input-placeholder-foreground);
+}
+
+.data-editor-string::placeholder {
+    color: var(--data-string);
+    font-style: italic;
+}
+.data-editor-number::placeholder {
+    color: var(--data-number);
+    font-style: italic;
+}
+.data-editor-null::placeholder {
+    color: var(--data-null);
+    font-style: italic;
+}
+.data-editor-default::placeholder {
+    color: var(--data-default);
+    font-style: italic;
 }
 
 .ew-resize,
