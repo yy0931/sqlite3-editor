@@ -99,6 +99,7 @@ const mountInput = () => {
     if (state.statement !== "UPDATE") { return }
     if (state.type === "number" || state.type === "string" || state.type === "null") {
         const textarea = document.createElement("textarea")
+        textarea.spellcheck = false
         textarea.style.resize = "none"
         textarea.style.color = type2color(state.type)
         const unsubscribe = useEditorStore.subscribe((state) => {
@@ -421,7 +422,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             </>
             editor = <>
                 <MultiColumnDefEditor value={state.columnDefs} onChange={(columnDefs) => useEditorStore.setState({ columnDefs })} strict={state.strict} />
-                <textarea autocomplete="off" className="[margin-top:10px] [height:20vh]" placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
+                <textarea autocomplete="off" spellcheck={false} className="[margin-top:10px] [height:20vh]" placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
                 <div className="mt-2">
                     <Commit disabled={!state.newTableName || state.columnDefs.length === 0} className="[margin-top:10px] [margin-bottom:10px]" onClick={() => {
                         state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { reload: "allTables", selectTable: state.newTableName }).catch(console.error)
@@ -564,7 +565,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         case "Custom Query": {
             header = <></>
             editor = <>
-                <textarea autocomplete="off" className="mb-2 [height:20vh]" placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
+                <textarea autocomplete="off" spellcheck={false} className="mb-2 [height:20vh]" placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
                 <div className="mt-2">
                     <Commit onClick={() => state.commit(state.query, [], { reload: "allTables" })} />
                     <Cancel />
@@ -633,6 +634,7 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
         ref={ref}
         rows={props.type === "string" ? props.rows : 1}
         autocomplete="off"
+        spellcheck={false}
         style={{ color: type2color(props.type), resize: props.type === "string" ? "vertical" : "none", ...props.style }}
         className={`data-editor-${props.type} ` + (props.className ?? "")}
         value={props.type === "null" || props.type === "default" ? "" : props.textareaValue}
