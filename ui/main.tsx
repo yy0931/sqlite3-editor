@@ -56,70 +56,79 @@ export const BigintMath = {
     min: (...args: bigint[]) => args.reduce((prev, curr) => curr < prev ? curr : prev),
 }
 
-const viewerTempViewName = "editor_tmp_database.custom_viewer_query"
-let viewerTempViewSchema: string | undefined = undefined
-
-export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: boolean) => {
-    let state = useMainStore.getState()
-    const { useCustomViewerQuery: advancedViewerQuery, customViewerQuery } = state
-    const tableName = advancedViewerQuery ? viewerTempViewName : state.tableName
-    if (tableName === undefined) { return }
-
-    const { wr, type } = tableName === viewerTempViewName ? { wr: true, type: "view" } as const : state.tableList.find(({ name }) => name === tableName) ?? {}
-    if (wr === undefined || type === undefined) { return }
-
-    if (advancedViewerQuery && viewerTempViewSchema !== customViewerQuery) {
-        await remote.query(`DROP VIEW IF EXISTS ${escapeSQLIdentifier(viewerTempViewName)}`, [], "w+")
-        await remote.query(`CREATE VIEW ${escapeSQLIdentifier(viewerTempViewName)} AS ${customViewerQuery}`, [], "w+")
-        viewerTempViewSchema = customViewerQuery
-    }
-    const tableInfo = reloadSchema ? await remote.getTableInfo(tableName) : useTableStore.getState().tableInfo
+const buildFindWidgetQuery = (tableInfo: remote.TableInfo) => {
+    const { findWidget } = useMainStore.getState()
     let findWidgetQuery = ""
     let findWidgetParams: string[] = []
-    if (state.findWidget.value) {
-        if (state.findWidget.regex) {
-            findWidgetQuery = tableInfo.map(({ name: column }) => `find_widget_regexp(IFNULL(${escapeSQLIdentifier(column)}, 'NULL'), ?, ${state.findWidget.wholeWord ? "1" : "0"}, ${state.findWidget.caseSensitive ? "1" : "0"})`).join(" OR ")
+    if (findWidget.value) {
+        if (findWidget.regex) {
+            findWidgetQuery = tableInfo.map(({ name: column }) => `find_widget_regexp(IFNULL(${escapeSQLIdentifier(column)}, 'NULL'), ?, ${findWidget.wholeWord ? "1" : "0"}, ${findWidget.caseSensitive ? "1" : "0"})`).join(" OR ")
         } else {
-            if (state.findWidget.wholeWord) {
-                if (state.findWidget.caseSensitive) {
+            if (findWidget.wholeWord) {
+                if (findWidget.caseSensitive) {
                     findWidgetQuery = tableInfo.map(({ name: column }) => `IFNULL(${escapeSQLIdentifier(column)}, 'NULL') = ?`).join(" OR ")
                 } else {
                     findWidgetQuery = tableInfo.map(({ name: column }) => `UPPER(IFNULL(${escapeSQLIdentifier(column)}, 'NULL')) = UPPER(?)`).join(" OR ")
                 }
             } else {
-                if (state.findWidget.caseSensitive) {
+                if (findWidget.caseSensitive) {
                     findWidgetQuery = tableInfo.map(({ name: column }) => `INSTR(IFNULL(${escapeSQLIdentifier(column)}, 'NULL'), ?) > 0`).join(" OR ")
                 } else {
                     findWidgetQuery = tableInfo.map(({ name: column }) => `INSTR(UPPER(IFNULL(${escapeSQLIdentifier(column)}, 'NULL')), UPPER(?)) > 0`).join(" OR ")
                 }
             }
         }
-        findWidgetParams = tableInfo.map(() => state.findWidget.value)
+        findWidgetParams = tableInfo.map(() => findWidget.value)
     }
     if (findWidgetQuery !== "") {
         findWidgetQuery = ` WHERE ${findWidgetQuery}`
     }
+    return { findWidgetQuery, findWidgetParams }
+}
 
+export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: boolean) => {
+    let state = useMainStore.getState()
+    const { useCustomViewerQuery, customViewerQuery } = state
+
+    let subquery: string
+    let hasRowId: boolean
+    let tableInfo: remote.TableInfo
+    if (!useCustomViewerQuery) {
+        if (state.tableName === undefined) { return }
+        subquery = escapeSQLIdentifier(state.tableName)
+
+        const tableListItem = state.tableList.find(({ name }) => name === state.tableName!)
+        if (tableListItem === undefined) { return }
+        hasRowId = tableListItem.type === "table" && !tableListItem.wr
+        tableInfo = !reloadSchema ? useTableStore.getState().tableInfo : await remote.getTableInfo(state.tableName)
+    } else {
+        subquery = `(${customViewerQuery})`
+        hasRowId = false
+        tableInfo = !reloadSchema ? useTableStore.getState().tableInfo : (await remote.query(`SELECT * FROM ${subquery} LIMIT 0`, [], "r")).columns.map((column, i): remote.TableInfo[number] => ({ name: column, cid: BigInt(i), dflt_value: null, notnull: 0n, pk: 0n, type: "" }))
+    }
+
+    const { findWidgetQuery, findWidgetParams } = buildFindWidgetQuery(tableInfo)
     if (reloadRecordCount) {
-        const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM ${escapeSQLIdentifier(tableName)}${findWidgetQuery}`, findWidgetParams, "r"))[0]!.count
+        const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM ${subquery}${findWidgetQuery}`, findWidgetParams, "r")).records[0]!.count
         if (typeof numRecords !== "bigint") { throw new Error(numRecords + "") }
         await state.setPaging({ numRecords }, undefined, true)
         state = useMainStore.getState() // state.paging will be updated
     }
 
-    const records = await remote.query(`SELECT${/* without rowid */!wr && type === "table" ? " rowid AS rowid," : ""} * FROM ${escapeSQLIdentifier(tableName)}${findWidgetQuery} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.visibleAreaSize, state.paging.visibleAreaTop], "r") ?? []
+    const records = (await remote.query(`SELECT${hasRowId ? " rowid AS rowid," : ""} * FROM ${subquery}${findWidgetQuery} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.visibleAreaSize, state.paging.visibleAreaTop], "r")).records
 
     if (!reloadSchema) {
         useTableStore.setState({ records })
     } else {
-        if (!advancedViewerQuery) {
-            const indexList = await remote.getIndexList(tableName)
+        if (!useCustomViewerQuery) {
+            const indexList = await remote.getIndexList(state.tableName!)
+            const autoIncrement = await remote.hasTableAutoincrementColumn(state.tableName!)
+            const tableSchema = await remote.getTableSchema(state.tableName!)
             useTableStore.setState({
                 tableInfo,
                 records,
-                autoIncrement: tableName === null ? false : await remote.hasTableAutoincrementColumn(tableName),
-                tableSchema: await remote.getTableSchema(tableName),
-
+                autoIncrement,
+                tableSchema,
                 indexList,
                 indexInfo: await Promise.all(indexList.map((index) => remote.getIndexInfo(index.name))),
                 indexSchema: await Promise.all(indexList.map((index) => remote.getIndexSchema(index.name).then((x) => x ?? null))),
@@ -129,7 +138,10 @@ export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: bool
                 tableInfo,
                 records,
                 autoIncrement: false,
-                tableSchema: await remote.getTableSchema(tableName),
+                tableSchema: "",
+                indexList: [],
+                indexInfo: [],
+                indexSchema: [],
             })
         }
     }
@@ -375,7 +387,7 @@ const App = () => {
     })()
     useMainStore.setState({
         tableList,
-        pragmaList: (await remote.query("PRAGMA pragma_list", [], "r")).map(({ name }) => name as string),
+        pragmaList: (await remote.query("PRAGMA pragma_list", [], "r")).records.map(({ name }) => name as string),
     })
     await useMainStore.getState().setViewerQuery({ tableName })
     {
