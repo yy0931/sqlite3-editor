@@ -82,9 +82,10 @@ export const downloadState = (): Promise<void> => post("/downloadState", {}).the
 
 type QueryResult<T extends string> = Promise<T extends `SELECT ${string}` | `PRAGMA pragma_list` ? Record<string, SQLite3Value>[] : Record<string, SQLite3Value>[] | undefined>
 
-export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): QueryResult<T> =>
-    post(`/query`, { query, params, mode })
-
+export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): QueryResult<T> => {
+    console.log(query, params)
+    return post(`/query`, { query, params, mode })
+}
 /** Imports a BLOB from a file. */
 export const import_ = (filepath: string) =>
     post(`/import`, { filepath }) as Promise<Uint8Array>
