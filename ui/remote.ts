@@ -117,8 +117,7 @@ export const getTableInfo = (tableName: string) =>
 
 export const getTableList = async () => {
     return (await query("PRAGMA table_list", [], "r") as TableListItem[])
-        // https://www.sqlite.org/schematab.html#alternative_names
-        .filter(({ name }) => !["sqlite_schema", "sqlite_temp_schema"].includes(name))
+        .filter(({ name }) => !name.startsWith("sqlite_"))  // https://www.sqlite.org/fileformat2.html#intschema
 }
 
 export const getTableSchema = async (tableName: string) =>
