@@ -88,13 +88,16 @@ export const onKeydown = async (ev: KeyboardEvent) => {
             if (a === "!a" && ev.altKey) { return false }
             return ev.code === code
         }
-        const inputFocus = !(ev.target instanceof HTMLElement && (ev.target.matches("table textarea") || !ev.target.matches("label, button, input, textarea, select, option")))
+        const inputFocus = ev.target instanceof HTMLElement && !ev.target.matches("table textarea") && ev.target.matches("label, button, input, textarea, select, option")
+        const findWidgetFocus = ev.target instanceof HTMLInputElement && ev.target.id === "findWidget"
 
-        if (inputFocus && key("+Escape")) {
-            const { activeElement } = document
-            if (activeElement instanceof HTMLElement) {
-                activeElement.blur()
-            }
+        if (findWidgetFocus && key("+Escape")) {
+            ev.preventDefault()
+            ev.target.blur()
+            useMainStore.setState({ isFindWidgetVisible: false })
+        } else if (inputFocus && key("+Escape")) {
+            ev.preventDefault()
+            ev.target.blur()
         } else if (key("c!s!a+KeyF")) {
             ev.preventDefault()
             const isFindWidgetVisible = useMainStore.getState().isFindWidgetVisibleWhenValueIsEmpty || useMainStore.getState().findWidget.value !== ""
@@ -107,6 +110,18 @@ export const onKeydown = async (ev: KeyboardEvent) => {
             } else {
                 useMainStore.setState({ isFindWidgetVisibleWhenValueIsEmpty: true })
             }
+        } else if (findWidgetFocus && key("a+KeyC")) {
+            ev.preventDefault()
+            const mainState = useMainStore.getState()
+            await mainState.setFindWidgetState({ caseSensitive: !mainState.findWidget.caseSensitive })
+        } else if (findWidgetFocus && key("a+KeyW")) {
+            ev.preventDefault()
+            const mainState = useMainStore.getState()
+            await mainState.setFindWidgetState({ wholeWord: !mainState.findWidget.wholeWord })
+        } else if (findWidgetFocus && key("a+KeyR")) {
+            ev.preventDefault()
+            const mainState = useMainStore.getState()
+            await mainState.setFindWidgetState({ regex: !mainState.findWidget.regex })
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("+Escape")) {
             ev.preventDefault()
             await state.clearInputs()
