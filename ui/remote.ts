@@ -26,8 +26,10 @@ const loop = () => {
 }
 loop()
 
+type PostOptions = { withoutLogging?: boolean }
+
 /** Send the data to the server with fetch(), or to the extension host with vscode.postMessage(). */
-export const post = async (url: string, body: unknown) => {
+export const post = async (url: string, body: unknown, opts: PostOptions = {}) => {
     const id = { start: Date.now() }
     queue.push(id)
     if (vscode !== undefined) {
@@ -38,7 +40,7 @@ export const post = async (url: string, body: unknown) => {
                 if (data.type !== "sqlite3-editor-server" || data.requestId !== requestId) { return }
                 window.removeEventListener("message", callback)
                 if ("err" in data) {
-                    useMainStore.getState().addErrorMessage(data.err)
+                    if (!opts.withoutLogging) { useMainStore.getState().addErrorMessage(data.err) }
                     reject(new Error(data.err))
                     return
                 }
@@ -53,13 +55,13 @@ export const post = async (url: string, body: unknown) => {
             let res: Response
             try {
                 res = await fetch("http://localhost:8080" + url, { method: "POST", body: packr.pack(body), headers: { "Content-Type": "application/octet-stream" } })
-            } catch (err: any) {
-                useMainStore.getState().addErrorMessage("message" in err ? err.message : "" + err)
+            } catch (err) {
+                if (!opts.withoutLogging) { useMainStore.getState().addErrorMessage(typeof err === "object" && err !== null && "message" in err ? err.message + "" : err + "") }
                 throw err
             }
             if (!res.ok) {
                 const message = await res.text()
-                useMainStore.getState().addErrorMessage(message)
+                if (!opts.withoutLogging) { useMainStore.getState().addErrorMessage(message) }
                 throw new Error(message)
             }
             return unpackr.unpack(new Uint8Array(await res.arrayBuffer()))
@@ -70,61 +72,61 @@ export const post = async (url: string, body: unknown) => {
 }
 
 let state: Record<string, unknown> = {}
-export const setState = async <T>(key: string, value: T) => {
+export const setState = async <T>(key: string, value: T, opts: PostOptions = {} = {}) => {
     state[key] = value
-    await post("/setState", { key, value })
+    await post("/setState", { key, value }, opts)
 }
 export const getState = <T>(key: string): T | undefined => {
     return state[key] as T | undefined
 }
 /** Called only once, before any getState() or setState() calls. */
-export const downloadState = (): Promise<void> => post("/downloadState", {}).then((value) => { state = value })
+export const downloadState = (opts: PostOptions = {}): Promise<void> => post("/downloadState", {}, opts).then((value) => { state = value })
 
 type QueryResult<T extends string> = Promise<{
     columns: string[]
     records: T extends `SELECT ${string}` | `PRAGMA pragma_list` ? Record<string, SQLite3Value>[] : (Record<string, SQLite3Value>[] | undefined)
 }>
 
-export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): QueryResult<T> =>
-    post(`/query`, { query, params, mode })
+export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+", opts: PostOptions = {}): QueryResult<T> =>
+    post(`/query`, { query, params, mode }, opts)
 
 /** Imports a BLOB from a file. */
-export const import_ = (filepath: string) =>
-    post(`/import`, { filepath }) as Promise<Uint8Array>
+export const import_ = (filepath: string, opts: PostOptions = {}) =>
+    post(`/import`, { filepath }, opts) as Promise<Uint8Array>
 
 /** Exports a BLOB to a file. */
-export const export_ = (filepath: string, data: Uint8Array) =>
-    post(`/export`, { filepath, data }) as Promise<void>
+export const export_ = (filepath: string, data: Uint8Array, opts: PostOptions = {}) =>
+    post(`/export`, { filepath, data }, opts) as Promise<void>
 
 /** https://stackoverflow.com/a/1604121/10710682 */
-export const existsTable = async (tableName: string) =>
-    (await query(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName], "r")).records.length > 0
+export const existsTable = async (tableName: string, opts: PostOptions = {}) =>
+    (await query(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName], "r", opts)).records.length > 0
 
 /** https://stackoverflow.com/questions/20979239/how-to-tell-if-a-sqlite-column-is-autoincrement */
-export const hasTableAutoincrementColumn = async (tableName: string) =>
-    await existsTable("sqlite_sequence") &&  // sqlite_sequence doesn't exist when the database is empty.
-    !!((await query(`SELECT COUNT(*) AS count FROM sqlite_sequence WHERE name = ?`, [tableName], "r")).records[0]?.count)
+export const hasTableAutoincrementColumn = async (tableName: string, opts: PostOptions = {}) =>
+    await existsTable("sqlite_sequence", opts) &&  // sqlite_sequence doesn't exist when the database is empty.
+    !!((await query(`SELECT COUNT(*) AS count FROM sqlite_sequence WHERE name = ?`, [tableName], "r", opts)).records[0]?.count)
 
 export type IndexInfo = { seqno: bigint, cid: bigint, name: string }[]
 
-export const getIndexInfo = async (indexName: string) =>
-    (await query(`PRAGMA index_info(${escapeSQLIdentifier(indexName)})`, [], "r")).records as IndexInfo
+export const getIndexInfo = async (indexName: string, opts: PostOptions = {}) =>
+    (await query(`PRAGMA index_info(${escapeSQLIdentifier(indexName)})`, [], "r", opts)).records as IndexInfo
 
 export type IndexList = { seq: bigint, name: string, unique: 0n | 1n, origin: "c" | "u" | "pk", partial: 0n | 1n }[]
 
-export const getIndexList = async (tableName: string) =>
-    (await query(`PRAGMA index_list(${escapeSQLIdentifier(tableName)})`, [], "r")).records as IndexList
+export const getIndexList = async (tableName: string, opts: PostOptions = {}) =>
+    (await query(`PRAGMA index_list(${escapeSQLIdentifier(tableName)})`, [], "r", opts)).records as IndexList
 
-export const getTableInfo = async (tableName: string) =>
-    (await query(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r")).records as TableInfo
+export const getTableInfo = async (tableName: string, opts: PostOptions = {}) =>
+    (await query(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r", opts)).records as TableInfo
 
-export const getTableList = async () => {
-    return ((await query("PRAGMA table_list", [], "r")).records as TableListItem[])
+export const getTableList = async (opts: PostOptions = {}) => {
+    return ((await query("PRAGMA table_list", [], "r", opts)).records as TableListItem[])
         .filter(({ name }) => !name.startsWith("sqlite_"))  // https://www.sqlite.org/fileformat2.html#intschema
 }
 
-export const getTableSchema = async (tableName: string) =>
-    (await query(`SELECT sql FROM sqlite_schema WHERE name = ?`, [tableName], "r")).records[0]?.sql as string | undefined
+export const getTableSchema = async (tableName: string, opts: PostOptions = {}) =>
+    (await query(`SELECT sql FROM sqlite_schema WHERE name = ?`, [tableName], "r", opts)).records[0]?.sql as string | undefined
 
-export const getIndexSchema = async (indexName: string) =>
-    (await query(`SELECT sql FROM sqlite_schema WHERE type = ? AND name = ?`, ["index", indexName], "r")).records[0]?.sql as string | null | undefined
+export const getIndexSchema = async (indexName: string, opts: PostOptions = {}) =>
+    (await query(`SELECT sql FROM sqlite_schema WHERE type = ? AND name = ?`, ["index", indexName], "r", opts)).records[0]?.sql as string | null | undefined

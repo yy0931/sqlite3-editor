@@ -8,13 +8,15 @@ import { scrollbarWidth, ScrollbarY } from "./scrollbar"
 import { persistentRef } from "./components"
 
 export const useTableStore = zustand<{
+    invalidQuery: string | null
+
     tableInfo: remote.TableInfo
     indexList: remote.IndexList
     /** index_info for each index in indexList */
     indexInfo: remote.IndexInfo[]
     /** sqlite_schema.sql for each in dex in indexList */
     indexSchema: (string | null)[]
-    tableSchema: string | undefined
+    tableSchema: string | null
     autoIncrement: boolean
     records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[]
     input: { readonly draftValue: string, readonly draftValueType: string, readonly textarea: HTMLTextAreaElement | null } | null
@@ -24,11 +26,12 @@ export const useTableStore = zustand<{
     }[]
     getRecordSelectors: (record: Record<string, remote.SQLite3Value>) => string[][]
 }>()((set, get) => ({
+    invalidQuery: null,
     tableInfo: [],
     indexList: [],
     indexInfo: [],
     indexSchema: [],
-    tableSchema: undefined,
+    tableSchema: null,
     autoIncrement: false,
     records: [],
     input: null,
@@ -81,14 +84,22 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
 
     const scrollbarRef = useRef() as Ref<ScrollbarY>
     useEffect(() => {
-        tableRef.current?.addEventListener("wheel", (ev) => {
+        if (!tableRef.current) { return }
+        const el = tableRef.current
+        const onWheel = (ev: WheelEvent) => {
             if (ev.deltaY === 0) { return }  // Scroll horizontally
             ev.preventDefault()
             scrollbarRef.current!.wheel(ev.deltaY / 30)
-        }, { passive: false })
-    }, [])
+        }
+        el.addEventListener("wheel", onWheel, { passive: false })
+        return () => { el.removeEventListener("wheel", onWheel as any, { passive: false } as any) }
+    }, [tableRef.current])
 
     const isFindWidgetVisible = useMainStore((state) => state.isFindWidgetVisibleWhenValueIsEmpty || state.findWidget.value !== "")
+
+    if (state.invalidQuery !== null) {
+        return <span className="text-red-700">{state.invalidQuery}</span>
+    }
 
     return <>
         <div className="max-w-full overflow-x-auto w-max">
