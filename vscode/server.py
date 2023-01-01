@@ -17,11 +17,16 @@ def find_widget_regexp(text: str, pattern: str, whole_word: int, case_sensitive:
 
 
 class Server:
-    def __init__(self, database_filepath, request_body_filepath, response_body_filepath, cwd):
+    def __init__(self, database_filepath, request_body_filepath, response_body_filepath, cwd, tmp_database_path):
         self.readonly_connection = sqlite3.connect("file:" + urllib.parse.quote(database_filepath) + "?mode=ro", uri=True)
         self.readwrite_connection = sqlite3.connect(database_filepath)
+
         self.readonly_connection.create_function("find_widget_regexp", 4, find_widget_regexp, deterministic=True)
         self.readwrite_connection.create_function("find_widget_regexp", 4, find_widget_regexp, deterministic=True)
+
+        self.readonly_connection.execute("ATTACH DATABASE ? AS editor_tmp_database", ["file:" + urllib.parse.quote(tmp_database_path)])
+        self.readwrite_connection.execute("ATTACH DATABASE ? AS editor_tmp_database", ["file:" + urllib.parse.quote(tmp_database_path)])
+
         self.request_body_filepath = request_body_filepath
         self.response_body_filepath = response_body_filepath
         self.cwd = cwd
@@ -74,7 +79,8 @@ if __name__ == "__main__":
     parser.add_argument("--request-body-filepath", type=str, required=True)
     parser.add_argument("--response-body-filepath", type=str, required=True)
     parser.add_argument("--cwd", type=str, required=True)
+    parser.add_argument("--tmp-database-path", type=str, required=True)
     args = parser.parse_args()
-    server = Server(args.database_filepath, args.request_body_filepath, args.response_body_filepath, args.cwd)
+    server = Server(args.database_filepath, args.request_body_filepath, args.response_body_filepath, args.cwd, args.tmp_database_path)
     while True:
         print(server.handle(input()), flush=True)

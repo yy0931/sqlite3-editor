@@ -12,6 +12,10 @@ const readWriteConnection = sqlite3("../samples/employees_db-full-1.0.6.db")
 readonlyConnection.defaultSafeIntegers()
 readWriteConnection.defaultSafeIntegers()
 
+fs.writeFileSync("tmp.db", "")
+readonlyConnection.prepare("ATTACH DATABASE ? AS editor_tmp_database").run(["tmp.db"])
+readWriteConnection.prepare("ATTACH DATABASE ? AS editor_tmp_database").run(["tmp.db"])
+
 const find_widget_regexp = (text: string, pattern: string, wholeWord: 0n | 1n, caseSensitive: 0n | 1n) => {
     try {
         return new RegExp(wholeWord ? `\\b(?:${pattern})\\b` : pattern, caseSensitive ? "" : "i").test(text) ? 1n : 0n

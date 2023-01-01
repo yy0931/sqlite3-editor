@@ -56,13 +56,23 @@ export const BigintMath = {
     min: (...args: bigint[]) => args.reduce((prev, curr) => curr < prev ? curr : prev),
 }
 
+const viewerTempViewName = "editor_tmp_database.custom_viewer_query"
+let viewerTempViewSchema: string | undefined = undefined
+
 export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: boolean) => {
     let state = useMainStore.getState()
-    if (state.tableName === undefined) { return }
-    const { viewerStatement } = state
-    const { wr, type } = state.tableList.find(({ name }) => name === state.tableName) ?? {}
+    const { useCustomViewerQuery: advancedViewerQuery, customViewerQuery } = state
+    const tableName = advancedViewerQuery ? viewerTempViewName : state.tableName
+    if (tableName === undefined) { return }
+
+    const { wr, type } = tableName === viewerTempViewName ? { wr: true, type: "view" } as const : state.tableList.find(({ name }) => name === tableName) ?? {}
     if (wr === undefined || type === undefined) { return }
-    const tableName = viewerStatement === "SELECT" ? state.tableName : `pragma_${state.pragma.toLowerCase()}`
+
+    if (advancedViewerQuery && viewerTempViewSchema !== customViewerQuery) {
+        await remote.query(`DROP VIEW IF EXISTS ${escapeSQLIdentifier(viewerTempViewName)}`, [], "w+")
+        await remote.query(`CREATE VIEW ${escapeSQLIdentifier(viewerTempViewName)} AS ${customViewerQuery}`, [], "w+")
+        viewerTempViewSchema = customViewerQuery
+    }
     const tableInfo = reloadSchema ? await remote.getTableInfo(tableName) : useTableStore.getState().tableInfo
     let findWidgetQuery = ""
     let findWidgetParams: string[] = []
@@ -102,20 +112,19 @@ export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: bool
     if (!reloadSchema) {
         useTableStore.setState({ records })
     } else {
-        if (viewerStatement === "SELECT") {
-            // SELECT
+        if (!advancedViewerQuery) {
             const indexList = await remote.getIndexList(tableName)
             useTableStore.setState({
                 tableInfo,
                 records,
                 autoIncrement: tableName === null ? false : await remote.hasTableAutoincrementColumn(tableName),
+                tableSchema: await remote.getTableSchema(tableName),
+
                 indexList,
                 indexInfo: await Promise.all(indexList.map((index) => remote.getIndexInfo(index.name))),
                 indexSchema: await Promise.all(indexList.map((index) => remote.getIndexSchema(index.name).then((x) => x ?? null))),
-                tableSchema: await remote.getTableSchema(tableName),
             })
         } else {
-            // PRAGMA
             useTableStore.setState({
                 tableInfo,
                 records,
@@ -134,7 +143,8 @@ export const useMainStore = zustand<{
         visibleAreaSize: bigint
     }
     errorMessage: string
-    viewerStatement: "SELECT" | "PRAGMA"  // set via setViewerQuery
+    useCustomViewerQuery: boolean
+    customViewerQuery: string
     pragma: string                        // set via setViewerQuery
     tableName: string | undefined         // set via setViewerQuery
     findWidget: {  // set via setFindWidgetState
@@ -150,7 +160,8 @@ export const useMainStore = zustand<{
     autoReload: boolean
     _rerender: Record<string, never>,
     setViewerQuery: (opts: {
-        viewerStatement?: "SELECT" | "PRAGMA"
+        useCustomViewerQuery?: boolean
+        customViewerQuery?: string
         pragma?: string
         tableName?: string
     }) => Promise<void>,
@@ -177,7 +188,8 @@ export const useMainStore = zustand<{
             visibleAreaSize: 20n,
         },
         errorMessage: "",
-        viewerStatement: "SELECT",
+        useCustomViewerQuery: false,
+        customViewerQuery: "",
         pragma: "analysis_limit",
         findWidget: {
             value: "",
@@ -195,8 +207,8 @@ export const useMainStore = zustand<{
             set(opts)
             await remote.setState("tableName", get().tableName)
             await reloadTable(true, true)
-            if (opts.viewerStatement !== undefined || opts.tableName !== undefined) {
-                await editor.useEditorStore.getState().switchTable(opts.viewerStatement === "PRAGMA" ? undefined : get().tableName)
+            if (opts.useCustomViewerQuery !== undefined || opts.customViewerQuery !== undefined || opts.tableName !== undefined) {
+                await editor.useEditorStore.getState().switchTable(opts.useCustomViewerQuery ? undefined : get().tableName)
             }
         },
         setFindWidgetState: async (opts) => {
@@ -248,8 +260,8 @@ export const useMainStore = zustand<{
 })
 
 const App = () => {
-    const state = useMainStore(({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging, isFindWidgetVisible, autoReload }) =>
-        ({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging, isFindWidgetVisible, autoReload }))
+    const state = useMainStore(({ requireReloading, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging, isFindWidgetVisible, autoReload, useCustomViewerQuery, customViewerQuery }) =>
+        ({ requireReloading, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging, isFindWidgetVisible, autoReload, useCustomViewerQuery, customViewerQuery }))
 
     const editorStatement = editor.useEditorStore((state) => state.statement)
 
@@ -285,30 +297,29 @@ const App = () => {
     return <>
         <LoadingIndicator />
         <h2 className="[padding-top:var(--page-padding)]">
-            <Select value={state.viewerStatement} onChange={(value) => { state.setViewerQuery({ viewerStatement: value }).catch(console.error) }} options={{ SELECT: {}, PRAGMA: {} }} className="primary" />
-            {state.viewerStatement === "SELECT" && <> * FROM
-                {" "}
+            {!state.useCustomViewerQuery && <>
+                {"SELECT * FROM "}
                 {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
-                {" "}
             </>}
-            {state.viewerStatement === "PRAGMA" && <Select value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
-            {state.viewerStatement === "SELECT" && (() => {
-                return <div className="ml-0 block lg:ml-2 lg:inline">
-                    <SVGCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>Schema</SVGCheckbox>
-                    <SVGCheckbox icon="#add" checked={editorStatement === "CREATE TABLE"} className="ml-2" onClick={(checked) => {
-                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                        editor.useEditorStore.getState().createTable(state.tableName)
-                    }}>Create Table</SVGCheckbox>
-                    <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} className="ml-2" onClick={(checked) => {
-                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                        editor.useEditorStore.getState().custom(state.tableName)
-                    }}>Custom Query</SVGCheckbox>
-                    <SVGCheckbox icon="#search" checked={state.isFindWidgetVisible} className="ml-2" onClick={(checked) => {
-                        useMainStore.setState({ isFindWidgetVisible: checked })
-                    }}>Find</SVGCheckbox>
-                    <label className="ml-2 select-none cursor-pointer" title="Reload the table when the database is updated."><input type="checkbox" checked={state.autoReload} onChange={() => { useMainStore.setState({ autoReload: !state.autoReload }) }}></input> Auto reload</label>
-                </div>
-            })()}
+            {state.useCustomViewerQuery && <>
+                <input placeholder="SELECT * FROM table-name" className="w-96" value={state.customViewerQuery} onChange={(ev) => { state.setViewerQuery({ customViewerQuery: ev.currentTarget.value }).catch(console.error) }}></input>
+            </>}
+            <label className="ml-2 select-none cursor-pointer"><input type="checkbox" checked={state.useCustomViewerQuery} onChange={() => { state.setViewerQuery({ useCustomViewerQuery: !state.useCustomViewerQuery }).catch(console.error) }}></input> Custom Viewer Query</label>
+            <div className="ml-0 block lg:ml-2 lg:inline">
+                <SVGCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>Schema</SVGCheckbox>
+                <SVGCheckbox icon="#add" checked={editorStatement === "CREATE TABLE"} className="ml-2" onClick={(checked) => {
+                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                    editor.useEditorStore.getState().createTable(state.tableName)
+                }}>Create Table</SVGCheckbox>
+                <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} className="ml-2" onClick={(checked) => {
+                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                    editor.useEditorStore.getState().custom(state.tableName)
+                }}>Custom Query</SVGCheckbox>
+                <SVGCheckbox icon="#search" checked={state.isFindWidgetVisible} className="ml-2" onClick={(checked) => {
+                    useMainStore.setState({ isFindWidgetVisible: checked })
+                }}>Find</SVGCheckbox>
+                <label className="ml-2 select-none cursor-pointer" title="Reload the table when the database is updated."><input type="checkbox" checked={state.autoReload} onChange={() => { useMainStore.setState({ autoReload: !state.autoReload }) }}></input> Auto reload</label>
+            </div>
         </h2>
         {isSettingsViewOpen && <div>
             <SettingsView />
