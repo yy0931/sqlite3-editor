@@ -73,10 +73,6 @@ const moveSelectionLeft = () => {
 }
 
 export const onKeydown = async (ev: KeyboardEvent) => {
-    if (!(ev.target instanceof HTMLElement && (ev.target.matches("table textarea") || !ev.target.matches("label, button, input, textarea, select, option")))) {
-        return
-    }
-
     try {
         const state = editor.useEditorStore.getState()
         const singleClick = isInSingleClickState()
@@ -92,43 +88,96 @@ export const onKeydown = async (ev: KeyboardEvent) => {
             if (a === "!a" && ev.altKey) { return false }
             return ev.code === code
         }
+        const inputFocus = !(ev.target instanceof HTMLElement && (ev.target.matches("table textarea") || !ev.target.matches("label, button, input, textarea, select, option")))
 
-        if (state.statement === "UPDATE" && singleClick && key("+Escape")) {
+        if (inputFocus && key("+Escape")) {
+            const { activeElement } = document
+            if (activeElement instanceof HTMLElement) {
+                activeElement.blur()
+            }
+        } else if (key("c!s!a+KeyF")) {
+            ev.preventDefault()
+            const isFindWidgetVisible = useMainStore.getState().isFindWidgetVisibleWhenValueIsEmpty || useMainStore.getState().findWidget.value !== ""
+            if (isFindWidgetVisible) {
+                const findWidget = document.querySelector<HTMLInputElement>("#findWidget")
+                if (findWidget) {
+                    findWidget.focus()
+                    findWidget.select()
+                }
+            } else {
+                useMainStore.setState({ isFindWidgetVisibleWhenValueIsEmpty: true })
+            }
+        } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("+Escape")) {
+            ev.preventDefault()
             await state.clearInputs()
-        } else if (state.statement === "UPDATE" && !singleClick && key("+Escape")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("+Escape")) {
+            ev.preventDefault()
             state.update(state.tableName, state.column, state.row)
-        } else if (state.statement === "UPDATE" && singleClick && key("!c!s!a+ArrowUp")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("!c!s!a+ArrowUp")) {
+            ev.preventDefault()
             await moveSelectionUp()
-        } else if (state.statement === "UPDATE" && singleClick && key("!c!s!a+ArrowDown")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("!c!s!a+ArrowDown")) {
+            ev.preventDefault()
             await moveSelectionDown()
-        } else if (state.statement === "UPDATE" && singleClick && key("!c!s!a+ArrowLeft")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("!c!s!a+ArrowLeft")) {
+            ev.preventDefault()
             moveSelectionLeft()
-        } else if (state.statement === "UPDATE" && singleClick && key("!c!s!a+ArrowRight")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("!c!s!a+ArrowRight")) {
+            ev.preventDefault()
             moveSelectionRight()
-        } else if (state.statement === "UPDATE" && singleClick && key("!c!a+Enter")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("!c!a+Enter")) {
+            ev.preventDefault()
             document.querySelector(".single-click")!.classList.remove("single-click")
-        } else if (state.statement === "UPDATE" && !singleClick && key("!c!s!a+Enter")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("!c!s!a+Enter")) {
+            ev.preventDefault()
             await editor.useEditorStore.getState().commitUpdate(true)
             await moveSelectionDown()
-        } else if (state.statement === "UPDATE" && !singleClick && key("!cs!a+Enter")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("!cs!a+Enter")) {
+            ev.preventDefault()
             await editor.useEditorStore.getState().commitUpdate(true)
             await moveSelectionUp()
-        } else if (state.statement === "UPDATE" && singleClick && key("!c!s!a+Tab")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("!c!s!a+Tab")) {
+            ev.preventDefault()
             moveSelectionRight()
-        } else if (state.statement === "UPDATE" && !singleClick && key("!c!s!a+Tab")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("!c!s!a+Tab")) {
+            ev.preventDefault()
             await editor.useEditorStore.getState().commitUpdate(true)
             moveSelectionRight()
-        } else if (state.statement === "UPDATE" && singleClick && key("!cs!a+Tab")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("!cs!a+Tab")) {
+            ev.preventDefault()
             moveSelectionLeft()
-        } else if (state.statement === "UPDATE" && !singleClick && key("!cs!a+Tab")) {
+        } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("!cs!a+Tab")) {
+            ev.preventDefault()
             await editor.useEditorStore.getState().commitUpdate(true)
             moveSelectionLeft()
-        } else if (state.statement === "DELETE" && key("+Escape")) {
+        } else if (!inputFocus && state.statement === "DELETE" && key("+Escape")) {
+            ev.preventDefault()
             await state.clearInputs()
-        } else {
-            return
+        } else if (!inputFocus && key("!c!s!a+ArrowDown")) {
+            ev.preventDefault()
+            const mainState = useMainStore.getState()
+            await mainState.setPaging({ visibleAreaTop: mainState.paging.visibleAreaTop + 1n })
+        } else if (!inputFocus && key("!c!s!a+ArrowUp")) {
+            ev.preventDefault()
+            const mainState = useMainStore.getState()
+            await mainState.setPaging({ visibleAreaTop: mainState.paging.visibleAreaTop - 1n })
+        } else if (!inputFocus && key("!c!s!a+PageDown")) {
+            ev.preventDefault()
+            const mainState = useMainStore.getState()
+            await mainState.setPaging({ visibleAreaTop: mainState.paging.visibleAreaTop + mainState.paging.visibleAreaSize })
+        } else if (!inputFocus && key("!c!s!a+PageUp")) {
+            ev.preventDefault()
+            const mainState = useMainStore.getState()
+            await mainState.setPaging({ visibleAreaTop: mainState.paging.visibleAreaTop - mainState.paging.visibleAreaSize })
+        } else if (!inputFocus && key("c!s!a+Home")) {
+            ev.preventDefault()
+            const mainState = useMainStore.getState()
+            await mainState.setPaging({ visibleAreaTop: 0n })
+        } else if (!inputFocus && key("c!s!a+End")) {
+            ev.preventDefault()
+            const mainState = useMainStore.getState()
+            await mainState.setPaging({ visibleAreaTop: mainState.paging.numRecords - mainState.paging.visibleAreaSize })
         }
-        ev.preventDefault()
     } catch (err) {
         console.error(err)
     }

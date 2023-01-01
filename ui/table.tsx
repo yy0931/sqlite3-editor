@@ -88,6 +88,8 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
         }, { passive: false })
     }, [])
 
+    const isFindWidgetVisible = useMainStore((state) => state.isFindWidgetVisibleWhenValueIsEmpty || state.findWidget.value !== "")
+
     return <>
         <div className="max-w-full overflow-x-auto w-max">
             <table ref={tableRef} className="viewer w-max border-collapse table-fixed bg-white" style={{ paddingRight: scrollbarWidth, boxShadow: "0 0 0px 2px #000000ad" }}>
@@ -144,12 +146,12 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
+                    {isFindWidgetVisible && <tr>
                         <td className="[padding-left:10px] [padding-right:10px] [background-color:var(--gutter-color)]"></td>
                         <td className="relative text-right" colSpan={state.tableInfo.length} style={{ maxWidth: getColumnWidths().reduce((a, b) => a + b, 0) }}>
                             <FindWidget />
                         </td>
-                    </tr>
+                    </tr>}
                     {state.records.length === 0 && <tr>
                         <td className="overflow-hidden no-hover inline-block cursor-default [height:1.2em] [padding-left:10px] [padding-right:10px]" style={{ borderRight: "1px solid var(--td-border-color)" }}></td>
                     </tr>}
@@ -175,18 +177,27 @@ const FindWidget = () => {
     const setFindWidgetState = useMainStore((state) => state.setFindWidgetState)
     const ref = useRef() as Ref<HTMLInputElement>
 
+    // Focus the input box on mount
     useEffect(() => {
-        window.addEventListener("keydown", (ev) => {
-            if (ev.ctrlKey && ev.code === "KeyF") {
-                ev.preventDefault()
-                ref.current!.focus()
-                ref.current!.select()
-            }
-        })
+        ref.current!.focus()
+        ref.current!.select()
     }, [])
 
+    // Hide the find widget on blur
+    useEffect(() => {
+        const input = ref.current
+        if (!input) { return }
+        const onBlur = () => {
+            if (useMainStore.getState().findWidget.value === "") {
+                useMainStore.setState({ isFindWidgetVisibleWhenValueIsEmpty: false })
+            }
+        }
+        input.addEventListener("blur", onBlur)
+        return () => { input.removeEventListener("blur", onBlur) }
+    }, [ref.current])
+
     return <div className="inline-block pl-1 pt-1 bg-gray-200 shadow-md whitespace-nowrap sticky right-3">
-        <input ref={ref} className="mr-1" placeholder="Find" value={value} onChange={(ev) => setFindWidgetState({ value: ev.currentTarget.value })} />
+        <input id="findWidget" ref={ref} className="mr-1" placeholder="Find" value={value} onChange={(ev) => setFindWidgetState({ value: ev.currentTarget.value })} />
         <span className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
             <svg className="[width:1em] [height:1em]"><use xlinkHref="#case-sensitive" /></svg>
         </span>
