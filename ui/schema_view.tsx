@@ -25,10 +25,10 @@ export const SettingsView = () => {
                 if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
                 useEditorStore.getState().dropView(tableName)
             }}>Drop View</SVGCheckbox>}
-            <SVGCheckbox icon="#edit" className="ml-2" checked={editorStatement === "ALTER TABLE"} onClick={(checked) => {
+            {tableType === "table" && <SVGCheckbox icon="#edit" className="ml-2" checked={editorStatement === "ALTER TABLE"} onClick={(checked) => {
                 if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
                 useEditorStore.getState().alterTable(tableName, undefined).catch(console.error)
-            }}>Alter Table</SVGCheckbox>
+            }}>Alter Table</SVGCheckbox>}
         </div>}
         <div className="[padding-left:var(--page-padding)] mb-4"><pre className="[font-size:inherit] overflow-x-auto bg-white p-2" dangerouslySetInnerHTML={{ __html: Prism.highlight(schema ?? "", Prism.languages.sql!, "sql") }}></pre></div>
         <h2 className="font-bold">Indexes</h2>

@@ -313,25 +313,13 @@ const App = () => {
     }, [])
 
     const [isSettingsViewOpen, setIsSettingsViewOpen] = persistentUseState("isSettingsViewOpen", false)
+    const isTableRendered = useTableStore((state) => state.invalidQuery === null)
 
     return <>
         <LoadingIndicator />
         <h2 className="[padding-top:var(--page-padding)]">
-            {!state.useCustomViewerQuery && <>
-                {"SELECT * FROM "}
-                {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
-            </>}
-            {state.useCustomViewerQuery && <>
-                <input placeholder="SELECT * FROM table-name" className="w-96" value={state.customViewerQuery} onBlur={(ev) => { state.setViewerQuery({ customViewerQuery: ev.currentTarget.value }).catch(console.error) }}></input>
-            </>}
-            <label className="ml-2 select-none cursor-pointer"><input type="checkbox" checked={state.useCustomViewerQuery} onChange={() => { state.setViewerQuery({ useCustomViewerQuery: !state.useCustomViewerQuery }).catch(console.error) }}></input> Custom Viewer Query</label>
-            <div className="ml-0 block lg:ml-2 lg:inline">
-                <label className="select-none cursor-pointer" title="Reload the table when the database is updated."><input type="checkbox" checked={state.autoReload} onChange={() => { useMainStore.setState({ autoReload: !state.autoReload }) }}></input> Auto reload</label>
-                <SVGCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} className="ml-2" checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>Schema</SVGCheckbox>
-                <SVGCheckbox icon="#search" checked={state.isFindWidgetVisible} className="ml-2" onClick={(checked) => {
-                    useMainStore.setState({ isFindWidgetVisible: checked })
-                }}>Find</SVGCheckbox>
-                <SVGCheckbox icon="#add" checked={editorStatement === "CREATE TABLE"} className="ml-2" onClick={(checked) => {
+            <div className="mb-2">
+                <SVGCheckbox icon="#add" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                     editor.useEditorStore.getState().createTable(state.tableName)
                 }}>Create Table</SVGCheckbox>
@@ -339,6 +327,24 @@ const App = () => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                     editor.useEditorStore.getState().custom(state.tableName)
                 }}>Custom Query</SVGCheckbox>
+            </div>
+            <hr className="mb-2 border-b-2 border-b-gray-400" />
+            <div className="mb-2">
+                {!state.useCustomViewerQuery && <>
+                    {"SELECT * FROM "}
+                    {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
+                </>}
+                {state.useCustomViewerQuery && <>
+                    <input placeholder="SELECT * FROM table-name" className="w-96" value={state.customViewerQuery} onBlur={(ev) => { state.setViewerQuery({ customViewerQuery: ev.currentTarget.value }).catch(console.error) }}></input>
+                </>}
+                <label className="ml-2 select-none cursor-pointer"><input type="checkbox" checked={state.useCustomViewerQuery} onChange={() => { state.setViewerQuery({ useCustomViewerQuery: !state.useCustomViewerQuery }).catch(console.error) }}></input> Custom Viewer Query</label>
+                <label className="select-none cursor-pointer ml-2" title="Reload the table when the database is updated."><input type="checkbox" checked={state.autoReload} onChange={() => { useMainStore.setState({ autoReload: !state.autoReload }) }}></input> Auto reload</label>
+            </div>
+            <div>
+                {!state.useCustomViewerQuery && <SVGCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>Schema</SVGCheckbox>}
+                {isTableRendered && <SVGCheckbox icon="#search" checked={state.isFindWidgetVisible} className="ml-2" onClick={(checked) => {
+                    useMainStore.setState({ isFindWidgetVisible: checked })
+                }}>Find</SVGCheckbox>}
             </div>
         </h2>
         {isSettingsViewOpen && <div>
