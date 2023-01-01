@@ -280,10 +280,13 @@ export const useMainStore = zustand<{
 })
 
 const App = () => {
-    const state = useMainStore(({ requireReloading, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging, isFindWidgetVisible, autoReload, useCustomViewerQuery, customViewerQuery }) =>
-        ({ requireReloading, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging, isFindWidgetVisible, autoReload, useCustomViewerQuery, customViewerQuery }))
-
+    const state = useMainStore(({ requireReloading, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging, isFindWidgetVisible, autoReload, useCustomViewerQuery, customViewerQuery }) =>
+        ({ requireReloading, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging, isFindWidgetVisible, autoReload, useCustomViewerQuery, customViewerQuery }))
+    const tableName = useMainStore(({ tableName }) => tableName)
     const editorStatement = editor.useEditorStore((state) => state.statement)
+    const [isSettingsViewOpen, setIsSettingsViewOpen] = persistentUseState("isSettingsViewOpen", false)
+    const isTableRendered = useTableStore((state) => state.invalidQuery === null)
+    const tableType = useMainStore((state) => state.tableList.find(({ name }) => name === tableName)?.type)
 
     useEffect(() => {
         const handler = ({ data }: remote.Message) => {
@@ -312,27 +315,24 @@ const App = () => {
         return () => { clearInterval(timer) }
     }, [])
 
-    const [isSettingsViewOpen, setIsSettingsViewOpen] = persistentUseState("isSettingsViewOpen", false)
-    const isTableRendered = useTableStore((state) => state.invalidQuery === null)
-
     return <>
         <LoadingIndicator />
         <h2 className="[padding-top:var(--page-padding)]">
             <div className="mb-2">
                 <SVGCheckbox icon="#add" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                    editor.useEditorStore.getState().createTable(state.tableName)
+                    editor.useEditorStore.getState().createTable(tableName)
                 }}>Create Table</SVGCheckbox>
                 <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} className="ml-2" onClick={(checked) => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                    editor.useEditorStore.getState().custom(state.tableName)
+                    editor.useEditorStore.getState().custom(tableName)
                 }}>Custom Query</SVGCheckbox>
             </div>
             <hr className="mb-2 border-b-2 border-b-gray-400" />
             <div className="mb-2">
                 {!state.useCustomViewerQuery && <>
                     {"SELECT * FROM "}
-                    {state.tableName === undefined ? <>No tables</> : <Select value={state.tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
+                    {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
                 </>}
                 {state.useCustomViewerQuery && <>
                     <input placeholder="SELECT * FROM table-name" className="w-96" value={state.customViewerQuery} onBlur={(ev) => { state.setViewerQuery({ customViewerQuery: ev.currentTarget.value }).catch(console.error) }}></input>
@@ -342,7 +342,23 @@ const App = () => {
             </div>
             <div>
                 {!state.useCustomViewerQuery && <SVGCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>Schema</SVGCheckbox>}
-                {isTableRendered && <SVGCheckbox icon="#search" checked={state.isFindWidgetVisible} className="ml-2" onClick={(checked) => {
+                {tableName && tableType === "table" && <SVGCheckbox icon="#trash" className="ml-2" checked={editorStatement === "DROP TABLE"} onClick={(checked) => {
+                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                    editor.useEditorStore.getState().dropTable(tableName)
+                }}>Drop Table</SVGCheckbox>}
+                {tableName && tableType === "view" && <SVGCheckbox icon="#trash" className="ml-2" checked={editorStatement === "DROP VIEW"} onClick={(checked) => {
+                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                    editor.useEditorStore.getState().dropView(tableName)
+                }}>Drop View</SVGCheckbox>}
+                {tableName && tableType === "table" && <SVGCheckbox icon="#edit" className="ml-2" checked={editorStatement === "ALTER TABLE"} onClick={(checked) => {
+                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                    editor.useEditorStore.getState().alterTable(tableName, undefined).catch(console.error)
+                }}>Alter Table</SVGCheckbox>}
+                {tableName && tableType === "table" && <SVGCheckbox icon="#add" className="ml-2" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
+                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                    editor.useEditorStore.getState().createIndex(tableName)
+                }}>Create Index</SVGCheckbox>}
+                {isTableRendered && !isSettingsViewOpen && <SVGCheckbox icon="#search" checked={state.isFindWidgetVisible} className="ml-2" onClick={(checked) => {
                     useMainStore.setState({ isFindWidgetVisible: checked })
                 }}>Find</SVGCheckbox>}
             </div>
@@ -353,7 +369,7 @@ const App = () => {
         </div>}
         {!isSettingsViewOpen && <>
             <div className="relative w-max max-w-full [padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">
-                <Table tableName={state.tableName} />
+                <Table tableName={tableName} />
             </div>
             <div className="h-2 cursor-ns-resize select-none" onMouseDown={(ev) => {
                 ev.preventDefault()
