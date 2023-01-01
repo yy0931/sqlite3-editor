@@ -319,7 +319,7 @@ const App = () => {
         <LoadingIndicator />
         <h2 className="[padding-top:var(--page-padding)]">
             <div className="mb-2">
-                <SVGCheckbox icon="#add" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
+                <SVGCheckbox icon="#empty-window" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                     editor.useEditorStore.getState().createTable(tableName)
                 }}>Create Table</SVGCheckbox>
@@ -354,7 +354,7 @@ const App = () => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                     editor.useEditorStore.getState().alterTable(tableName, undefined).catch(console.error)
                 }}>Alter Table</SVGCheckbox>}
-                {tableName && tableType === "table" && <SVGCheckbox icon="#add" className="ml-2" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
+                {tableName && tableType === "table" && <SVGCheckbox icon="#symbol-interface" className="ml-2" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                     editor.useEditorStore.getState().createIndex(tableName)
                 }}>Create Index</SVGCheckbox>}
