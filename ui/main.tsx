@@ -473,10 +473,6 @@ const App = () => {
             <div className="relative w-max max-w-full [padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">
                 <Table tableName={state.tableName} />
             </div>
-            {state.errorMessage && <p className="text-white [background:rgb(14,72,117)] [padding:10px]">
-                <pre className="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{state.errorMessage}</pre>
-                <Button className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })}>Close</Button>
-            </p>}
             <div className="h-2 cursor-ns-resize select-none" onMouseDown={(ev) => {
                 ev.preventDefault()
                 document.body.classList.add("ns-resize")
@@ -504,6 +500,10 @@ const App = () => {
                 <hr className="mt-2 border-b-2 border-b-gray-400" />
             </div>
         </>}
+        {state.errorMessage && <p className="text-white [background:rgb(14,72,117)] [padding:10px]">
+            <pre className="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{state.errorMessage}</pre>
+            <Button className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })}>Close</Button>
+        </p>}
         <editor.Editor tableList={state.tableList} />
     </>
 }
