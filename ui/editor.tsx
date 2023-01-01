@@ -361,6 +361,8 @@ export type OnWriteOptions = {
     scrollToBottom?: true
 }
 
+const Highlight = (props: { children: preact.ComponentChildren }) => <span className="[color:var(--button-primary-background)]">{props.children}</span>
+
 export const Editor = (props: { tableList: remote.TableListItem[] }) => {
     const state = useEditorStore()
 
@@ -380,6 +382,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
     switch (state.statement) {
         case "ALTER TABLE": {
             header = <>
+                <Highlight>ALTER TABLE </Highlight>
                 {escapeSQLIdentifier(state.tableName)} <Select value={state.statement2} onChange={(value) => useEditorStore.setState({ statement2: value })} options={{
                     "RENAME TO": {},
                     "RENAME COLUMN": {},
@@ -416,6 +419,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         }
         case "CREATE TABLE": {
             header = <>
+                <Highlight>CREATE TABLE </Highlight>
                 <input placeholder="table-name" value={state.newTableName} onInput={(ev) => useEditorStore.setState({ newTableName: ev.currentTarget.value })}></input>(...)
                 <Checkbox checked={state.withoutRowId} onChange={(checked) => useEditorStore.setState({ withoutRowId: checked })} className="[margin-left:8px]" text="WITHOUT ROWID" />
                 <Checkbox checked={state.strict} onChange={(checked) => useEditorStore.setState({ strict: checked })} text="STRICT" />
@@ -435,7 +439,8 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         case "DELETE": {
             const columns = state.constraintChoices[state.selectedConstraint]!
             header = <>
-                FROM {escapeSQLIdentifier(state.tableName)} WHERE <select value={state.selectedConstraint} onInput={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
+                <Highlight>DELETE FROM </Highlight>
+                {escapeSQLIdentifier(state.tableName)} WHERE <select value={state.selectedConstraint} onInput={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
                     state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as remote.SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>
@@ -450,7 +455,10 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             break
         }
         case "DROP TABLE": {
-            header = <>{escapeSQLIdentifier(state.tableName)}</>
+            header = <>
+                <Highlight>DROP TABLE </Highlight>
+                {escapeSQLIdentifier(state.tableName)}
+            </>
             editor = <>
                 <div>
                     <Commit onClick={() => state.commit(`DROP TABLE ${escapeSQLIdentifier(state.tableName)}`, [], { reload: "allTables" })} />
@@ -460,7 +468,10 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             break
         }
         case "DROP VIEW": {
-            header = <>{escapeSQLIdentifier(state.tableName)}</>
+            header = <>
+                <Highlight>DROP VIEW </Highlight>
+                {escapeSQLIdentifier(state.tableName)}
+            </>
             editor = <>
                 <div>
                     <Commit onClick={() => state.commit(`DROP VIEW ${escapeSQLIdentifier(state.tableName)}`, [], { reload: "allTables" })} />
@@ -473,10 +484,13 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             const filterDefaults = <T extends unknown>(_: T, i: number) => state.dataTypes[i] !== "default"
             const buildQuery = () => {
                 return state.dataTypes.every((d) => d === "default") ?
-                    `INTO ${escapeSQLIdentifier(state.tableName)} DEFAULT VALUES` :
-                    `INTO ${escapeSQLIdentifier(state.tableName)} (${state.tableInfo.filter(filterDefaults).map(({ name }) => name).map(escapeSQLIdentifier).join(", ")}) VALUES (${state.tableInfo.filter(filterDefaults).map(() => "?").join(", ")})`
+                    `${escapeSQLIdentifier(state.tableName)} DEFAULT VALUES` :
+                    `${escapeSQLIdentifier(state.tableName)} (${state.tableInfo.filter(filterDefaults).map(({ name }) => name).map(escapeSQLIdentifier).join(", ")}) VALUES (${state.tableInfo.filter(filterDefaults).map(() => "?").join(", ")})`
             }
-            header = <>{buildQuery()}</>
+            header = <>
+                <Highlight>INSERT INTO </Highlight>
+                {buildQuery()}
+            </>
             editor = <>
                 <ul className="list-none">
                     {state.tableInfo.map(({ name }, i) => {
@@ -499,13 +513,14 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                     })}
                 </ul>
                 <Commit className="mt-2" onClick={() => {
-                    state.commit(`INSERT ${buildQuery()}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { reload: "currentTable", scrollToBottom: true }).catch(console.error)
+                    state.commit(`INSERT INTO ${buildQuery()}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { reload: "currentTable", scrollToBottom: true }).catch(console.error)
                 }} />
             </>
             break
         }
         case "UPDATE": {
             header = <>
+                <Highlight>UPDATE </Highlight>
                 {escapeSQLIdentifier(state.tableName)} SET {escapeSQLIdentifier(state.column)} = ? WHERE <select value={state.selectedConstraint} onChange={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
                     state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as remote.SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
@@ -532,11 +547,11 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         }
         case "CREATE INDEX": {
             header = <>
-                <span className="[color:var(--button-primary-background)]">
+                <Highlight>
                     {"CREATE "}
                     <Checkbox text="UNIQUE" checked={state.unique} onChange={(unique) => useEditorStore.setState({ unique })} />
                     {"INDEX "}
-                </span>
+                </Highlight>
                 <input placeholder="index-name" value={state.indexName} onInput={(ev) => useEditorStore.setState({ indexName: ev.currentTarget.value })}></input>
                 {" ON "}
                 {escapeSQLIdentifier(state.tableName)}
@@ -554,7 +569,8 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         }
         case "DROP INDEX": {
             header = <>
-                DROP INDEX {escapeSQLIdentifier(state.indexName)}
+                <Highlight>DROP INDEX </Highlight>
+                <span className="[color:var(--button-primary-background)]">DROP INDEX</span> {escapeSQLIdentifier(state.indexName)}
             </>
             editor = <>
                 <Commit onClick={() => state.commit(`DROP INDEX ${escapeSQLIdentifier(state.indexName)}`, [], { reload: "allTables" }).catch(console.error)} />
@@ -563,7 +579,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             break
         }
         case "Custom Query": {
-            header = <></>
+            header = <><Highlight>Custom Query </Highlight></>
             editor = <>
                 <textarea autocomplete="off" spellcheck={false} className="mb-2 [height:20vh]" placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
                 <div className="mt-2">
@@ -577,8 +593,6 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
 
     return <>
         <h2>
-            {state.statement !== "CREATE INDEX" && <span className="[color:var(--button-primary-background)]">{state.statement}</span>}
-            {" "}
             {header}
         </h2>
         <div className="[padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">

@@ -95,7 +95,8 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
         return () => { el.removeEventListener("wheel", onWheel as any, { passive: false } as any) }
     }, [tableRef.current])
 
-    const isFindWidgetVisible = useMainStore((state) => state.isFindWidgetVisibleWhenValueIsEmpty || state.findWidget.value !== "")
+    const isFindWidgetVisible = useMainStore((state) => state.isFindWidgetVisible)
+    const tableType = useMainStore((state) => state.tableList.find(({ name }) => name === state.tableName)?.type)
 
     if (state.invalidQuery !== null) {
         return <span className="text-red-700">{state.invalidQuery}</span>
@@ -109,7 +110,8 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                         <th className="font-normal select-none [padding-top:3px] [padding-bottom:3px] [padding-left:1em] [padding-right:1em]"></th>
                         {state.tableInfo.map(({ name, notnull, pk, type, dflt_value }, i) => <th
                             style={{ width: getColumnWidths()[i]! }}
-                            className={"font-normal select-none " + (tableName !== undefined ? "clickable" : "")}
+                            className={"font-normal select-none " + (tableName !== undefined && tableType === "table" ? "clickable" : "")}
+                            title={tableType === "table" ? "" : `A ${tableType} cannot be altered.`}
                             onMouseMove={(ev) => {
                                 const rect = ev.currentTarget.getBoundingClientRect()
                                 if (rect.right - ev.clientX < 20) {
@@ -141,7 +143,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                                             window.removeEventListener("mousemove", mouseMove)
                                             document.body.classList.remove("ew-resize")
                                         }, { once: true })
-                                    } else if (tableName !== undefined) { // center
+                                    } else if (tableName !== undefined && tableType === "table") { // center
                                         alterTable(tableName, name).catch(console.error)
                                     }
                                 }).catch(console.error)
