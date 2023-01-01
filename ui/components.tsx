@@ -4,7 +4,7 @@ import type { ReadonlyDeep } from "type-fest"
 import * as remote from "./remote"
 
 /** Typed version of `<select>` */
-export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, className?: string }) => {
+export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string, group?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, className?: string }) => {
     const ref1 = useRef() as Ref<HTMLSelectElement>
     const ref2 = useRef() as Ref<HTMLSelectElement>
     useLayoutEffect(() => {
@@ -12,9 +12,22 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
         if (!ref1.current || !ref2.current) { return }
         ref1.current.style.width = ref2.current.offsetWidth + "px"
     })  // skip the second argument
+
+    const groups = new Map<string | undefined, string[]>()
+    for (const [value, { group }] of Object.entries(props.options) as [T, (typeof props.options)[T]][]) {
+        if (!groups.has(group)) { groups.set(group, []) }
+        groups.get(group)!.push(value)
+    }
+
     return <>
         <select autocomplete="off" value={props.value} style={props.style} className={"[padding-left:15px] [padding-right:15px] " + (props.className ?? "")} ref={ref1} onChange={(ev) => props.onChange(ev.currentTarget.value as T)} tabIndex={props.tabIndex}>{
-            (Object.keys(props.options) as T[]).map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].disabled ? props.options[value].disabledReason : undefined}>{props.options[value].text ?? value}</option>)
+            ([...groups.entries()] as [string, T[]][]).map(([group, values]) => {
+                const options = values.map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].disabled ? props.options[value].disabledReason : undefined}>{props.options[value].text ?? value}</option>)
+                if (group === undefined) {
+                    return options
+                }
+                return <optgroup label={group}>{options}</optgroup>
+            })
         }</select>
 
         {/* Hidden replication for auto resizing */}
