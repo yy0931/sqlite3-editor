@@ -6,7 +6,7 @@ import * as editor from "./editor"
 import deepEqual from "fast-deep-equal"
 import { useEffect, useRef, Ref } from "preact/hooks"
 import * as remote from "./remote"
-import { Button, persistentUseState, Select, SVGCheckbox } from "./components"
+import { Button, Checkbox, persistentUseState, Select, SVGCheckbox } from "./components"
 import { escapeSQLIdentifier, Table, useTableStore } from "./table"
 import zustand from "zustand"
 import "./scrollbar"
@@ -147,6 +147,7 @@ export const useMainStore = zustand<{
     tableList: remote.TableListItem[]
     pragmaList: string[]
     scrollerRef: { current: HTMLDivElement | null }
+    autoReload: boolean
     _rerender: Record<string, never>,
     setViewerQuery: (opts: {
         viewerStatement?: "SELECT" | "PRAGMA"
@@ -188,6 +189,7 @@ export const useMainStore = zustand<{
         tableList: [],
         pragmaList: [],
         scrollerRef: { current: null },
+        autoReload: true,
         _rerender: {},
         setViewerQuery: async (opts) => {
             set(opts)
@@ -246,15 +248,17 @@ export const useMainStore = zustand<{
 })
 
 const App = () => {
-    const state = useMainStore(({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging }) =>
-        ({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging }))
+    const state = useMainStore(({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging, isFindWidgetVisible, autoReload }) =>
+        ({ requireReloading, viewerStatement, tableName, errorMessage, tableList, setViewerQuery, pragma, pragmaList, setPaging, isFindWidgetVisible, autoReload }))
 
     const editorStatement = editor.useEditorStore((state) => state.statement)
 
     useEffect(() => {
         const handler = ({ data }: remote.Message) => {
             if (data.type === "sqlite3-editor-server" && data.requestId === undefined) {
-                state.requireReloading()
+                if (useMainStore.getState().autoReload) {
+                    state.requireReloading()
+                }
             }
         }
         window.addEventListener("message", handler)
@@ -299,9 +303,10 @@ const App = () => {
                         if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                         editor.useEditorStore.getState().custom(state.tableName)
                     }}>Custom Query</SVGCheckbox>
-                    <SVGCheckbox icon="#tools" checked={false} className="ml-2" onClick={(checked) => {
-                        alert("TODO")
-                    }}>Tools…</SVGCheckbox>
+                    <SVGCheckbox icon="#search" checked={state.isFindWidgetVisible} className="ml-2" onClick={(checked) => {
+                        useMainStore.setState({ isFindWidgetVisible: checked })
+                    }}>Find</SVGCheckbox>
+                    <label className="ml-2 select-none cursor-pointer" title="Reload the table when the database is updated."><input type="checkbox" checked={state.autoReload} onChange={() => { useMainStore.setState({ autoReload: !state.autoReload }) }}></input> Auto reload</label>
                 </div>
             })()}
         </h2>
