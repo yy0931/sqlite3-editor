@@ -53,6 +53,13 @@ type State =
             selectedConstraint: number
             isTextareaDirty: boolean
         }
+        | {
+            statement: "CREATE INDEX"
+            unique: boolean
+            indexName: string
+            indexedColumns: string
+            where: string
+        }
     )
     | { tableName: string | undefined } & (
         | {
@@ -62,6 +69,10 @@ type State =
             strict: boolean
             tableConstraints: string
             columnDefs: ColumnDef[]
+        }
+        | {
+            statement: "DROP INDEX"
+            indexName: string
         }
         | {
             statement: "Custom Query"
@@ -151,6 +162,9 @@ export const useEditorStore = zustand<State & {
     insert: (tableName: string) => Promise<void>
     custom: (tableName: string | undefined) => void
     update: (tableName: string, column: string, row: number) => void
+    createIndex: (tableName: string) => void
+    dropIndex: (tableName: string | undefined, indexName: string) => void
+
     switchTable: (tableName: string | undefined) => Promise<void>
     commit: (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => Promise<void>
     commitUpdate: (preserveEditorState?: true, explicit?: true) => Promise<void>
@@ -258,6 +272,14 @@ export const useEditorStore = zustand<State & {
             })
             mountInput()
         },
+        createIndex: (tableName) => {
+            unmountInput?.()
+            set({ statement: "CREATE INDEX", tableName, unique: false, indexName: "", indexedColumns: "", where: "" })
+        },
+        dropIndex: (tableName, indexName) => {
+            unmountInput?.()
+            set({ statement: "DROP INDEX", indexName, tableName })
+        },
         switchTable: async (tableName: string | undefined) => {
             const state = get()
             if (tableName === undefined) {
@@ -270,6 +292,8 @@ export const useEditorStore = zustand<State & {
                 case "DROP VIEW": state.dropView(tableName); break
                 case "ALTER TABLE": await state.alterTable(tableName, undefined); break
                 case "DELETE": case "UPDATE": await state.insert(tableName); break
+                case "DROP INDEX": await state.insert(tableName); break
+                case "CREATE INDEX": await state.createIndex(tableName); break
                 case "CREATE TABLE": case "Custom Query":
                     if (state.tableName === undefined) {
                         await state.insert(tableName)
@@ -304,6 +328,8 @@ export const useEditorStore = zustand<State & {
                 case "DELETE": case "UPDATE": await state.insert(state.tableName); break
                 case "CREATE TABLE": state.createTable(state.tableName); break
                 case "Custom Query": state.custom(state.tableName); break
+                case "CREATE INDEX": state.createIndex(state.tableName); break
+                case "DROP INDEX": state.dropIndex(state.tableName, state.indexName); break
             }
         },
         cancel: async () => {
@@ -503,6 +529,38 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             </>
             break
         }
+        case "CREATE INDEX": {
+            header = <>
+                <span className="[color:var(--button-primary-background)]">
+                    {"CREATE "}
+                    <Checkbox text="UNIQUE" checked={state.unique} onChange={(unique) => useEditorStore.setState({ unique })} />
+                    {"INDEX "}
+                </span>
+                <input placeholder="index-name" value={state.indexName} onInput={(ev) => useEditorStore.setState({ indexName: ev.currentTarget.value })}></input>
+                {" ON "}
+                {escapeSQLIdentifier(state.tableName)}
+                {" ("}
+                <input placeholder="column1, column2" value={state.indexedColumns} onInput={(ev) => useEditorStore.setState({ indexedColumns: ev.currentTarget.value })}></input>
+                {") "}
+                <label className="[margin-right:8px]" style={{ color: state.where !== "" ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)" }}>WHERE</label>
+                <input placeholder="expr" value={state.where} onInput={(ev) => useEditorStore.setState({ where: ev.currentTarget.value })}></input>
+            </>
+            editor = <>
+                <Commit onClick={() => state.commit(`CREATE${state.unique ? " UNIQUE" : ""} INDEX ${escapeSQLIdentifier(state.indexName)} ON ${escapeSQLIdentifier(state.tableName)} (${state.indexedColumns})${state.where ? ` WHERE ${state.where}` : ""}`, [], { reload: "allTables" }).catch(console.error)} />
+                <Cancel />
+            </>
+            break
+        }
+        case "DROP INDEX": {
+            header = <>
+                DROP INDEX {escapeSQLIdentifier(state.indexName)}
+            </>
+            editor = <>
+                <Commit onClick={() => state.commit(`DROP INDEX ${escapeSQLIdentifier(state.indexName)}`, [], { reload: "allTables" }).catch(console.error)} />
+                <Cancel />
+            </>
+            break
+        }
         case "Custom Query": {
             header = <></>
             editor = <>
@@ -518,7 +576,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
 
     return <>
         <h2>
-            <span className="[color:var(--button-primary-background)]">{state.statement}</span>
+            {state.statement !== "CREATE INDEX" && <span className="[color:var(--button-primary-background)]">{state.statement}</span>}
             {" "}
             {header}
         </h2>

@@ -1,5 +1,6 @@
 import Prism from "prismjs"
 import "prismjs/components/prism-sql"
+import { useEditorStore } from "./editor"
 import { useTableStore } from "./table"
 
 export const SettingsView = () => {
@@ -19,7 +20,16 @@ export const SettingsView = () => {
             <ul className="list-disc ml-4">
                 {indexList.map((index, i) => {
                     return <li>
-                        <b>{index.name}</b><br />
+                        {index.name.startsWith("sqlite_") ? <b><i>{index.name}</i></b> : <b>{index.name}</b>}
+                        {!index.name.startsWith("sqlite_") && <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-1 pr-1 [border-radius:1px] inline-block cursor-pointer ml-2"
+                            title="Drop Index"
+                            onClick={() => {
+                                const state = useEditorStore.getState()
+                                state.dropIndex(state.tableName, index.name)
+                            }}>
+                            <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#trash" /></svg>
+                        </span>}
+                        <br />
                         {/* if the index is created by CREATE INDEX　*/ indexSchema[i] && indexSchema[i]}
                         {!indexSchema[i] && <>
                             {index.unique ? "UNIQUE " : ""}({indexInfo[i]!
@@ -29,6 +39,15 @@ export const SettingsView = () => {
                     </li>
                 })}
             </ul>
+            <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer [margin-left:-0.5rem]"
+                onClick={() => {
+                    const state = useEditorStore.getState()
+                    if (state.tableName === undefined) { throw new Error() }
+                    state.createIndex(state.tableName)
+                }}>
+                <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#add" /></svg>
+                <span className="ml-1">{"Create Index"}</span>
+            </span>
         </div>
     </>
 }
