@@ -13,20 +13,17 @@ class LocalPythonClient {
     readonly #p
     readonly #requestBody = temporaryFile({ extension: "msgpack" })
     readonly #responseBody = temporaryFile({ extension: "msgpack" })
-    readonly #tmpDatabasePath = temporaryFile({ extension: "db" })
 
     #resolve!: (data: Buffer) => void
     #reject!: (message: Error) => void
 
     constructor(pythonPath: string, serverScriptPath: string, databasePath: string, cwd: string) {
-        fs.writeFileSync(this.#tmpDatabasePath, "")
         this.#p = spawn(pythonPath, [
             serverScriptPath,
             "--database-filepath", databasePath,
             "--request-body-filepath", this.#requestBody,
             "--response-body-filepath", this.#responseBody,
             "--cwd", cwd,
-            "--tmp-database-path", this.#tmpDatabasePath,
         ])
         this.#p.stderr.on("data", (err: Buffer) => {
             console.error(err.toString())
@@ -58,7 +55,6 @@ class LocalPythonClient {
     close() {
         fs.rmSync(this.#requestBody, { force: true })
         fs.rmSync(this.#responseBody, { force: true })
-        fs.rmSync(this.#tmpDatabasePath, { force: true })
         this.#p.kill()
     }
 }

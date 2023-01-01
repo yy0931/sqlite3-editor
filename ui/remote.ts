@@ -2,7 +2,7 @@ import { Packr, Unpackr } from "msgpackr"
 import { useMainStore } from "./main"
 import { escapeSQLIdentifier } from "./table"
 
-export type TableInfo = { cid: bigint, dflt_value: bigint | string, name: string, notnull: bigint, type: string, pk: bigint }[]
+export type TableInfo = { cid: bigint, dflt_value: bigint | string | null, name: string, notnull: bigint, type: string, pk: bigint }[]
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
 export type SQLite3Value = string | number | bigint | Uint8Array | null
 export type TableListItem = { schema: string, name: string, type: "table" | "view" | "shadow" | "virtual", ncol: bigint, wr: bigint, strict: bigint }
@@ -80,12 +80,14 @@ export const getState = <T>(key: string): T | undefined => {
 /** Called only once, before any getState() or setState() calls. */
 export const downloadState = (): Promise<void> => post("/downloadState", {}).then((value) => { state = value })
 
-type QueryResult<T extends string> = Promise<T extends `SELECT ${string}` | `PRAGMA pragma_list` ? Record<string, SQLite3Value>[] : Record<string, SQLite3Value>[] | undefined>
+type QueryResult<T extends string> = Promise<{
+    columns: string[]
+    records: T extends `SELECT ${string}` | `PRAGMA pragma_list` ? Record<string, SQLite3Value>[] : (Record<string, SQLite3Value>[] | undefined)
+}>
 
-export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): QueryResult<T> => {
-    console.log(query, params)
-    return post(`/query`, { query, params, mode })
-}
+export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+"): QueryResult<T> =>
+    post(`/query`, { query, params, mode })
+
 /** Imports a BLOB from a file. */
 export const import_ = (filepath: string) =>
     post(`/import`, { filepath }) as Promise<Uint8Array>
@@ -96,33 +98,33 @@ export const export_ = (filepath: string, data: Uint8Array) =>
 
 /** https://stackoverflow.com/a/1604121/10710682 */
 export const existsTable = async (tableName: string) =>
-    (await query(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName], "r")).length > 0
+    (await query(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName], "r")).records.length > 0
 
 /** https://stackoverflow.com/questions/20979239/how-to-tell-if-a-sqlite-column-is-autoincrement */
 export const hasTableAutoincrementColumn = async (tableName: string) =>
     await existsTable("sqlite_sequence") &&  // sqlite_sequence doesn't exist when the database is empty.
-    !!((await query(`SELECT COUNT(*) AS count FROM sqlite_sequence WHERE name = ?`, [tableName], "r"))[0]?.count)
+    !!((await query(`SELECT COUNT(*) AS count FROM sqlite_sequence WHERE name = ?`, [tableName], "r")).records[0]?.count)
 
 export type IndexInfo = { seqno: bigint, cid: bigint, name: string }[]
 
-export const getIndexInfo = (indexName: string) =>
-    query(`PRAGMA index_info(${escapeSQLIdentifier(indexName)})`, [], "r") as Promise<IndexInfo>
+export const getIndexInfo = async (indexName: string) =>
+    (await query(`PRAGMA index_info(${escapeSQLIdentifier(indexName)})`, [], "r")).records as IndexInfo
 
 export type IndexList = { seq: bigint, name: string, unique: 0n | 1n, origin: "c" | "u" | "pk", partial: 0n | 1n }[]
 
-export const getIndexList = (tableName: string) =>
-    query(`PRAGMA index_list(${escapeSQLIdentifier(tableName)})`, [], "r") as Promise<IndexList>
+export const getIndexList = async (tableName: string) =>
+    (await query(`PRAGMA index_list(${escapeSQLIdentifier(tableName)})`, [], "r")).records as IndexList
 
-export const getTableInfo = (tableName: string) =>
-    query(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r") as Promise<TableInfo>
+export const getTableInfo = async (tableName: string) =>
+    (await query(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r")).records as TableInfo
 
 export const getTableList = async () => {
-    return (await query("PRAGMA table_list", [], "r") as TableListItem[])
+    return ((await query("PRAGMA table_list", [], "r")).records as TableListItem[])
         .filter(({ name }) => !name.startsWith("sqlite_"))  // https://www.sqlite.org/fileformat2.html#intschema
 }
 
 export const getTableSchema = async (tableName: string) =>
-    (await query(`SELECT sql FROM sqlite_schema WHERE name = ?`, [tableName], "r"))[0]?.sql as string | undefined
+    (await query(`SELECT sql FROM sqlite_schema WHERE name = ?`, [tableName], "r")).records[0]?.sql as string | undefined
 
 export const getIndexSchema = async (indexName: string) =>
-    (await query(`SELECT sql FROM sqlite_schema WHERE type = ? AND name = ?`, ["index", indexName], "r"))[0]?.sql as string | null | undefined
+    (await query(`SELECT sql FROM sqlite_schema WHERE type = ? AND name = ?`, ["index", indexName], "r")).records[0]?.sql as string | null | undefined

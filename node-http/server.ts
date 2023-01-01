@@ -12,10 +12,6 @@ const readWriteConnection = sqlite3("../samples/employees_db-full-1.0.6.db")
 readonlyConnection.defaultSafeIntegers()
 readWriteConnection.defaultSafeIntegers()
 
-fs.writeFileSync("tmp.db", "")
-readonlyConnection.prepare("ATTACH DATABASE ? AS editor_tmp_database").run(["tmp.db"])
-readWriteConnection.prepare("ATTACH DATABASE ? AS editor_tmp_database").run(["tmp.db"])
-
 const find_widget_regexp = (text: string, pattern: string, wholeWord: 0n | 1n, caseSensitive: 0n | 1n) => {
     try {
         return new RegExp(wholeWord ? `\\b(?:${pattern})\\b` : pattern, caseSensitive ? "" : "i").test(text) ? 1n : 0n
@@ -42,8 +38,10 @@ express()
 
             try {
                 const statement = (query.mode === "w+" ? readWriteConnection : readonlyConnection).prepare(query.query)
+                // TODO:
                 if (statement.reader) {
-                    res.send(packr.pack(statement.all(...query.params)))
+                    const columns = (statement.columns() as { name: string, column: string | null, table: string | null, database: string | null, type: string | null }[]).map(({ name }) => name)
+                    res.send(packr.pack({ columns, records: statement.all(...query.params) }))
                 } else {
                     statement.run(...query.params)
                     res.send(packr.pack(undefined))
