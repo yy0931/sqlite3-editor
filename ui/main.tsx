@@ -332,7 +332,7 @@ const App = () => {
             <div className="mb-2">
                 {!state.useCustomViewerQuery && <>
                     {"SELECT * FROM "}
-                    {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName }) => [tableName, {}] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
+                    {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName, type }) => [tableName, { group: type }] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
                 </>}
                 {state.useCustomViewerQuery && <>
                     <input placeholder="SELECT * FROM table-name" className="w-96" value={state.customViewerQuery} onBlur={(ev) => { state.setViewerQuery({ customViewerQuery: ev.currentTarget.value }).catch(console.error) }}></input>
