@@ -143,6 +143,7 @@ export const useMainStore = zustand<{
         wholeWord: boolean
         regex: boolean
     }
+    isFindWidgetVisibleWhenValueIsEmpty: boolean
     tableList: remote.TableListItem[]
     pragmaList: string[]
     scrollerRef: { current: HTMLDivElement | null }
@@ -183,6 +184,7 @@ export const useMainStore = zustand<{
             wholeWord: false,
             regex: false,
         },
+        isFindWidgetVisibleWhenValueIsEmpty: false,
         tableList: [],
         pragmaList: [],
         scrollerRef: { current: null },
