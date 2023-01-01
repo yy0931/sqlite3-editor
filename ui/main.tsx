@@ -6,11 +6,12 @@ import * as editor from "./editor"
 import deepEqual from "fast-deep-equal"
 import { useEffect, useRef, Ref } from "preact/hooks"
 import * as remote from "./remote"
-import { Button, persistentUseState, Select } from "./components"
+import { Button, persistentUseState, Select, SVGCheckbox } from "./components"
 import { escapeSQLIdentifier, Table, useTableStore } from "./table"
 import zustand from "zustand"
 import "./scrollbar"
 import { SettingsView } from "./schema_view"
+import { onKeydown } from "./keybindings"
 
 export type VSCodeAPI = {
     postMessage(data: unknown): void
@@ -259,118 +260,8 @@ const App = () => {
     }, [])
 
     useEffect(() => {
-        window.addEventListener("keydown", async (ev) => {
-            // only when the focus is on the input in the table
-            if (!(ev.target instanceof HTMLElement && (ev.target.matches("table textarea") || !ev.target.matches("label, button, input, textarea, select, option")))) {
-                return
-            }
-
-            try {
-                const editorState = editor.useEditorStore.getState()
-                if (editorState.statement === "UPDATE") {
-                    const { tableInfo } = useTableStore.getState()
-                    const { paging, setPaging } = useMainStore.getState()
-                    const columnIndex = tableInfo.findIndex(({ name }) => name === editorState.column)
-                    const rowNumber = Number(paging.visibleAreaTop) + editorState.row
-
-                    const toSingleClick = () => {
-                        if (!singleClick) {
-                            editorState.update(editorState.tableName, editorState.column, editorState.row)
-                        }
-                    }
-                    const moveSelectionUp = async () => {
-                        if (rowNumber >= 1) {
-                            if (editorState.row === 0) {
-                                await setPaging({ visibleAreaTop: paging.visibleAreaTop - 1n }, true)
-                                editorState.update(editorState.tableName, editorState.column, 0)
-                            } else {
-                                editorState.update(editorState.tableName, editorState.column, editorState.row - 1)
-                            }
-                        } else {
-                            toSingleClick()
-                        }
-                    }
-
-                    const moveSelectionDown = async () => {
-                        if (rowNumber <= Number(paging.numRecords) - 2) {
-                            if (editorState.row === Number(paging.visibleAreaSize) - 1) {
-                                await setPaging({ visibleAreaTop: paging.visibleAreaTop + 1n }, true)
-                                editorState.update(editorState.tableName, editorState.column, Number(paging.visibleAreaSize) - 1)
-                            } else {
-                                editorState.update(editorState.tableName, editorState.column, editorState.row + 1)
-                            }
-                        } else {
-                            toSingleClick()
-                        }
-                    }
-
-                    const moveSelectionRight = () => {
-                        if (columnIndex <= tableInfo.length - 2) {
-                            editorState.update(editorState.tableName, tableInfo[columnIndex + 1]!.name, editorState.row)
-                        } else {
-                            toSingleClick()
-                        }
-                    }
-
-                    const moveSelectionLeft = () => {
-                        if (columnIndex >= 1) {
-                            editorState.update(editorState.tableName, tableInfo[columnIndex - 1]!.name, editorState.row)
-                        } else {
-                            toSingleClick()
-                        }
-                    }
-
-                    const singleClick = document.querySelector(".single-click") !== null  // TODO:
-                    switch (ev.code) {
-                        case "Escape":
-                            if (singleClick) {
-                                await editorState.clearInputs()
-                            } else {
-                                editorState.update(editorState.tableName, editorState.column, editorState.row)
-                            }
-                            break
-                        case "ArrowUp":
-                            if (!ev.ctrlKey && !ev.shiftKey && !ev.altKey && singleClick) { await moveSelectionUp() }
-                            break
-                        case "ArrowDown":
-                            if (!ev.ctrlKey && !ev.shiftKey && !ev.altKey && singleClick) { await moveSelectionDown() }
-                            break
-                        case "ArrowLeft":
-                            if (!ev.ctrlKey && !ev.shiftKey && !ev.altKey && singleClick) { moveSelectionLeft() }
-                            break
-                        case "ArrowRight":
-                            if (!ev.ctrlKey && !ev.shiftKey && !ev.altKey && singleClick) { moveSelectionRight() }
-                            break
-                        case "Enter":
-                            if (!ev.ctrlKey && !ev.altKey) {
-                                ev.preventDefault()
-                                if (singleClick) {
-                                    document.querySelector(".single-click")!.classList.remove("single-click")
-                                } else {
-                                    await editor.useEditorStore.getState().commitUpdate(true)
-                                    if (ev.shiftKey) { await moveSelectionUp() } else { await moveSelectionDown() }
-                                }
-                            }
-                            break
-                        case "Tab":
-                            if (!ev.ctrlKey && !ev.altKey) {
-                                ev.preventDefault()
-                                if (!singleClick) {
-                                    await editor.useEditorStore.getState().commitUpdate(true)
-                                }
-                                if (ev.shiftKey) { moveSelectionLeft() } else { moveSelectionRight() }
-                            }
-                            break
-                    }
-                } else if (editorState.statement === "DELETE") {
-                    switch (ev.code) {
-                        case "Escape": await editorState.clearInputs(); break
-                    }
-                }
-            } catch (err) {
-                console.error(err)
-            }
-        })
+        window.addEventListener("keydown", onKeydown)
+        return () => { window.removeEventListener("keydown", onKeydown) }
     }, [])
 
     useEffect(() => {
@@ -397,41 +288,18 @@ const App = () => {
             {state.viewerStatement === "PRAGMA" && <Select value={state.pragma} onChange={(value) => state.setViewerQuery({ pragma: value })} options={Object.fromEntries(state.pragmaList.map((k) => [k, {}]))} />}
             {state.viewerStatement === "SELECT" && (() => {
                 return <div className="ml-0 block lg:ml-2 lg:inline">
-                    <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer"
-                        style={{ borderBottom: "1px solid gray", background: isSettingsViewOpen ? "rgba(100, 100, 100)" : "", color: isSettingsViewOpen ? "white" : "" }} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>
-                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref={isSettingsViewOpen ? "#close" : "#settings-gear"} /></svg>
-                        <span className="ml-1">Schema</span>
-                    </span>
-                    <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer ml-2"
-                        style={{ borderBottom: "1px solid gray", background: editorStatement === "CREATE TABLE" ? "rgba(100, 100, 100)" : "", color: editorStatement === "CREATE TABLE" ? "white" : "" }}
-                        onClick={() => {
-                            if (editorStatement === "CREATE TABLE") {
-                                editor.useEditorStore.getState().cancel().catch(console.error)
-                            } else {
-                                editor.useEditorStore.getState().createTable(state.tableName)
-                            }
-                        }}>
-                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#add" /></svg>
-                        <span className="ml-1">{"Create Table"}</span>
-                    </span>
-                    <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer ml-2"
-                        style={{ borderBottom: "1px solid gray", background: editorStatement === "Custom Query" ? "rgba(100, 100, 100)" : "", color: editorStatement === "Custom Query" ? "white" : "" }}
-                        onClick={() => {
-                            if (editorStatement === "Custom Query") {
-                                editor.useEditorStore.getState().cancel().catch(console.error)
-                            } else {
-                                editor.useEditorStore.getState().custom(state.tableName)
-                            }
-                        }}>
-                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#terminal" /></svg>
-                        <span className="ml-1">{"Custom Query"}</span>
-                    </span>
-                    <span className="align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer ml-2"
-                        style={{ borderBottom: "1px solid gray", }}
-                        onClick={() => { alert("TODO") }}>
-                        <svg className="inline [width:1em] [height:1em]"><use xlinkHref="#tools" /></svg>
-                        <span className="ml-1">{"Tools…"}</span>
-                    </span>
+                    <SVGCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>Schema</SVGCheckbox>
+                    <SVGCheckbox icon="#add" checked={editorStatement === "CREATE TABLE"} className="ml-2" onClick={(checked) => {
+                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                        editor.useEditorStore.getState().createTable(state.tableName)
+                    }}>Create Table</SVGCheckbox>
+                    <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} className="ml-2" onClick={(checked) => {
+                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                        editor.useEditorStore.getState().custom(state.tableName)
+                    }}>Custom Query</SVGCheckbox>
+                    <SVGCheckbox icon="#tools" checked={false} className="ml-2" onClick={(checked) => {
+                        alert("TODO")
+                    }}>Tools…</SVGCheckbox>
                 </div>
             })()}
         </h2>
