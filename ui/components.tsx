@@ -5,8 +5,8 @@ import * as remote from "./remote"
 
 /** Typed version of `<select>` */
 export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string, group?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, class?: string }) => {
-    const ref1 = useRef() as Ref<HTMLSelectElement>
-    const ref2 = useRef() as Ref<HTMLSelectElement>
+    const ref1 = useRef<HTMLSelectElement>(null)
+    const ref2 = useRef<HTMLSelectElement>(null)
     useLayoutEffect(() => {
         // Auto resize the width of `<select>` base on the current value: https://stackoverflow.com/questions/20091481/auto-resizing-the-select-element-according-to-selected-options-width
         if (!ref1.current || !ref2.current) { return }

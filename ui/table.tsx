@@ -76,13 +76,13 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
         }
         return result
     }
-    const tableRef = useRef() as Ref<HTMLTableElement>
+    const tableRef = useRef<HTMLTableElement>(null)
 
     const selectedRow = useEditorStore((state) => state.statement === "DELETE" ? state.row : null)
     const selectedDataRow = useEditorStore((state) => state.statement === "UPDATE" ? state.row : null)
     const selectedDataColumn = useEditorStore((state) => state.statement === "UPDATE" ? state.column : null)
 
-    const scrollbarRef = useRef() as Ref<ScrollbarY>
+    const scrollbarRef = useRef<ScrollbarY>(null)
     useEffect(() => {
         if (!tableRef.current) { return }
         const el = tableRef.current
@@ -188,7 +188,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
 const FindWidget = () => {
     const { value, caseSensitive, wholeWord, regex } = useMainStore((state) => state.findWidget)
     const setFindWidgetState = useMainStore((state) => state.setFindWidgetState)
-    const ref = useRef() as Ref<HTMLInputElement>
+    const ref = useRef<HTMLInputElement>(null)
 
     // Focus the input box on mount
     useEffect(() => {
@@ -253,7 +253,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
 }
 
 const MountInput = (props: { element: HTMLTextAreaElement, onFocusOrMount: () => void, onBlurOrUnmount: () => void }) => {
-    const ref = useRef() as Ref<HTMLSpanElement>
+    const ref = useRef<HTMLSpanElement>(null)
     useLayoutEffect(() => {
         ref.current?.append(props.element)
         props.onFocusOrMount()
