@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "install": "cd vscode && npm i",
     "start:node-http": "pnpm -F node-http -F ui start"
   },
   "keywords": [],
