@@ -319,42 +319,43 @@ const App = () => {
         <LoadingIndicator />
         <h2 className="[padding-top:var(--page-padding)]">
             <div className="mb-2">
-                <SVGCheckbox icon="#empty-window" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
-                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                    editor.useEditorStore.getState().createTable(tableName)
-                }}>Create Table</SVGCheckbox>
-                <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} className="ml-2" onClick={(checked) => {
-                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                    editor.useEditorStore.getState().custom(tableName)
-                }}>Custom Query</SVGCheckbox>
-            </div>
-            <hr className="mb-2 border-b-2 border-b-gray-400" />
-            <div className="mb-2">
+                <div className="mb-2 float-right">
+                    <SVGCheckbox icon="#empty-window" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
+                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                        editor.useEditorStore.getState().createTable(tableName)
+                    }}>Create Table</SVGCheckbox>
+                    <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} className="ml-2" onClick={(checked) => {
+                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                        editor.useEditorStore.getState().custom(tableName)
+                    }}>Custom Query</SVGCheckbox>
+                </div>
                 {!state.useCustomViewerQuery && <>
-                    {"SELECT * FROM "}
+                    <Highlight>SELECT </Highlight>
+                    *
+                    <Highlight> FROM </Highlight>
                     {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName, type }) => [tableName, { group: type }] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
                 </>}
                 {state.useCustomViewerQuery && <>
                     <input placeholder="SELECT * FROM table-name" className="w-96" value={state.customViewerQuery} onBlur={(ev) => { state.setViewerQuery({ customViewerQuery: ev.currentTarget.value }).catch(console.error) }}></input>
                 </>}
-                <label className="ml-2 select-none cursor-pointer"><input type="checkbox" checked={state.useCustomViewerQuery} onChange={() => { state.setViewerQuery({ useCustomViewerQuery: !state.useCustomViewerQuery }).catch(console.error) }}></input> Custom Viewer Query</label>
+                <label className="ml-2 select-none cursor-pointer"><input type="checkbox" checked={state.useCustomViewerQuery} onChange={() => { state.setViewerQuery({ useCustomViewerQuery: !state.useCustomViewerQuery }).catch(console.error) }}></input> Custom</label>
                 <label className="select-none cursor-pointer ml-2" title="Reload the table when the database is updated."><input type="checkbox" checked={state.autoReload} onChange={() => { useMainStore.setState({ autoReload: !state.autoReload }) }}></input> Auto reload</label>
             </div>
             <div>
                 {!state.useCustomViewerQuery && <SVGCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>Schema</SVGCheckbox>}
-                {tableName && tableType === "table" && <SVGCheckbox icon="#trash" className="ml-2" checked={editorStatement === "DROP TABLE"} onClick={(checked) => {
+                {!state.useCustomViewerQuery && tableName && tableType === "table" && <SVGCheckbox icon="#trash" className="ml-2" checked={editorStatement === "DROP TABLE"} onClick={(checked) => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                     editor.useEditorStore.getState().dropTable(tableName)
                 }}>Drop Table</SVGCheckbox>}
-                {tableName && tableType === "view" && <SVGCheckbox icon="#trash" className="ml-2" checked={editorStatement === "DROP VIEW"} onClick={(checked) => {
+                {!state.useCustomViewerQuery && tableName && tableType === "view" && <SVGCheckbox icon="#trash" className="ml-2" checked={editorStatement === "DROP VIEW"} onClick={(checked) => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                     editor.useEditorStore.getState().dropView(tableName)
                 }}>Drop View</SVGCheckbox>}
-                {tableName && tableType === "table" && <SVGCheckbox icon="#edit" className="ml-2" checked={editorStatement === "ALTER TABLE"} onClick={(checked) => {
+                {!state.useCustomViewerQuery && tableName && tableType === "table" && <SVGCheckbox icon="#edit" className="ml-2" checked={editorStatement === "ALTER TABLE"} onClick={(checked) => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                     editor.useEditorStore.getState().alterTable(tableName, undefined).catch(console.error)
                 }}>Alter Table</SVGCheckbox>}
-                {tableName && tableType === "table" && <SVGCheckbox icon="#symbol-interface" className="ml-2" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
+                {!state.useCustomViewerQuery && tableName && tableType === "table" && <SVGCheckbox icon="#symbol-interface" className="ml-2" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
                     if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                     editor.useEditorStore.getState().createIndex(tableName)
                 }}>Create Index</SVGCheckbox>}

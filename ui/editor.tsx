@@ -283,7 +283,10 @@ export const useEditorStore = zustand<State & {
         },
         switchTable: async (tableName: string | undefined) => {
             const state = get()
-            if (tableName === undefined) {
+            if (useMainStore.getState().useCustomViewerQuery) {
+                state.custom(tableName)
+                return
+            } else if (tableName === undefined) {
                 state.createTable(tableName)
                 return
             }
@@ -335,7 +338,9 @@ export const useEditorStore = zustand<State & {
         },
         cancel: async () => {
             const state = get()
-            if (state.tableName === undefined) {
+            if (useMainStore.getState().useCustomViewerQuery) {
+                state.custom(state.tableName)
+            } else if (state.tableName === undefined) {
                 state.createTable(state.tableName)
             } else {
                 await state.insert(state.tableName)
