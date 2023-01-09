@@ -614,8 +614,36 @@ const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorD
 
 type EditorDataType = "string" | "number" | "null" | "blob" | "default"
 
+let editorHeight = new Map<string, string>()
+
 const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, className?: string, onTypeChange: (type: EditorDataType) => void }) => {
     const [filename, setFilename] = useState("")
+
+    const ref = useRef() as Ref<HTMLTextAreaElement>
+
+    useEffect(() => {
+        if (props.ref) {
+            (props.ref as MutableRef<HTMLTextAreaElement>).current = ref.current!
+        }
+    }, [ref.current])
+
+    useLayoutEffect(() => {
+        if (props.type === "string") {
+            ref.current!.style.height = editorHeight.get(props.column) ?? ""
+        } else {
+            ref.current!.style.height = ""  // Reset the height of the textarea
+        }
+
+        if (props.type !== "string") { return }
+        const observer = new ResizeObserver((a) => {
+            if (!ref.current || !ref.current.style.height) { return }
+            console.log(props.column, ref.current.style.height)
+            editorHeight.set(props.column, ref.current.style.height)
+        })
+        observer.observe(ref.current!)
+        return () => { observer.disconnect() }
+    }, [ref.current, props.type, props.column])
+
     if (props.type === "blob") {
         return <div>
             <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} className={"w-40 inline [margin-right:10px] " + (props.className ?? "")} />
@@ -624,16 +652,6 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
             <Button onClick={() => remote.export_(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null}>Export</Button>
         </div>
     }
-
-    const ref = useRef() as Ref<HTMLTextAreaElement>
-    useLayoutEffect(() => {
-        ref.current!.style.height = ""  // Reset the height of the textarea
-    }, [props.type])
-    useEffect(() => {
-        if (props.ref) {
-            (props.ref as MutableRef<HTMLTextAreaElement>).current = ref.current!
-        }
-    }, [ref.current])
 
     const placeholder = ((): string => {
         switch (props.type) {
@@ -646,13 +664,20 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
             case "number": return "0"
         }
     })()
+
+
     return <textarea
         placeholder={placeholder}
         ref={ref}
         rows={props.type === "string" ? props.rows : 1}
         autocomplete="off"
         spellcheck={false}
-        style={{ color: type2color(props.type), resize: props.type === "string" ? "vertical" : "none", ...props.style }}
+        style={{
+            color: type2color(props.type),
+            resize: props.type === "string" ? "vertical" : "none",
+            ...props.type === "string" ? { height: editorHeight.get(props.column) ?? "" } : { height: "" },
+            ...props.style,
+        }}
         className={`data-editor-${props.type} ` + (props.className ?? "")}
         value={props.type === "null" || props.type === "default" ? "" : props.textareaValue}
         onInput={(ev) => {
