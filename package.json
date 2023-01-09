@@ -1,0 +1,12 @@
+{
+  "name": "sqlite-editor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start:node-http": "pnpm -F node-http -F ui start"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT"
+}
