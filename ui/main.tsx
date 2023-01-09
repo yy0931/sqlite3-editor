@@ -48,7 +48,7 @@ const LoadingIndicator = () => {
         loop()
         return () => { canceled = true }
     }, [])
-    return <div className="progressbar inline-block select-none pointer-events-none absolute top-0 [z-index:100] [height:5px] [background:var(--button-primary-background)] opacity-0" ref={ref} style={{ width: width + "px", transition: "opacity 0.5s cubic-bezier(1.000, 0.060, 0.955, -0.120)" }}></div>
+    return <div class="progressbar inline-block select-none pointer-events-none absolute top-0 z-[100] h-[5px] bg-[var(--button-primary-background)] opacity-0" ref={ref} style={{ width: width + "px", transition: "opacity 0.5s cubic-bezier(1.000, 0.060, 0.955, -0.120)" }}></div>
 }
 
 export const BigintMath = {
@@ -317,14 +317,14 @@ const App = () => {
 
     return <>
         <LoadingIndicator />
-        <h2 className="[padding-top:var(--page-padding)]">
-            <div className="mb-2">
-                <div className="mb-2 float-right">
+        <h2 class="pt-[var(--page-padding)]">
+            <div class="mb-2">
+                <div class="mb-2 float-right">
                     <SVGCheckbox icon="#empty-window" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
                         if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                         editor.useEditorStore.getState().createTable(tableName)
                     }}>Create Table</SVGCheckbox>
-                    <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} className="ml-2" onClick={(checked) => {
+                    <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} class="ml-2" onClick={(checked) => {
                         if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                         editor.useEditorStore.getState().custom(tableName)
                     }}>Custom Query</SVGCheckbox>
@@ -333,12 +333,12 @@ const App = () => {
                     <Highlight>SELECT </Highlight>
                     *
                     <Highlight> FROM </Highlight>
-                    {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName, type }) => [tableName, { group: type }] as const).sort((a, b) => a[0].localeCompare(b[0])))} className="primary" />}
+                    {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { state.setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(state.tableList.map(({ name: tableName, type }) => [tableName, { group: type }] as const).sort((a, b) => a[0].localeCompare(b[0])))} class="primary" />}
                 </>}
                 {state.useCustomViewerQuery && <>
-                    <input placeholder="SELECT * FROM table-name" className="w-96" value={state.customViewerQuery} onBlur={(ev) => { state.setViewerQuery({ customViewerQuery: ev.currentTarget.value }).catch(console.error) }}></input>
+                    <input placeholder="SELECT * FROM table-name" class="w-96" value={state.customViewerQuery} onBlur={(ev) => { state.setViewerQuery({ customViewerQuery: ev.currentTarget.value }).catch(console.error) }}></input>
                 </>}
-                <span className="ml-1">
+                <span class="ml-1">
                     {!state.useCustomViewerQuery && <SVGOnlyCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} title="Schema" checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}></SVGOnlyCheckbox>}
                     {!state.useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#trash" title="Drop Table" checked={editorStatement === "DROP TABLE"} onClick={(checked) => {
                         if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
@@ -360,19 +360,19 @@ const App = () => {
                         useMainStore.setState({ isFindWidgetVisible: checked })
                     }}></SVGOnlyCheckbox>}
                 </span>
-                <label className="ml-2 select-none cursor-pointer"><input type="checkbox" checked={state.useCustomViewerQuery} onChange={() => { state.setViewerQuery({ useCustomViewerQuery: !state.useCustomViewerQuery }).catch(console.error) }}></input> Custom</label>
-                <label className="select-none cursor-pointer ml-2" title="Reload the table when the database is updated."><input type="checkbox" checked={state.autoReload} onChange={() => { useMainStore.setState({ autoReload: !state.autoReload }) }}></input> Auto reload</label>
+                <label class="ml-2 select-none cursor-pointer"><input type="checkbox" checked={state.useCustomViewerQuery} onChange={() => { state.setViewerQuery({ useCustomViewerQuery: !state.useCustomViewerQuery }).catch(console.error) }}></input> Custom</label>
+                <label class="select-none cursor-pointer ml-2" title="Reload the table when the database is updated."><input type="checkbox" checked={state.autoReload} onChange={() => { useMainStore.setState({ autoReload: !state.autoReload }) }}></input> Auto reload</label>
             </div>
         </h2>
         {isSettingsViewOpen && <div>
             <SettingsView />
-            <hr className="mt-2 border-b-2 border-b-gray-400" />
+            <hr class="mt-2 border-b-2 border-b-gray-400" />
         </div>}
         {!isSettingsViewOpen && <>
-            <div className="relative w-max max-w-full [padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">
+            <div class="relative w-max max-w-full pl-[var(--page-padding)] pr-[var(--page-padding)]">
                 <Table tableName={tableName} />
             </div>
-            <div className="h-2 cursor-ns-resize select-none" onMouseDown={(ev) => {
+            <div class="h-2 cursor-ns-resize select-none" onMouseDown={(ev) => {
                 ev.preventDefault()
                 document.body.classList.add("ns-resize")
                 let prev = ev.pageY
@@ -396,12 +396,12 @@ const App = () => {
                     document.body.classList.remove("ns-resize")
                 }, { once: true })
             }}>
-                <hr className="mt-2 border-b-2 border-b-gray-400" />
+                <hr class="mt-2 border-b-2 border-b-gray-400" />
             </div>
         </>}
-        {state.errorMessage && <p className="text-white [background:rgb(14,72,117)] [padding:10px]">
-            <pre className="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{state.errorMessage}</pre>
-            <Button className="primary [margin-top:10px]" onClick={() => useMainStore.setState({ errorMessage: "" })}>Close</Button>
+        {state.errorMessage && <p class="text-white bg-[rgb(14,72,117)] [padding:10px]">
+            <pre class="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{state.errorMessage}</pre>
+            <Button class="primary mt-[10px]" onClick={() => useMainStore.setState({ errorMessage: "" })}>Close</Button>
         </p>}
         <editor.Editor tableList={state.tableList} />
     </>

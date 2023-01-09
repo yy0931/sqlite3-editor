@@ -398,7 +398,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             </>
             editor = <>
                 {state.statement2 === "ADD COLUMN" && <ColumnDefEditor value={state.columnDef} onChange={(columnDef) => useEditorStore.setState({ columnDef })} strict={state.strict} />}
-                <div className="mt-2">
+                <div class="mt-2">
                     <Commit disabled={
                         state.statement2 === "RENAME TO" ? state.newTableName === "" :
                             state.statement2 === "RENAME COLUMN" ? state.oldColumnName === "" || state.newColumnName === "" :
@@ -424,14 +424,14 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
             header = <>
                 <Highlight>CREATE TABLE </Highlight>
                 <input placeholder="table-name" value={state.newTableName} onInput={(ev) => useEditorStore.setState({ newTableName: ev.currentTarget.value })}></input>(...)
-                <Checkbox checked={state.withoutRowId} onChange={(checked) => useEditorStore.setState({ withoutRowId: checked })} className="[margin-left:8px]" text="WITHOUT ROWID" />
+                <Checkbox checked={state.withoutRowId} onChange={(checked) => useEditorStore.setState({ withoutRowId: checked })} class="ml-[8px]" text="WITHOUT ROWID" />
                 <Checkbox checked={state.strict} onChange={(checked) => useEditorStore.setState({ strict: checked })} text="STRICT" />
             </>
             editor = <>
                 <MultiColumnDefEditor value={state.columnDefs} onChange={(columnDefs) => useEditorStore.setState({ columnDefs })} strict={state.strict} />
-                <textarea autocomplete="off" spellcheck={false} className="[margin-top:10px] [height:20vh]" placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
-                <div className="mt-2">
-                    <Commit disabled={!state.newTableName || state.columnDefs.length === 0} className="[margin-top:10px] [margin-bottom:10px]" onClick={() => {
+                <textarea autocomplete="off" spellcheck={false} class="mt-[10px] h-[20vh]" placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
+                <div class="mt-2">
+                    <Commit disabled={!state.newTableName || state.columnDefs.length === 0} class="mt-[10px] mb-[10px]" onClick={() => {
                         state.commit(`CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`, [], { reload: "allTables", selectTable: state.newTableName }).catch(console.error)
                     }} />
                     <Cancel />
@@ -495,15 +495,15 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 {buildQuery()}
             </>
             editor = <>
-                <ul className="list-none">
+                <ul class="list-none">
                     {state.tableInfo.map(({ name }, i) => {
                         return <li>
-                            <div className="[margin-right:1em]">{name}</div>
+                            <div class="mr-[1em]">{name}</div>
                             <DataEditor
                                 column={name}
                                 type={state.dataTypes[i]!}
                                 rows={2}
-                                className="w-full resize-y block"
+                                class="w-full resize-y block"
                                 style={{ color: type2color(state.dataTypes[i]!) }}
                                 textareaValue={state.textareaValues[i]!}
                                 onTextareaValueChange={(value) => { useEditorStore.setState({ textareaValues: produce(state.textareaValues, (d) => { d[i] = value }) }) }}
@@ -515,7 +515,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                         </li>
                     })}
                 </ul>
-                <Commit className="mt-2" onClick={() => {
+                <Commit class="mt-2" onClick={() => {
                     state.commit(`INSERT INTO ${buildQuery()}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { reload: "currentTable", scrollToBottom: true }).catch(console.error)
                 }} />
             </>
@@ -541,7 +541,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 />
                 {"AS "}
                 <DataTypeInput value={state.type} onChange={(type) => { useEditorStore.setState({ type }); mountInput() }} />
-                <div className="mt-2">
+                <div class="mt-2">
                     <Commit onClick={() => state.commitUpdate(undefined, true)} />
                     <Cancel />
                 </div>
@@ -561,7 +561,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
                 {" ("}
                 <input placeholder="column1, column2" value={state.indexedColumns} onInput={(ev) => useEditorStore.setState({ indexedColumns: ev.currentTarget.value })}></input>
                 {") "}
-                <label className="[margin-right:8px]" style={{ color: state.where !== "" ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)" }}>WHERE</label>
+                <label class="mr-[8px]" style={{ color: state.where !== "" ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)" }}>WHERE</label>
                 <input placeholder="expr" value={state.where} onInput={(ev) => useEditorStore.setState({ where: ev.currentTarget.value })}></input>
             </>
             editor = <>
@@ -573,7 +573,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         case "DROP INDEX": {
             header = <>
                 <Highlight>DROP INDEX </Highlight>
-                <span className="[color:var(--button-primary-background)]">DROP INDEX</span> {escapeSQLIdentifier(state.indexName)}
+                <span class="[color:var(--button-primary-background)]">DROP INDEX</span> {escapeSQLIdentifier(state.indexName)}
             </>
             editor = <>
                 <Commit onClick={() => state.commit(`DROP INDEX ${escapeSQLIdentifier(state.indexName)}`, [], { reload: "allTables" }).catch(console.error)} />
@@ -584,8 +584,8 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         case "Custom Query": {
             header = <><Highlight>Custom Query </Highlight></>
             editor = <>
-                <textarea autocomplete="off" spellcheck={false} className="mb-2 [height:20vh]" placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
-                <div className="mt-2">
+                <textarea autocomplete="off" spellcheck={false} class="mb-2 h-[20vh]" placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
+                <div class="mt-2">
                     <Commit onClick={() => state.commit(state.query, [], { reload: "allTables" })} />
                     <Cancel />
                 </div>
@@ -598,7 +598,7 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
         <h2>
             {header}
         </h2>
-        <div className="[padding-left:var(--page-padding)] [padding-right:var(--page-padding)]">
+        <div class="pl-[var(--page-padding)] pr-[var(--page-padding)]">
             {editor}
         </div>
     </>
@@ -618,7 +618,7 @@ type EditorDataType = "string" | "number" | "null" | "blob" | "default"
 
 let editorHeight = new Map<string, string>()
 
-const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, className?: string, onTypeChange: (type: EditorDataType) => void }) => {
+const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, class?: string, onTypeChange: (type: EditorDataType) => void }) => {
     const [filename, setFilename] = useState("")
 
     const ref = useRef() as Ref<HTMLTextAreaElement>
@@ -650,7 +650,7 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
 
     if (props.type === "blob") {
         return <div>
-            <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} className={"w-40 inline [margin-right:10px] " + (props.className ?? "")} />
+            <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} class={"w-40 inline mr-[10px] " + (props.class ?? "")} />
             <input value={filename} placeholder={"tmp.dat"} onInput={(ev) => setFilename(ev.currentTarget.value)} />
             <Button onClick={() => remote.import_(filename).then((data) => props.onBlobValueChange(data))} disabled={filename === ""}>Import</Button>
             <Button onClick={() => remote.export_(filename, props.blobValue ?? new Uint8Array())} disabled={filename === "" || props.blobValue === null}>Export</Button>
@@ -682,7 +682,7 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
             ...props.type === "string" ? { height: editorHeight.get(props.column) ?? "" } : { height: "" },
             ...props.style,
         }}
-        className={`data-editor-${props.type} ` + (props.className ?? "")}
+        class={`data-editor-${props.type} ` + (props.class ?? "")}
         value={props.type === "null" || props.type === "default" ? "" : props.textareaValue}
         onInput={(ev) => {
             if (props.type === "null" || props.type === "default") {
@@ -711,7 +711,7 @@ const parseTextareaValue = (value: string, blobValue: Uint8Array | null, type: E
     }
 }
 
-const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInternal.CSSProperties, className?: string }) => {
+const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInternal.CSSProperties, class?: string }) => {
     useEffect(() => {
         const handler = (ev: KeyboardEvent) => {
             if (ev.ctrlKey && ev.code === "Enter") {
@@ -722,13 +722,13 @@ const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInt
         window.addEventListener("keydown", handler)
         return () => { window.removeEventListener("keydown", handler) }
     }, [props.onClick])
-    return <Button disabled={props.disabled} style={props.style} className={"mb-2 " + (props.className ?? "")} onClick={props.onClick}>
-        Commit<span className="opacity-60 ml-2 [font-size:70%]">Ctrl+Enter</span>
+    return <Button disabled={props.disabled} style={props.style} class={"mb-2 " + (props.class ?? "")} onClick={props.onClick}>
+        Commit<span class="opacity-60 ml-2 [font-size:70%]">Ctrl+Enter</span>
     </Button>
 }
 
-const Cancel = (props: { disabled?: boolean, style?: JSXInternal.CSSProperties, className?: string }) => {
-    return <Button disabled={props.disabled} style={props.style} className={"mb-2 ml-2 [background-color:var(--dropdown-background)] [color:var(--dropdown-foreground)] hover:[background-color:#8e8e8e] " + (props.className ?? "")} onClick={() => { useEditorStore.getState().cancel().catch(console.error) }}>
+const Cancel = (props: { disabled?: boolean, style?: JSXInternal.CSSProperties, class?: string }) => {
+    return <Button disabled={props.disabled} style={props.style} class={"mb-2 ml-2 bg-[var(--dropdown-background)] [color:var(--dropdown-foreground)] hover:[background-color:#8e8e8e] " + (props.class ?? "")} onClick={() => { useEditorStore.getState().cancel().catch(console.error) }}>
         Cancel
     </Button>
 }
@@ -745,14 +745,14 @@ type ColumnDef = {
 
 const ColumnDefEditor = (props: { columnNameOnly?: boolean, value: ColumnDef, onChange: (columnDef: ColumnDef) => void, strict: boolean }) => {
     return <>
-        <input tabIndex={0} placeholder="column-name" className="[margin-right:8px]" value={props.value.name} onInput={(ev) => { props.onChange({ ...props.value, name: ev.currentTarget.value }) }}></input>
+        <input tabIndex={0} placeholder="column-name" class="mr-[8px]" value={props.value.name} onInput={(ev) => { props.onChange({ ...props.value, name: ev.currentTarget.value }) }}></input>
         {!props.columnNameOnly && <>
-            <Select tabIndex={0} className="[margin-right:8px]" value={props.value.affinity} onChange={(value) => props.onChange({ ...props.value, affinity: value })} options={{ "TEXT": {}, "INTEGER": {}, "REAL": {}, "BLOB": {}, "ANY": { disabled: !props.strict, disabledReason: "STRICT tables only." }, "NUMERIC": { disabled: props.strict, disabledReason: "non-STRICT tables only." } }} />
+            <Select tabIndex={0} class="mr-[8px]" value={props.value.affinity} onChange={(value) => props.onChange({ ...props.value, affinity: value })} options={{ "TEXT": {}, "INTEGER": {}, "REAL": {}, "BLOB": {}, "ANY": { disabled: !props.strict, disabledReason: "STRICT tables only." }, "NUMERIC": { disabled: props.strict, disabledReason: "non-STRICT tables only." } }} />
             <Checkbox tabIndex={-1} checked={props.value.primary} onChange={(checked) => props.onChange({ ...props.value, primary: checked })} text="PRIMARY KEY" />
             <Checkbox tabIndex={-1} checked={props.value.autoIncrement} onChange={(checked) => props.onChange({ ...props.value, autoIncrement: checked })} text="AUTOINCREMENT" />
             <Checkbox tabIndex={-1} checked={props.value.unique} onChange={(checked) => props.onChange({ ...props.value, unique: checked })} text="UNIQUE" />
             <Checkbox tabIndex={-1} checked={props.value.notNull} onChange={(checked) => props.onChange({ ...props.value, notNull: checked })} text="NOT NULL" />
-            <label className="[margin-right:8px]" style={{ color: props.value.default ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)" }}>DEFAULT</label><input placeholder="CURRENT_TIMESTAMP" value={props.value.default} onChange={(el) => props.onChange({ ...props.value, default: el.currentTarget.value })} />
+            <label class="mr-[8px]" style={{ color: props.value.default ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)" }}>DEFAULT</label><input placeholder="CURRENT_TIMESTAMP" value={props.value.default} onChange={(el) => props.onChange({ ...props.value, default: el.currentTarget.value })} />
         </>}
     </>
 }
@@ -767,7 +767,7 @@ const MultiColumnDefEditor = (props: { value: ColumnDef[], onChange: (value: Col
         renderedColumnDefs.push({ name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false, default: "" })
     }
 
-    return <ul className="list-none">{renderedColumnDefs.map((columnDef, i) =>
+    return <ul class="list-none">{renderedColumnDefs.map((columnDef, i) =>
         <li key={i}>
             <ColumnDefEditor columnNameOnly={i === renderedColumnDefs.length - 1 && columnDef.name === ""} value={columnDef} onChange={(value) => {
                 props.onChange(produce(renderedColumnDefs, (d) => {

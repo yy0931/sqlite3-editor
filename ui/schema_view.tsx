@@ -13,15 +13,15 @@ export const SettingsView = () => {
     const tableName = useEditorStore((state) => state.tableName)
 
     return <>
-        <h2 className="font-bold">Schema</h2>
-        <div className="[padding-left:var(--page-padding)] mb-4"><pre className="[font-size:inherit] overflow-x-auto bg-white p-2" dangerouslySetInnerHTML={{ __html: Prism.highlight(schema ?? "", Prism.languages.sql!, "sql") }}></pre></div>
-        <h2 className="font-bold">Indexes</h2>
-        <div className="[padding-left:var(--page-padding)]">
-            <ul className="list-disc ml-4">
+        <h2 class="font-bold">Schema</h2>
+        <div class="pl-[var(--page-padding)] mb-4"><pre class="[font-size:inherit] overflow-x-auto bg-white p-2" dangerouslySetInnerHTML={{ __html: Prism.highlight(schema ?? "", Prism.languages.sql!, "sql") }}></pre></div>
+        <h2 class="font-bold">Indexes</h2>
+        <div class="pl-[var(--page-padding)]">
+            <ul class="list-disc ml-4">
                 {indexList.map((index, i) => {
                     return <li>
                         {index.name.startsWith("sqlite_") ? <b><i>{index.name}</i></b> : <b>{index.name}</b>}
-                        {!index.name.startsWith("sqlite_") && <SVGCheckbox icon="#trash" className="ml-2 pl-1 pr-0" checked={false} title="Drop Index" onClick={() => { useEditorStore.getState().dropIndex(tableName, index.name) }}></SVGCheckbox>}
+                        {!index.name.startsWith("sqlite_") && <SVGCheckbox icon="#trash" class="ml-2 pl-1 pr-0" checked={false} title="Drop Index" onClick={() => { useEditorStore.getState().dropIndex(tableName, index.name) }}></SVGCheckbox>}
                         <br />
                         {/* if the index is created by CREATE INDEX　*/ indexSchema[i] && indexSchema[i]}
                         {!indexSchema[i] && <>
