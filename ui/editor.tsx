@@ -605,11 +605,13 @@ export const Editor = (props: { tableList: remote.TableListItem[] }) => {
 }
 
 const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorDataType) => void }) => {
-    const options = { string: "TEXT", number: "NUMERIC", null: "NULL", blob: "BLOB", default: "DEFAULT" }
-    return <>{
-        Object.entries(options)
-            .map(([k, v]) => <Checkbox tabIndex={-1} text={v} checked={props.value === k} onChange={(value) => value ? props.onChange(k as keyof typeof options) : props.onChange("default")} />)
-    }</>
+    return <>
+        <Checkbox tabIndex={-1} text="TEXT" checked={props.value === "string"} onChange={(value) => value ? props.onChange("string") : props.onChange("default")} />
+        <Checkbox tabIndex={-1} text="NUMERIC" checked={props.value === "number"} onChange={(value) => value ? props.onChange("number") : props.onChange("default")} />
+        <Checkbox tabIndex={-1} text="BLOB" checked={props.value === "blob"} onChange={(value) => value ? props.onChange("blob") : props.onChange("default")} />
+        <Checkbox tabIndex={-1} text="NULL" checked={props.value === "null"} onChange={(value) => value ? props.onChange("null") : props.onChange("default")} />
+        <Checkbox tabIndex={-1} text="DEFAULT" checked={props.value === "default"} onChange={(value) => value ? props.onChange("default") : props.onChange("default")} />
+    </>
 }
 
 type EditorDataType = "string" | "number" | "null" | "blob" | "default"
@@ -628,19 +630,21 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
     }, [ref.current])
 
     useLayoutEffect(() => {
+        if (ref.current === null) { return }
+        const textarea = ref.current
         if (props.type === "string") {
-            ref.current!.style.height = editorHeight.get(props.column) ?? ""
+            textarea.style.height = editorHeight.get(props.column) ?? ""
         } else {
-            ref.current!.style.height = ""  // Reset the height of the textarea
+            textarea.style.height = ""  // Reset the height of the textarea
         }
 
         if (props.type !== "string") { return }
         const observer = new ResizeObserver((a) => {
-            if (!ref.current || !ref.current.style.height) { return }
-            console.log(props.column, ref.current.style.height)
-            editorHeight.set(props.column, ref.current.style.height)
+            if (!textarea || !textarea.style.height) { return }
+            console.log(props.column, textarea.style.height)
+            editorHeight.set(props.column, textarea.style.height)
         })
-        observer.observe(ref.current!)
+        observer.observe(textarea)
         return () => { observer.disconnect() }
     }, [ref.current, props.type, props.column])
 

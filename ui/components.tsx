@@ -62,10 +62,17 @@ export const persistentUseState = <T extends unknown>(key: string, defaultValue:
     }] as const
 }
 
-export const SVGCheckbox = (props: { icon: string, checked?: boolean, onClick: (checked: boolean) => void, className?: string, title?: string, children?: preact.ComponentChildren }) => {
-    return <span className={"align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer " + (props.className ? props.className : "")}
+export const SVGOnlyCheckbox = (props: { icon: string, checked?: boolean, onClick: (checked: boolean) => void, className?: string, title: string }) => {
+    return <span className={"align-middle hover:bg-gray-300 active:bg-inherit select-none px-1 [border-radius:1px] inline-block cursor-pointer " + (props.className ? props.className : "")}
         title={props.title}
-        style={{ borderBottom: "1px solid gray", background: props.checked ? "rgba(100, 100, 100)" : "", color: props.checked ? "white" : "" }}
+        onClick={() => props.onClick(!props.checked)}>
+        <svg className="inline [width:1em] [height:1em]"><use xlinkHref={props.icon} /></svg>
+    </span>
+}
+
+export const SVGCheckbox = (props: { icon: string, tabIndex?: number, checked?: boolean, onClick: (checked: boolean) => void, className?: string, title?: string, children?: preact.ComponentChildren }) => {
+    return <span tabIndex={props.tabIndex} className={"align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer " + (props.className ? props.className : "")}
+        title={props.title}
         onClick={() => props.onClick(!props.checked)}>
         <svg className="inline [width:1em] [height:1em]"><use xlinkHref={props.icon} /></svg>
         <span className="ml-1">{props.children}</span>

@@ -6,7 +6,7 @@ import * as editor from "./editor"
 import deepEqual from "fast-deep-equal"
 import { useEffect, useRef, Ref } from "preact/hooks"
 import * as remote from "./remote"
-import { Button, Highlight, persistentUseState, Select, SVGCheckbox } from "./components"
+import { Button, Highlight, persistentUseState, Select, SVGCheckbox, SVGOnlyCheckbox } from "./components"
 import { escapeSQLIdentifier, Table, useTableStore } from "./table"
 import zustand from "zustand"
 import "./scrollbar"
@@ -338,30 +338,30 @@ const App = () => {
                 {state.useCustomViewerQuery && <>
                     <input placeholder="SELECT * FROM table-name" className="w-96" value={state.customViewerQuery} onBlur={(ev) => { state.setViewerQuery({ customViewerQuery: ev.currentTarget.value }).catch(console.error) }}></input>
                 </>}
+                <span className="ml-1">
+                    {!state.useCustomViewerQuery && <SVGOnlyCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} title="Schema" checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}></SVGOnlyCheckbox>}
+                    {!state.useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#trash" title="Drop Table" checked={editorStatement === "DROP TABLE"} onClick={(checked) => {
+                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                        editor.useEditorStore.getState().dropTable(tableName)
+                    }}></SVGOnlyCheckbox>}
+                    {!state.useCustomViewerQuery && tableName && tableType === "view" && <SVGOnlyCheckbox icon="#trash" title="Drop View" checked={editorStatement === "DROP VIEW"} onClick={(checked) => {
+                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                        editor.useEditorStore.getState().dropView(tableName)
+                    }}></SVGOnlyCheckbox>}
+                    {!state.useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#edit" title="Alter Table" checked={editorStatement === "ALTER TABLE"} onClick={(checked) => {
+                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                        editor.useEditorStore.getState().alterTable(tableName, undefined).catch(console.error)
+                    }}></SVGOnlyCheckbox>}
+                    {!state.useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#symbol-interface" title="Create Index" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
+                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
+                        editor.useEditorStore.getState().createIndex(tableName)
+                    }}></SVGOnlyCheckbox>}
+                    {isTableRendered && !isSettingsViewOpen && <SVGOnlyCheckbox icon="#search" title="Find" checked={state.isFindWidgetVisible} onClick={(checked) => {
+                        useMainStore.setState({ isFindWidgetVisible: checked })
+                    }}></SVGOnlyCheckbox>}
+                </span>
                 <label className="ml-2 select-none cursor-pointer"><input type="checkbox" checked={state.useCustomViewerQuery} onChange={() => { state.setViewerQuery({ useCustomViewerQuery: !state.useCustomViewerQuery }).catch(console.error) }}></input> Custom</label>
                 <label className="select-none cursor-pointer ml-2" title="Reload the table when the database is updated."><input type="checkbox" checked={state.autoReload} onChange={() => { useMainStore.setState({ autoReload: !state.autoReload }) }}></input> Auto reload</label>
-            </div>
-            <div>
-                {!state.useCustomViewerQuery && <SVGCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}>Schema</SVGCheckbox>}
-                {!state.useCustomViewerQuery && tableName && tableType === "table" && <SVGCheckbox icon="#trash" className="ml-2" checked={editorStatement === "DROP TABLE"} onClick={(checked) => {
-                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                    editor.useEditorStore.getState().dropTable(tableName)
-                }}>Drop Table</SVGCheckbox>}
-                {!state.useCustomViewerQuery && tableName && tableType === "view" && <SVGCheckbox icon="#trash" className="ml-2" checked={editorStatement === "DROP VIEW"} onClick={(checked) => {
-                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                    editor.useEditorStore.getState().dropView(tableName)
-                }}>Drop View</SVGCheckbox>}
-                {!state.useCustomViewerQuery && tableName && tableType === "table" && <SVGCheckbox icon="#edit" className="ml-2" checked={editorStatement === "ALTER TABLE"} onClick={(checked) => {
-                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                    editor.useEditorStore.getState().alterTable(tableName, undefined).catch(console.error)
-                }}>Alter Table</SVGCheckbox>}
-                {!state.useCustomViewerQuery && tableName && tableType === "table" && <SVGCheckbox icon="#symbol-interface" className="ml-2" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
-                    if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                    editor.useEditorStore.getState().createIndex(tableName)
-                }}>Create Index</SVGCheckbox>}
-                {isTableRendered && !isSettingsViewOpen && <SVGCheckbox icon="#search" checked={state.isFindWidgetVisible} className="ml-2" onClick={(checked) => {
-                    useMainStore.setState({ isFindWidgetVisible: checked })
-                }}>Find</SVGCheckbox>}
             </div>
         </h2>
         {isSettingsViewOpen && <div>
