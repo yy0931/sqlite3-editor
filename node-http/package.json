@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "concurrently \"cd ../ui && npm start\" \"ts-node-esm server.ts\""
+    "start": "npx concurrently \"cd ../ui && npm start\" \"ts-node-esm server.ts\""
   },
   "keywords": [],
   "author": "",
