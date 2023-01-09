@@ -99,18 +99,18 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const tableType = useMainStore((state) => state.tableList.find(({ name }) => name === state.tableName)?.type)
 
     if (state.invalidQuery !== null) {
-        return <span className="text-red-700">{state.invalidQuery}</span>
+        return <span class="text-red-700">{state.invalidQuery}</span>
     }
 
     return <>
-        <div className="max-w-full overflow-x-auto w-max">
-            <table ref={tableRef} className="viewer w-max border-collapse table-fixed bg-white" style={{ paddingRight: scrollbarWidth, boxShadow: "0 0 0px 2px #000000ad" }}>
-                <thead className="text-black [background:var(--gutter-color)]" style={{ outline: "rgb(181, 181, 181) 1px solid" }}>
+        <div class="max-w-full overflow-x-auto w-max">
+            <table ref={tableRef} class="viewer w-max border-collapse table-fixed bg-white" style={{ paddingRight: scrollbarWidth, boxShadow: "0 0 0px 2px #000000ad" }}>
+                <thead class="text-black bg-[var(--gutter-color)]" style={{ outline: "rgb(181, 181, 181) 1px solid" }}>
                     <tr>
-                        <th className="font-normal select-none [padding-top:3px] [padding-bottom:3px] [padding-left:1em] [padding-right:1em]"></th>
+                        <th class="font-normal select-none pt-[3px] pb-[3px] pl-[1em] pr-[1em]"></th>
                         {state.tableInfo.map(({ name, notnull, pk, type, dflt_value }, i) => <th
                             style={{ width: getColumnWidths()[i]! }}
-                            className={"font-normal select-none " + (tableName !== undefined && tableType === "table" ? "clickable" : "")}
+                            class={"font-normal select-none " + (tableName !== undefined && tableType === "table" ? "clickable" : "")}
                             title={tableType === "table" ? "" : `A ${tableType} cannot be altered.`}
                             onMouseMove={(ev) => {
                                 const rect = ev.currentTarget.getBoundingClientRect()
@@ -151,22 +151,22 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                             onMouseLeave={(ev) => {
                                 ev.currentTarget.classList.remove("ew-resize")
                             }}>
-                            <code className="inline-block [word-break:break-word] [color:inherit] [font-family:inherit] [font-size:inherit]">
+                            <code class="inline-block [word-break:break-word] [color:inherit] [font-family:inherit] [font-size:inherit]">
                                 {name}
-                                <span className="italic opacity-70">{`${type ? (" " + type) : ""}${pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : ""}${notnull ? " NOT NULL" : ""}${dflt_value !== null ? ` DEFAULT ${dflt_value}` : ""}`}</span>
+                                <span class="italic opacity-70">{`${type ? (" " + type) : ""}${pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : ""}${notnull ? " NOT NULL" : ""}${dflt_value !== null ? ` DEFAULT ${dflt_value}` : ""}`}</span>
                             </code>
                         </th>)}
                     </tr>
                 </thead>
                 <tbody>
                     {isFindWidgetVisible && <tr>
-                        <td className="[padding-left:10px] [padding-right:10px] [background-color:var(--gutter-color)]"></td>
-                        <td className="relative text-right" colSpan={state.tableInfo.length} style={{ maxWidth: getColumnWidths().reduce((a, b) => a + b, 0) }}>
+                        <td class="pl-[10px] pr-[10px] bg-[var(--gutter-color)]"></td>
+                        <td class="relative text-right" colSpan={state.tableInfo.length} style={{ maxWidth: getColumnWidths().reduce((a, b) => a + b, 0) }}>
                             <FindWidget />
                         </td>
                     </tr>}
                     {state.records.length === 0 && <tr>
-                        <td className="overflow-hidden no-hover inline-block cursor-default [height:1.2em] [padding-left:10px] [padding-right:10px]" style={{ borderRight: "1px solid var(--td-border-color)" }}></td>
+                        <td class="overflow-hidden no-hover inline-block cursor-default h-[1.2em] pl-[10px] pr-[10px]" style={{ borderRight: "1px solid var(--td-border-color)" }}></td>
                     </tr>}
                     {state.records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
                 </tbody>
@@ -179,7 +179,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                 max={numRecords}
                 size={pageSize}
                 value={visibleAreaTop}
-                className="h-full right-0 top-0 absolute"
+                class="h-full right-0 top-0 absolute"
                 style={{ width: scrollbarWidth }}
                 onChange={() => { useMainStore.getState().setPaging({ visibleAreaTop: BigInt(Math.round(scrollbarRef.current!.value)) }).catch(console.error) }} />}
     </>
@@ -196,29 +196,16 @@ const FindWidget = () => {
         ref.current!.select()
     }, [])
 
-    // Hide the find widget on blur
-    useEffect(() => {
-        const input = ref.current
-        if (!input) { return }
-        const onBlur = () => {
-            if (useMainStore.getState().findWidget.value === "") {
-                useMainStore.setState({ isFindWidgetVisibleWhenValueIsEmpty: false })
-            }
-        }
-        input.addEventListener("blur", onBlur)
-        return () => { input.removeEventListener("blur", onBlur) }
-    }, [ref.current])
-
-    return <div className="inline-block pl-1 pt-1 bg-gray-200 shadow-md whitespace-nowrap sticky right-3">
-        <input id="findWidget" ref={ref} className="mr-1" placeholder="Find" value={value} onChange={(ev) => setFindWidgetState({ value: ev.currentTarget.value })} />
-        <span title="Match Case" className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
-            <svg className="[width:1em] [height:1em]"><use xlinkHref="#case-sensitive" /></svg>
+    return <div class="inline-block pl-1 pt-1 bg-gray-200 shadow-md whitespace-nowrap sticky right-3">
+        <input id="findWidget" ref={ref} class="mr-1" placeholder="Find" value={value} onChange={(ev) => setFindWidgetState({ value: ev.currentTarget.value })} />
+        <span title="Match Case" class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
+            <svg class="w-[1em] h-[1em]"><use xlinkHref="#case-sensitive" /></svg>
         </span>
-        <span title="Match Whole Word" className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={wholeWord ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ wholeWord: !wholeWord })}>
-            <svg className="[width:1em] [height:1em]"><use xlinkHref="#whole-word" /></svg>
+        <span title="Match Whole Word" class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={wholeWord ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ wholeWord: !wholeWord })}>
+            <svg class="w-[1em] h-[1em]"><use xlinkHref="#whole-word" /></svg>
         </span>
-        <span title="Use Regular Expression" className="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none [padding:2px] [border-radius:1px] inline-block cursor-pointer" style={regex ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ regex: !regex })}>
-            <svg className="[width:1em] [height:1em]"><use xlinkHref="#regex" /></svg>
+        <span title="Use Regular Expression" class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={regex ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ regex: !regex })}>
+            <svg class="w-[1em] h-[1em]"><use xlinkHref="#regex" /></svg>
         </span>
     </div>
 }
@@ -234,9 +221,9 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
     const onFocusOrMount = useCallback(() => { setCursorVisibility(true) }, [])
     const onBlurOrUnmount = useCallback(() => { setCursorVisibility(false) }, [])
 
-    return useMemo(() => <tr className={props.selected ? "editing" : ""}>
+    return useMemo(() => <tr class={props.selected ? "editing" : ""}>
         <td
-            className={"[padding-left:10px] [padding-right:10px] [background-color:var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (props.tableName !== undefined ? "clickable" : "")}
+            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (props.tableName !== undefined ? "clickable" : "")}
             style={{ borderRight: "1px solid var(--td-border-color)" }}
             onMouseDown={(ev) => {
                 useEditorStore.getState().commitUpdate().then(() => {
@@ -247,7 +234,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
             return <td
-                className={"[padding-left:10px] [padding-right:10px] overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
+                class={"pl-[10px] pr-[10px] overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
                 onMouseDown={(ev) => {
                     const editorState = useEditorStore.getState()
@@ -256,8 +243,8 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                         if (props.tableName !== undefined) { update(props.tableName, name, props.row) }
                     }).catch(console.error)
                 }}>
-                <pre className={"overflow-hidden text-ellipsis whitespace-nowrap [max-width:50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: input?.draftValue ? type2color(input?.draftValueType) : type2color(typeof value) }}>
-                    <span className="select-none">{input?.draftValue ?? renderValue(value)}</span>
+                <pre class={"overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: input?.draftValue ? type2color(input?.draftValueType) : type2color(typeof value) }}>
+                    <span class="select-none">{input?.draftValue ?? renderValue(value)}</span>
                     {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
                 </pre>
             </td>
