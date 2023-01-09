@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, Ref, MutableRef, useState, useRef } from "preact/hooks"
+import { useEffect, useLayoutEffect, MutableRef, useState, useRef, Ref } from "preact/hooks"
 import zustand from "zustand"
 import produce from "immer"
 import type { JSXInternal } from "preact/src/jsx"
@@ -621,7 +621,7 @@ let editorHeight = new Map<string, string>()
 const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, class?: string, onTypeChange: (type: EditorDataType) => void }) => {
     const [filename, setFilename] = useState("")
 
-    const ref = useRef() as Ref<HTMLTextAreaElement>
+    const ref = useRef<HTMLTextAreaElement>(null)
 
     useEffect(() => {
         if (props.ref) {
@@ -630,7 +630,7 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
     }, [ref.current])
 
     useLayoutEffect(() => {
-        if (ref.current === null) { return }
+        if (!ref.current) { return }
         const textarea = ref.current
         if (props.type === "string") {
             textarea.style.height = editorHeight.get(props.column) ?? ""

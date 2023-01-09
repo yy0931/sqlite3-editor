@@ -27,7 +27,7 @@ declare global {
 
 /** Looping animation to indicate loading state, visible only when body.querying. */
 const LoadingIndicator = () => {
-    const ref = useRef() as Ref<HTMLDivElement>
+    const ref = useRef<HTMLDivElement>(null)
     let x = 0
     const width = 200
     const t = Date.now()
