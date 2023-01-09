@@ -76,3 +76,5 @@ export const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: bo
     <label className={"select-none mr-2 cursor-pointer " + (props.className ?? "")} tabIndex={props.tabIndex ?? 0} style={{ borderBottom: "1px solid gray", color: props.checked ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)", ...props.style }} onClick={() => props.onChange(!props.checked)} onKeyDown={(ev) => { if (["Enter", "Space"].includes(ev.code)) { props.onChange(!props.checked) } }}>
         {props.text}
     </label>
+
+export const Highlight = (props: { children: preact.ComponentChildren }) => <span className="[color:var(--button-primary-background)]">{props.children}</span>

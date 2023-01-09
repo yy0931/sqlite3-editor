@@ -4,7 +4,7 @@ import produce from "immer"
 import type { JSXInternal } from "preact/src/jsx"
 import * as remote from "./remote"
 import { BigintMath, reloadTable, useMainStore } from "./main"
-import { Button, Checkbox, Select } from "./components"
+import { Button, Checkbox, Highlight, Select } from "./components"
 import { blob2hex, escapeSQLIdentifier, renderValue, type2color, unsafeEscapeValue, useTableStore } from "./table"
 
 type State =
@@ -360,8 +360,6 @@ export type OnWriteOptions = {
     reload: "currentTable"
     scrollToBottom?: true
 }
-
-const Highlight = (props: { children: preact.ComponentChildren }) => <span className="[color:var(--button-primary-background)]">{props.children}</span>
 
 export const Editor = (props: { tableList: remote.TableListItem[] }) => {
     const state = useEditorStore()
