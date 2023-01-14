@@ -6,6 +6,7 @@ import * as remote from "./remote"
 import { BigintMath, reloadTable, useMainStore } from "./main"
 import { Button, Checkbox, Highlight, Select } from "./components"
 import { blob2hex, escapeSQLIdentifier, renderValue, type2color, unsafeEscapeValue, useTableStore } from "./table"
+import { useEventListener } from "usehooks-ts"
 
 type State =
     | {
@@ -366,7 +367,7 @@ export type OnWriteOptions = {
     scrollToBottom?: true
 }
 
-export const Editor = (props: { tableList: remote.TableListItem[] }) => {
+export const Editor = () => {
     const state = useEditorStore()
 
     useLayoutEffect(() => {
