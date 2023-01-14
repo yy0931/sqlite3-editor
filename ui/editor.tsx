@@ -344,6 +344,9 @@ export const useEditorStore = createStore({
             // <textarea> replaces \r\n with \n
             const state = get()
             if (state.statement !== "UPDATE" || (!explicit && !state.isTextareaDirty)) { return }
+            if (!explicit) {
+                if (!await useMainStore.getState().confirm()) { return }
+            }
             setPartial({ isTextareaDirty: false })
             const columns = state.constraintChoices[state.selectedConstraint]!
             await commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], { reload: "currentTable" }, preserveEditorState)
@@ -518,7 +521,7 @@ export const Editor = () => {
         case "UPDATE": {
             header = <>
                 <Highlight>UPDATE </Highlight>
-                {escapeSQLIdentifier(state.tableName)} SET {escapeSQLIdentifier(state.column)} = ? WHERE <select value={state.selectedConstraint} onChange={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
+                {escapeSQLIdentifier(state.tableName)} SET {escapeSQLIdentifier(state.column)} = ? WHERE <select value={state.selectedConstraint} class="pl-1" onChange={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
                     state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as remote.SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>

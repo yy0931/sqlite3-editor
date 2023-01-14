@@ -73,6 +73,9 @@ const moveSelectionLeft = () => {
 }
 
 export const onKeydown = async (ev: KeyboardEvent) => {
+    if (useMainStore.getState().isConfirmDialogVisible) {
+        return
+    }
     try {
         const state = editor.useEditorStore.getState()
         const singleClick = isInSingleClickState()

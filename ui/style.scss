@@ -234,3 +234,7 @@ table.viewer {
 body > svg {
     display: none;
 }
+
+dialog::backdrop {
+    @apply bg-black bg-opacity-50;
+}
