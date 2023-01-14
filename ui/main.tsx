@@ -4,7 +4,7 @@ enableMapSet()
 import { render } from "preact"
 import * as editor from "./editor"
 import deepEqual from "fast-deep-equal"
-import { useEffect, useRef, Ref } from "preact/hooks"
+import { useEffect, useRef } from "preact/hooks"
 import * as remote from "./remote"
 import { Button, Highlight, persistentUseState, Select, SVGCheckbox, SVGOnlyCheckbox } from "./components"
 import { escapeSQLIdentifier, Table, useTableStore } from "./table"
@@ -161,6 +161,7 @@ export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: bool
 
 export const useMainStore = createStore({
     reloadRequired: false,
+    isConfirmDialogVisible: false as false | ((value: boolean) => void),
     tableName: undefined as string | undefined,
     paging: {
         visibleAreaTop: 0n,
@@ -196,6 +197,16 @@ export const useMainStore = createStore({
     }
     return {
         setViewerQuery,
+        confirm: async (): Promise<boolean> => {
+            return new Promise<boolean>((resolve) => {
+                set({
+                    isConfirmDialogVisible: (value) => {
+                        set({ isConfirmDialogVisible: false })
+                        resolve(value)
+                    }
+                })
+            })
+        },
         getPageMax: () => BigInt(Math.ceil(Number(get().paging.numRecords) / Number(get().paging.visibleAreaSize))),
         setFindWidgetVisibility: async (value: boolean) => {
             if (get().isFindWidgetVisible === value) { return }
@@ -258,6 +269,7 @@ export const useMainStore = createStore({
 /** The root element. */
 const App = () => {
     const requireReloading = useMainStore((s) => s.requireReloading)
+    const isConfirmationDialogVisible = useMainStore((s) => s.isConfirmDialogVisible)
     const errorMessage = useMainStore((s) => s.errorMessage)
     const tableList = useMainStore((s) => s.tableList)
     const setViewerQuery = useMainStore((s) => s.setViewerQuery)
@@ -271,6 +283,22 @@ const App = () => {
     const editorStatement = editor.useEditorStore((s) => s.statement)
     const isTableRendered = useTableStore((s) => s.invalidQuery === null)
     const [isSettingsViewOpen, setIsSettingsViewOpen] = persistentUseState("isSettingsViewOpen", false)
+    const confirmDialogRef = useRef<HTMLDialogElement>(null)
+
+    // Show or close the confirmation dialog
+    useEffect(() => {
+        if (isConfirmationDialogVisible) {
+            confirmDialogRef.current?.showModal()
+        } else {
+            confirmDialogRef.current?.close()
+        }
+    }, [isConfirmationDialogVisible])
+    useEventListener("close", () => {
+        const { isConfirmDialogVisible } = useMainStore.getState()
+        if (isConfirmDialogVisible) {
+            isConfirmDialogVisible(false)
+        }
+    }, confirmDialogRef)
 
     // Reload all tables if the database file is updated
     useEventListener("message", ({ data }: remote.Message) => {
@@ -416,6 +444,13 @@ const App = () => {
 
         {/* Editor */}
         <editor.Editor />
+
+        {/* Confirmation Dialog */}
+        <dialog class="p-4 bg-[#f0f0f0] shadow-2xl mx-auto mt-[10vh]" ref={confirmDialogRef}>
+            <p class="pb-2">Commit changes?</p>
+            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible(true) } }} class="mr-1">Commit</Button>
+            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible(false) } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e]">Discard changes</Button>
+        </dialog>
     </>
 }
 
