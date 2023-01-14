@@ -1,40 +1,24 @@
-import { useRef, Ref, useMemo, useLayoutEffect, useCallback, useState, useEffect } from "preact/hooks"
+import { useRef, useMemo, useLayoutEffect, useCallback, useState, useEffect } from "preact/hooks"
 import { useMainStore } from "./main"
 import * as remote from "./remote"
 import { useEditorStore } from "./editor"
-import zustand from "zustand"
 import produce from "immer"
 import { scrollbarWidth, ScrollbarY } from "./scrollbar"
 import { persistentRef } from "./components"
+import { createStore } from "./util"
 
-export const useTableStore = zustand<{
-    invalidQuery: string | null
-    tableInfo: remote.TableInfo
-    indexList: remote.IndexList
-    /** index_info for each index in indexList */
-    indexInfo: remote.IndexInfo[]
-    /** sqlite_schema.sql for each in dex in indexList */
-    indexSchema: (string | null)[]
-    tableSchema: string | null
-    autoIncrement: boolean
-    records: readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[]
-    input: { readonly draftValue: string, readonly draftValueType: string, readonly textarea: HTMLTextAreaElement | null } | null
-    listUniqueConstraints: () => {
-        primary: boolean
-        columns: string[]
-    }[]
-    getRecordSelectors: (record: Record<string, remote.SQLite3Value>) => string[][]
-}>()((set, get) => ({
-    invalidQuery: null,
-    tableInfo: [],
-    indexList: [],
-    indexInfo: [],
-    indexSchema: [],
-    tableSchema: null,
+export const useTableStore = createStore({
+    invalidQuery: null as string | null,
+    tableInfo: [] as remote.TableInfo,
+    indexList: [] as remote.IndexList,
+    indexInfo: [] as remote.IndexInfo[],
+    indexSchema: [] as (string | null)[],
+    tableSchema: null as string | null,
     autoIncrement: false,
-    records: [],
-    input: null,
-    listUniqueConstraints: () => {
+    records: [] as readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[],
+    input: null as { readonly draftValue: string, readonly draftValueType: string, readonly textarea: HTMLTextAreaElement | null } | null,
+}, (set, get) => {
+    const listUniqueConstraints = () => {
         const uniqueConstraints: { primary: boolean, columns: string[] }[] = []
         const { tableInfo, indexList, indexInfo } = get()
         for (const column of tableInfo) {
@@ -48,16 +32,19 @@ export const useTableStore = zustand<{
             uniqueConstraints.push({ primary: index.origin === "pk", columns: indexInfo[i]!.map(({ name }) => name) })
         }
         return uniqueConstraints
-    },
-    /** Enumerates the column tuples that uniquely select the record. */
-    getRecordSelectors: (record: Record<string, remote.SQLite3Value>): string[][] => {
-        const constraintChoices = ("rowid" in record ? [["rowid"]] : [])
-            .concat(get().listUniqueConstraints().sort((a, b) => +b.primary - +a.primary)
-                .map(({ columns }) => columns)
-                .filter((columns) => columns.every((column) => record[column] !== null)))
-        return [...new Set(constraintChoices.map((columns) => JSON.stringify(columns.sort((a, b) => a.localeCompare(b)))))].map((columns) => JSON.parse(columns))  // Remove duplicates
-    },
-}))
+    }
+    return {
+        listUniqueConstraints,
+        /** Enumerates the column tuples that uniquely select the record. */
+        getRecordSelectors: (record: Record<string, remote.SQLite3Value>): string[][] => {
+            const constraintChoices = ("rowid" in record ? [["rowid"]] : [])
+                .concat(listUniqueConstraints().sort((a, b) => +b.primary - +a.primary)
+                    .map(({ columns }) => columns)
+                    .filter((columns) => columns.every((column) => record[column] !== null)))
+            return [...new Set(constraintChoices.map((columns) => JSON.stringify(columns.sort((a, b) => a.localeCompare(b)))))].map((columns) => JSON.parse(columns))  // Remove duplicates
+        },
+    }
+})
 
 export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const visibleAreaTop = useMainStore((s) => Number(s.paging.visibleAreaTop))

@@ -8,11 +8,11 @@ import { useEffect, useRef, Ref } from "preact/hooks"
 import * as remote from "./remote"
 import { Button, Highlight, persistentUseState, Select, SVGCheckbox, SVGOnlyCheckbox } from "./components"
 import { escapeSQLIdentifier, Table, useTableStore } from "./table"
-import zustand from "zustand"
 import "./scrollbar"
 import { SettingsView } from "./schema_view"
 import { onKeydown } from "./keybindings"
 import { useEventListener, useInterval } from "usehooks-ts"
+import { createStore } from "./util"
 
 export type VSCodeAPI = {
     postMessage(data: unknown): void
@@ -159,84 +159,55 @@ export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: bool
     }
 }
 
-export const useMainStore = zustand<{
-    reloadRequired: boolean
+export const useMainStore = createStore({
+    reloadRequired: false,
+    tableName: undefined as string | undefined,
     paging: {
-        visibleAreaTop: bigint
-        numRecords: bigint
-        visibleAreaSize: bigint
-    }
-    errorMessage: string
-    useCustomViewerQuery: boolean
-    customViewerQuery: string
-    tableName: string | undefined         // set via setViewerQuery
-    findWidget: {  // set via setFindWidgetState
-        value: string
-        caseSensitive: boolean
-        wholeWord: boolean
-        regex: boolean
-    }
-    isFindWidgetVisibleWhenValueIsEmpty: boolean
-    tableList: remote.TableListItem[]
-    scrollerRef: { current: HTMLDivElement | null }
-    autoReload: boolean
-    _rerender: Record<string, never>,
-    setViewerQuery: (opts: {
+        visibleAreaTop: 0n,
+        numRecords: 0n,
+        visibleAreaSize: 20n,
+    },
+    errorMessage: "",
+    useCustomViewerQuery: false,
+    customViewerQuery: "",
+    findWidget: {
+        value: "",
+        caseSensitive: false,
+        wholeWord: false,
+        regex: false,
+    },
+    isFindWidgetVisible: false,
+    tableList: [] as remote.TableListItem[],
+    scrollerRef: { current: null as HTMLDivElement | null },
+    autoReload: true,
+    _rerender: {} as Record<string, never>,
+}, (set, get) => {
+    const setViewerQuery = async (opts: {
         useCustomViewerQuery?: boolean
         customViewerQuery?: string
         tableName?: string
-    }) => Promise<void>,
-    setFindWidgetVisibility: (value: boolean) => Promise<void>
-    setFindWidgetState: (opts: {
-        value?: string
-        caseSensitive?: boolean
-        wholeWord?: boolean
-        regex?: boolean
-    }) => Promise<void>
-    requireReloading: () => void
-    rerender: () => void,
-    getPageMax: () => bigint
-    setPaging: (opts: { visibleAreaTop?: bigint, numRecords?: bigint, visibleAreaSize?: bigint }, preserveEditorState?: true, withoutTableReloading?: true) => Promise<void>
-    reloadAllTables: (selectTable?: string) => Promise<void>
-    addErrorMessage: (value: string) => void
-}>()((set, get) => {
+    }) => {
+        set(opts)
+        await remote.setState("tableName", get().tableName)
+        await reloadTable(true, true)
+        if (opts.useCustomViewerQuery !== undefined || opts.customViewerQuery !== undefined || opts.tableName !== undefined) {
+            await editor.useEditorStore.getState().switchTable(opts.useCustomViewerQuery ? undefined : get().tableName)
+        }
+    }
     return {
-        reloadRequired: false,
+        setViewerQuery,
         getPageMax: () => BigInt(Math.ceil(Number(get().paging.numRecords) / Number(get().paging.visibleAreaSize))),
-        tableName: undefined,
-        paging: {
-            visibleAreaTop: 0n,
-            numRecords: 0n,
-            visibleAreaSize: 20n,
-        },
-        errorMessage: "",
-        useCustomViewerQuery: false,
-        customViewerQuery: "",
-        findWidget: {
-            value: "",
-            caseSensitive: false,
-            wholeWord: false,
-            regex: false,
-        },
-        isFindWidgetVisibleWhenValueIsEmpty: false,
-        tableList: [],
-        scrollerRef: { current: null },
-        autoReload: true,
-        _rerender: {},
-        setViewerQuery: async (opts) => {
-            set(opts)
-            await remote.setState("tableName", get().tableName)
-            await reloadTable(true, true)
-            if (opts.useCustomViewerQuery !== undefined || opts.customViewerQuery !== undefined || opts.tableName !== undefined) {
-                await editor.useEditorStore.getState().switchTable(opts.useCustomViewerQuery ? undefined : get().tableName)
-            }
-        },
         setFindWidgetVisibility: async (value: boolean) => {
             if (get().isFindWidgetVisible === value) { return }
             set({ isFindWidgetVisible: value })
             await reloadTable(false, true)
         },
-        setFindWidgetState: async (opts) => {
+        setFindWidgetState: async (opts: {
+            value?: string
+            caseSensitive?: boolean
+            wholeWord?: boolean
+            regex?: boolean
+        }) => {
             const oldState = get().findWidget
             const newState = { ...oldState, ...opts }
             if (deepEqual(oldState, newState)) { return }
@@ -244,7 +215,7 @@ export const useMainStore = zustand<{
             await reloadTable(false, true)
         },
         requireReloading: () => { set({ reloadRequired: true }) },
-        setPaging: async (opts, preserveEditorState, withoutTableReloading) => {
+        setPaging: async (opts: { visibleAreaTop?: bigint, numRecords?: bigint, visibleAreaSize?: bigint }, preserveEditorState?: true, withoutTableReloading?: true) => {
             const paging = { ...get().paging, ...opts }
             paging.visibleAreaSize = BigintMath.max(1n, BigintMath.min(200n, paging.visibleAreaSize))
             paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize, paging.visibleAreaTop))
@@ -275,7 +246,7 @@ export const useMainStore = zustand<{
                     newTableName = newTableList[0]?.name
                 }
                 set({ tableList: newTableList })
-                await get().setViewerQuery({ tableName: newTableName })
+                await setViewerQuery({ tableName: newTableName })
             } else {
                 // If the list of tables is not changed
                 await reloadTable(true, true)

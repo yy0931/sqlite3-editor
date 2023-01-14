@@ -1,12 +1,11 @@
 import { useEffect, useLayoutEffect, MutableRef, useState, useRef, Ref } from "preact/hooks"
-import zustand from "zustand"
 import produce from "immer"
 import type { JSXInternal } from "preact/src/jsx"
 import * as remote from "./remote"
 import { BigintMath, reloadTable, useMainStore } from "./main"
 import { Button, Checkbox, Highlight, Select } from "./components"
 import { blob2hex, escapeSQLIdentifier, renderValue, type2color, unsafeEscapeValue, useTableStore } from "./table"
-import { useEventListener } from "usehooks-ts"
+import { createStore } from "./util"
 
 type State =
     | {
@@ -154,197 +153,191 @@ const mountInput = () => {
         })
     }
 }
-
-export const useEditorStore = zustand<State & {
-    alterTable: (tableName: string, column: string | undefined) => Promise<void>
-    createTable: (tableName: string | undefined) => void
-    delete_: (tableName: string, record: Record<string, remote.SQLite3Value>, row: number) => Promise<void>
-    dropTable: (tableName: string) => void
-    dropView: (tableName: string) => void
-    insert: (tableName: string) => Promise<void>
-    custom: (tableName: string | undefined) => void
-    update: (tableName: string, column: string, row: number) => void
-    createIndex: (tableName: string) => void
-    dropIndex: (tableName: string | undefined, indexName: string) => void
-
-    switchTable: (tableName: string | undefined) => Promise<void>
-    commit: (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => Promise<void>
-    commitUpdate: (preserveEditorState?: true, explicit?: true) => Promise<void>
-    clearInputs: () => Promise<void>
-    cancel: () => Promise<void>
-}>()((setPartial, get) => {
+export const useEditorStore = createStore({
+    tableName: undefined,
+    statement: "CREATE TABLE",
+    strict: true,
+    tableConstraints: "",
+    newTableName: "",
+    withoutRowId: false,
+    columnDefs: [],
+} satisfies State as State, (setPartial, get) => {
     const set = (state: State) => { setPartial(state) }
-    return {
-        statement: "CREATE TABLE",
-        strict: true,
-        tableConstraints: "",
-        newTableName: "",
-        withoutRowId: false,
-        columnDefs: [],
-        tableName: undefined,
-
-        alterTable: async (tableName: string, column: string | undefined) => {
-            unmountInput?.()
-            set({
-                statement: "ALTER TABLE",
-                tableName,
-                statement2: column ? "RENAME COLUMN" : "RENAME TO",
-                oldColumnName: column ?? "",
-                columnDef: { name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false, default: "" },
-                newColumnName: column ?? "",
-                newTableName: tableName,
-                strict: !!(await remote.getTableList()).find(({ name }) => name === tableName)?.strict,
-            })
-        },
-        createTable: (tableName: string | undefined) => {
-            unmountInput?.()
-            set({ statement: "CREATE TABLE", strict: true, newTableName: "", tableConstraints: "", withoutRowId: false, columnDefs: [], tableName })
-        },
-        delete_: async (tableName: string, record: Record<string, remote.SQLite3Value>, row: number) => {
-            unmountInput?.()
-            set({
-                statement: "DELETE",
-                tableName,
-                record,
-                constraintChoices: useTableStore.getState().getRecordSelectors(record),
-                selectedConstraint: 0,
-                row,
-            })
-        },
-        dropTable: (tableName: string) => {
-            unmountInput?.()
-            set({ statement: "DROP TABLE", tableName })
-        },
-        dropView: (tableName: string) => {
-            unmountInput?.()
-            set({ statement: "DROP VIEW", tableName })
-        },
-        insert: async (tableName: string) => {
-            unmountInput?.()
-            const { tableInfo } = useTableStore.getState()
-            set({
-                statement: "INSERT",
-                tableName, tableInfo,
-                textareaValues: tableInfo.map(() => ""),
-                blobValues: tableInfo.map(() => null),
-                dataTypes: tableInfo.map(({ type, notnull, dflt_value }): EditorDataType => {
-                    if (notnull && dflt_value === null) {
-                        type = type.toLowerCase()
-                        if (type === "real" || type === "int" || type === "integer") {
-                            return "number"
-                        } else if (type === "text") {
-                            return "string"
-                        } else if (type === "null" || type === "blob") {
-                            return type
-                        } else {
-                            return "string"
-                        }
+    const alterTable = async (tableName: string, column: string | undefined) => {
+        unmountInput?.()
+        set({
+            statement: "ALTER TABLE",
+            tableName,
+            statement2: column ? "RENAME COLUMN" : "RENAME TO",
+            oldColumnName: column ?? "",
+            columnDef: { name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false, default: "" },
+            newColumnName: column ?? "",
+            newTableName: tableName,
+            strict: !!(await remote.getTableList()).find(({ name }) => name === tableName)?.strict,
+        })
+    }
+    const createTable = (tableName: string | undefined) => {
+        unmountInput?.()
+        set({ statement: "CREATE TABLE", strict: true, newTableName: "", tableConstraints: "", withoutRowId: false, columnDefs: [], tableName })
+    }
+    const delete_ = async (tableName: string, record: Record<string, remote.SQLite3Value>, row: number) => {
+        unmountInput?.()
+        set({
+            statement: "DELETE",
+            tableName,
+            record,
+            constraintChoices: useTableStore.getState().getRecordSelectors(record),
+            selectedConstraint: 0,
+            row,
+        })
+    }
+    const dropTable = (tableName: string) => {
+        unmountInput?.()
+        set({ statement: "DROP TABLE", tableName })
+    }
+    const dropView = (tableName: string) => {
+        unmountInput?.()
+        set({ statement: "DROP VIEW", tableName })
+    }
+    const insert = async (tableName: string) => {
+        unmountInput?.()
+        const { tableInfo } = useTableStore.getState()
+        set({
+            statement: "INSERT",
+            tableName, tableInfo,
+            textareaValues: tableInfo.map(() => ""),
+            blobValues: tableInfo.map(() => null),
+            dataTypes: tableInfo.map(({ type, notnull, dflt_value }): EditorDataType => {
+                if (notnull && dflt_value === null) {
+                    type = type.toLowerCase()
+                    if (type === "real" || type === "int" || type === "integer") {
+                        return "number"
+                    } else if (type === "text") {
+                        return "string"
+                    } else if (type === "null" || type === "blob") {
+                        return type
                     } else {
-                        return "default"
+                        return "string"
                     }
-                }),
-            })
-        },
-        custom: (tableName: string | undefined) => {
-            unmountInput?.()
-            set({ statement: "Custom Query", query: "", tableName })
-        },
-        update: (tableName: string, column: string, row: number) => {
-            unmountInput?.()
-            const record = useTableStore.getState().records[row]!
-            const value = record[column]
-            const constraintChoices = useTableStore.getState().getRecordSelectors(record)
-            if (constraintChoices.length === 0) { return }
-            let type: EditorDataType
-            if (value === null) {
-                type = "null"
-            } else if (value instanceof Uint8Array) {
-                type = "blob"
-            } else if (typeof value === "number" || typeof value === "bigint") {
-                type = "number"
-            } else {
-                type = "string"
+                } else {
+                    return "default"
+                }
+            }),
+        })
+    }
+    const custom = (tableName: string | undefined) => {
+        unmountInput?.()
+        set({ statement: "Custom Query", query: "", tableName })
+    }
+    const update = (tableName: string, column: string, row: number) => {
+        unmountInput?.()
+        const record = useTableStore.getState().records[row]!
+        const value = record[column]
+        const constraintChoices = useTableStore.getState().getRecordSelectors(record)
+        if (constraintChoices.length === 0) { return }
+        let type: EditorDataType
+        if (value === null) {
+            type = "null"
+        } else if (value instanceof Uint8Array) {
+            type = "blob"
+        } else if (typeof value === "number" || typeof value === "bigint") {
+            type = "number"
+        } else {
+            type = "string"
+        }
+        set({
+            statement: "UPDATE", tableName, column, record, constraintChoices, row, type,
+            selectedConstraint: 0,
+            textareaValue: value === null || value instanceof Uint8Array ? "" : (value + ""),
+            blobValue: value instanceof Uint8Array ? value : null,
+            isTextareaDirty: false,
+        })
+        mountInput()
+    }
+    const createIndex = (tableName: string) => {
+        unmountInput?.()
+        set({ statement: "CREATE INDEX", tableName, unique: false, indexName: "", indexedColumns: "", where: "" })
+    }
+    const dropIndex = (tableName: string | undefined, indexName: string) => {
+        unmountInput?.()
+        set({ statement: "DROP INDEX", indexName, tableName })
+    }
+    const clearInputs = async () => {
+        const state = get()
+        switch (state.statement) {
+            case "INSERT": setPartial({ textareaValues: state.textareaValues.map(() => ""), blobValues: state.blobValues.map(() => null) }); break
+            case "DROP TABLE": dropTable(state.tableName); break
+            case "DROP VIEW": dropView(state.tableName); break
+            case "ALTER TABLE": await alterTable(state.tableName, undefined); break
+            case "DELETE": case "UPDATE": await insert(state.tableName); break
+            case "CREATE TABLE": createTable(state.tableName); break
+            case "Custom Query": custom(state.tableName); break
+            case "CREATE INDEX": createIndex(state.tableName); break
+            case "DROP INDEX": dropIndex(state.tableName, state.indexName); break
+        }
+    }
+    const commit = async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => {
+        await remote.query(query, params, "w+")
+        if (opts.reload === "allTables") {
+            await useMainStore.getState().reloadAllTables(opts.selectTable)
+        } else {
+            await reloadTable(true, true)
+            if (opts.scrollToBottom) {
+                let state = useMainStore.getState()
+                await state.setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.visibleAreaSize, 0n) })
+                state = useMainStore.getState()
+                state.scrollerRef.current?.scrollBy({ behavior: "smooth", top: state.scrollerRef.current!.scrollHeight - state.scrollerRef.current!.offsetHeight })
             }
-            set({
-                statement: "UPDATE", tableName, column, record, constraintChoices, row, type,
-                selectedConstraint: 0,
-                textareaValue: value === null || value instanceof Uint8Array ? "" : (value + ""),
-                blobValue: value instanceof Uint8Array ? value : null,
-                isTextareaDirty: false,
-            })
-            mountInput()
-        },
-        createIndex: (tableName) => {
-            unmountInput?.()
-            set({ statement: "CREATE INDEX", tableName, unique: false, indexName: "", indexedColumns: "", where: "" })
-        },
-        dropIndex: (tableName, indexName) => {
-            unmountInput?.()
-            set({ statement: "DROP INDEX", indexName, tableName })
-        },
+        }
+        if (!preserveEditorState) { await clearInputs() }
+    }
+    return {
+        alterTable,
+        createTable,
+        delete_,
+        dropTable,
+        dropView,
+        insert,
+        custom,
+        update,
+        createIndex,
+        dropIndex,
+        commit,
+        clearInputs,
         switchTable: async (tableName: string | undefined) => {
             const state = get()
             if (useMainStore.getState().useCustomViewerQuery) {
-                state.custom(tableName)
+                custom(tableName)
                 return
             } else if (tableName === undefined) {
-                state.createTable(tableName)
+                createTable(tableName)
                 return
             }
             switch (state.statement) {
-                case "INSERT": await state.insert(tableName); break
-                case "DROP TABLE": state.dropTable(tableName); break
-                case "DROP VIEW": state.dropView(tableName); break
-                case "ALTER TABLE": await state.alterTable(tableName, undefined); break
-                case "DELETE": case "UPDATE": await state.insert(tableName); break
-                case "DROP INDEX": await state.insert(tableName); break
-                case "CREATE INDEX": await state.createIndex(tableName); break
+                case "INSERT": await insert(tableName); break
+                case "DROP TABLE": dropTable(tableName); break
+                case "DROP VIEW": dropView(tableName); break
+                case "ALTER TABLE": await alterTable(tableName, undefined); break
+                case "DELETE": case "UPDATE": await insert(tableName); break
+                case "DROP INDEX": await insert(tableName); break
+                case "CREATE INDEX": await createIndex(tableName); break
                 case "CREATE TABLE": case "Custom Query":
                     if (state.tableName === undefined) {
-                        await state.insert(tableName)
+                        await insert(tableName)
                     } else {
                         setPartial({ tableName })
                     }
                     break
             }
         },
-        commit: async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => {
-            await remote.query(query, params, "w+")
-            if (opts.reload === "allTables") {
-                await useMainStore.getState().reloadAllTables(opts.selectTable)
-            } else {
-                await reloadTable(true, true)
-                if (opts.scrollToBottom) {
-                    let state = useMainStore.getState()
-                    await state.setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.visibleAreaSize, 0n) })
-                    state = useMainStore.getState()
-                    state.scrollerRef.current?.scrollBy({ behavior: "smooth", top: state.scrollerRef.current!.scrollHeight - state.scrollerRef.current!.offsetHeight })
-                }
-            }
-            if (!preserveEditorState) { await get().clearInputs() }
-        },
-        clearInputs: async () => {
-            const state = get()
-            switch (state.statement) {
-                case "INSERT": setPartial({ textareaValues: state.textareaValues.map(() => ""), blobValues: state.blobValues.map(() => null) }); break
-                case "DROP TABLE": state.dropTable(state.tableName); break
-                case "DROP VIEW": state.dropView(state.tableName); break
-                case "ALTER TABLE": await state.alterTable(state.tableName, undefined); break
-                case "DELETE": case "UPDATE": await state.insert(state.tableName); break
-                case "CREATE TABLE": state.createTable(state.tableName); break
-                case "Custom Query": state.custom(state.tableName); break
-                case "CREATE INDEX": state.createIndex(state.tableName); break
-                case "DROP INDEX": state.dropIndex(state.tableName, state.indexName); break
-            }
-        },
         cancel: async () => {
             const state = get()
             if (useMainStore.getState().useCustomViewerQuery) {
-                state.custom(state.tableName)
+                custom(state.tableName)
             } else if (state.tableName === undefined) {
-                state.createTable(state.tableName)
+                createTable(state.tableName)
             } else {
-                await state.insert(state.tableName)
+                await insert(state.tableName)
             }
         },
         commitUpdate: async (preserveEditorState?: true, explicit?: true) => {
@@ -353,7 +346,7 @@ export const useEditorStore = zustand<State & {
             if (state.statement !== "UPDATE" || (!explicit && !state.isTextareaDirty)) { return }
             setPartial({ isTextareaDirty: false })
             const columns = state.constraintChoices[state.selectedConstraint]!
-            await state.commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], { reload: "currentTable" }, preserveEditorState)
+            await commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], { reload: "currentTable" }, preserveEditorState)
         }
     }
 })
