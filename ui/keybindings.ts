@@ -94,7 +94,7 @@ export const onKeydown = async (ev: KeyboardEvent) => {
         if (findWidgetFocus && key("+Escape")) {
             ev.preventDefault()
             ev.target.blur()
-            useMainStore.setState({ isFindWidgetVisible: false })
+            await useMainStore.getState().setFindWidgetVisibility(false)
         } else if (inputFocus && key("+Escape")) {
             ev.preventDefault()
             ev.target.blur()
@@ -108,7 +108,7 @@ export const onKeydown = async (ev: KeyboardEvent) => {
                     findWidget.select()
                 }
             } else {
-                useMainStore.setState({ isFindWidgetVisibleWhenValueIsEmpty: true })
+                await useMainStore.getState().setFindWidgetVisibility(true)
             }
         } else if (findWidgetFocus && key("a+KeyC")) {
             ev.preventDefault()

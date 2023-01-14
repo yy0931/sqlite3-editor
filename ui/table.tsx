@@ -9,7 +9,6 @@ import { persistentRef } from "./components"
 
 export const useTableStore = zustand<{
     invalidQuery: string | null
-
     tableInfo: remote.TableInfo
     indexList: remote.IndexList
     /** index_info for each index in indexList */
@@ -61,26 +60,30 @@ export const useTableStore = zustand<{
 }))
 
 export const Table = ({ tableName }: { tableName: string | undefined }) => {
-    const alterTable = useEditorStore((state) => state.alterTable)
-    const visibleAreaTop = useMainStore((state) => Number(state.paging.visibleAreaTop))
-    const pageSize = useMainStore((state) => Number(state.paging.visibleAreaSize))
-    const numRecords = useMainStore((state) => Number(state.paging.numRecords))
+    const visibleAreaTop = useMainStore((s) => Number(s.paging.visibleAreaTop))
+    const pageSize = useMainStore((s) => Number(s.paging.visibleAreaSize))
+    const numRecords = useMainStore((s) => Number(s.paging.numRecords))
 
-    const state = useTableStore()
+    const invalidQuery = useTableStore((s) => s.invalidQuery)
+    const tableInfo = useTableStore((s) => s.tableInfo)
+    const autoIncrement = useTableStore((s) => s.autoIncrement)
+    const records = useTableStore((s) => s.records)
+    const input = useTableStore((s) => s.input)
+
+    const alterTable = useEditorStore((s) => s.alterTable)
+    const selectedRow = useEditorStore((s) => s.statement === "DELETE" ? s.row : null)
+    const selectedDataRow = useEditorStore((s) => s.statement === "UPDATE" ? s.row : null)
+    const selectedDataColumn = useEditorStore((s) => s.statement === "UPDATE" ? s.column : null)
 
     const columnWidthCaches = persistentRef<Record<string, (number | undefined | null)[]>>("columnWidths_v3", {})
     const getColumnWidths = () => {
         const result: number[] = []
-        for (let i = 0; i < state.tableInfo.length; i++) {
-            result.push(columnWidthCaches.current[tableName ?? ""]?.[i] ?? (state.tableInfo.length === 1 ? 250 : 150))
+        for (let i = 0; i < tableInfo.length; i++) {
+            result.push(columnWidthCaches.current[tableName ?? ""]?.[i] ?? (tableInfo.length === 1 ? 250 : 150))
         }
         return result
     }
     const tableRef = useRef<HTMLTableElement>(null)
-
-    const selectedRow = useEditorStore((state) => state.statement === "DELETE" ? state.row : null)
-    const selectedDataRow = useEditorStore((state) => state.statement === "UPDATE" ? state.row : null)
-    const selectedDataColumn = useEditorStore((state) => state.statement === "UPDATE" ? state.column : null)
 
     const scrollbarRef = useRef<ScrollbarY>(null)
     useEffect(() => {
@@ -95,20 +98,22 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
         return () => { el.removeEventListener("wheel", onWheel as any, { passive: false } as any) }
     }, [tableRef.current])
 
-    const isFindWidgetVisible = useMainStore((state) => state.isFindWidgetVisible)
-    const tableType = useMainStore((state) => state.tableList.find(({ name }) => name === state.tableName)?.type)
+    const isFindWidgetVisible = useMainStore((s) => s.isFindWidgetVisible)
+    const tableType = useMainStore((s) => s.tableList.find(({ name }) => name === s.tableName)?.type)
 
-    if (state.invalidQuery !== null) {
-        return <span class="text-red-700">{state.invalidQuery}</span>
+    if (invalidQuery !== null) {
+        return <span class="text-red-700">{invalidQuery}</span>
     }
 
     return <>
         <div class="max-w-full overflow-x-auto w-max">
+            {/* Table */}
             <table ref={tableRef} class="viewer w-max border-collapse table-fixed bg-white" style={{ paddingRight: scrollbarWidth, boxShadow: "0 0 0px 2px #000000ad" }}>
+                {/* Table Header */}
                 <thead class="text-black bg-[var(--gutter-color)]" style={{ outline: "rgb(181, 181, 181) 1px solid" }}>
                     <tr>
                         <th class="font-normal select-none pt-[3px] pb-[3px] pl-[1em] pr-[1em]"></th>
-                        {state.tableInfo.map(({ name, notnull, pk, type, dflt_value }, i) => <th
+                        {tableInfo.map(({ name, notnull, pk, type, dflt_value }, i) => <th
                             style={{ width: getColumnWidths()[i]! }}
                             class={"font-normal select-none " + (tableName !== undefined && tableType === "table" ? "clickable" : "")}
                             title={tableType === "table" ? "" : `A ${tableType} cannot be altered.`}
@@ -153,25 +158,34 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                             }}>
                             <code class="inline-block [word-break:break-word] [color:inherit] [font-family:inherit] [font-size:inherit]">
                                 {name}
-                                <span class="italic opacity-70">{`${type ? (" " + type) : ""}${pk ? (state.autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : ""}${notnull ? " NOT NULL" : ""}${dflt_value !== null ? ` DEFAULT ${dflt_value}` : ""}`}</span>
+                                <span class="italic opacity-70">{`${type ? (" " + type) : ""}${pk ? (autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : ""}${notnull ? " NOT NULL" : ""}${dflt_value !== null ? ` DEFAULT ${dflt_value}` : ""}`}</span>
                             </code>
                         </th>)}
                     </tr>
                 </thead>
+
+                {/* Table Body */}
                 <tbody>
+                    {/* Find Widget */}
                     {isFindWidgetVisible && <tr>
                         <td class="pl-[10px] pr-[10px] bg-[var(--gutter-color)]"></td>
-                        <td class="relative text-right" colSpan={state.tableInfo.length} style={{ maxWidth: getColumnWidths().reduce((a, b) => a + b, 0) }}>
+                        <td class="relative text-right" colSpan={tableInfo.length} style={{ maxWidth: getColumnWidths().reduce((a, b) => a + b, 0) }}>
                             <FindWidget />
                         </td>
                     </tr>}
-                    {state.records.length === 0 && <tr>
+
+                    {/* Placeholder that is displayed when the table has no rows */}
+                    {records.length === 0 && <tr>
                         <td class="overflow-hidden no-hover inline-block cursor-default h-[1.2em] pl-[10px] pr-[10px]" style={{ borderRight: "1px solid var(--td-border-color)" }}></td>
                     </tr>}
-                    {state.records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? state.input : null} tableName={tableName} tableInfo={state.tableInfo} record={record} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
+
+                    {/* Rows */}
+                    {records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? input : null} tableName={tableName} tableInfo={tableInfo} record={record} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
                 </tbody>
             </table>
         </div>
+
+        {/* Vertical Scroll Bar */}
         {// @ts-ignore
             <scrollbar-y
                 ref={scrollbarRef}
@@ -186,8 +200,8 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
 }
 
 const FindWidget = () => {
-    const { value, caseSensitive, wholeWord, regex } = useMainStore((state) => state.findWidget)
-    const setFindWidgetState = useMainStore((state) => state.setFindWidgetState)
+    const { value, caseSensitive, wholeWord, regex } = useMainStore((s) => s.findWidget)
+    const setFindWidgetState = useMainStore((s) => s.setFindWidgetState)
     const ref = useRef<HTMLInputElement>(null)
 
     // Focus the input box on mount
@@ -197,13 +211,20 @@ const FindWidget = () => {
     }, [])
 
     return <div class="inline-block pl-1 pt-1 bg-gray-200 shadow-md whitespace-nowrap sticky right-3">
+        {/* Text input */}
         <input id="findWidget" ref={ref} class="mr-1" placeholder="Find" value={value} onChange={(ev) => setFindWidgetState({ value: ev.currentTarget.value })} />
+
+        {/* Match Case button */}
         <span title="Match Case" class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#case-sensitive" /></svg>
         </span>
+
+        {/* Match Whole Word button */}
         <span title="Match Whole Word" class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={wholeWord ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ wholeWord: !wholeWord })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#whole-word" /></svg>
         </span>
+
+        {/* Use Regular Expression button */}
         <span title="Use Regular Expression" class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={regex ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ regex: !regex })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#regex" /></svg>
         </span>
@@ -214,8 +235,8 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
     if (props.rowNumber <= 0) {
         throw new Error(props.rowNumber + "")
     }
-    const delete_ = useEditorStore((state) => state.delete_)
-    const update = useEditorStore((state) => state.update)
+    const delete_ = useEditorStore((s) => s.delete_)
+    const update = useEditorStore((s) => s.update)
 
     const [cursorVisibility, setCursorVisibility] = useState(true)
     const onFocusOrMount = useCallback(() => { setCursorVisibility(true) }, [])
@@ -225,7 +246,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
         <td
             class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (props.tableName !== undefined ? "clickable" : "")}
             style={{ borderRight: "1px solid var(--td-border-color)" }}
-            onMouseDown={(ev) => {
+            onMouseDown={() => {
                 useEditorStore.getState().commitUpdate().then(() => {
                     if (props.tableName !== undefined) { delete_(props.tableName, props.record, props.row).catch(console.error) }
                 }).catch(console.error)

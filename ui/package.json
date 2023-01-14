@@ -17,12 +17,14 @@
     "msgpackr": "github:yy0931/msgpackr",
     "prismjs": "^1.29.0",
     "type-fest": "^3.4.0",
+    "usehooks-ts": "^2.9.1",
     "zustand": "^4.1.5"
   },
   "devDependencies": {
     "@babel/core": "^7.20.5",
     "@preact/preset-vite": "^2.5.0",
     "@types/prismjs": "^1.26.0",
+    "@types/react": "^18.0.26",
     "@typescript-eslint/eslint-plugin": "^5.46.1",
     "@typescript-eslint/parser": "^5.46.1",
     "autoprefixer": "^10.4.13",

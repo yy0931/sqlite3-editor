@@ -2,19 +2,21 @@ import Prism from "prismjs"
 import "prismjs/components/prism-sql"
 import { SVGCheckbox } from "./components"
 import { useEditorStore } from "./editor"
-import { useMainStore } from "./main"
 import { useTableStore } from "./table"
 
 export const SettingsView = () => {
-    const schema = useTableStore((state) => state.tableSchema)
-    const indexList = useTableStore((state) => state.indexList)
-    const indexInfo = useTableStore((state) => state.indexInfo)
-    const indexSchema = useTableStore((state) => state.indexSchema)
-    const tableName = useEditorStore((state) => state.tableName)
+    const schema = useTableStore((s) => s.tableSchema)
+    const indexList = useTableStore((s) => s.indexList)
+    const indexInfo = useTableStore((s) => s.indexInfo)
+    const indexSchema = useTableStore((s) => s.indexSchema)
+    const tableName = useEditorStore((s) => s.tableName)
 
     return <>
+        {/* Schema */}
         <h2 class="font-bold">Schema</h2>
         <div class="pl-[var(--page-padding)] mb-4"><pre class="[font-size:inherit] overflow-x-auto bg-white p-2" dangerouslySetInnerHTML={{ __html: Prism.highlight(schema ?? "", Prism.languages.sql!, "sql") }}></pre></div>
+
+        {/* Indexes */}
         <h2 class="font-bold">Indexes</h2>
         <div class="pl-[var(--page-padding)]">
             <ul class="list-disc ml-4">
