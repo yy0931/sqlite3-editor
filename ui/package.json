@@ -16,25 +16,25 @@
     "fast-deep-equal": "^3.1.3",
     "msgpackr": "github:yy0931/msgpackr",
     "prismjs": "^1.29.0",
-    "type-fest": "^3.0.0",
-    "zustand": "^4.1.1"
+    "type-fest": "^3.4.0",
+    "zustand": "^4.1.5"
   },
   "devDependencies": {
-    "@babel/core": "^7.19.6",
-    "@preact/preset-vite": "^2.4.0",
+    "@babel/core": "^7.20.5",
+    "@preact/preset-vite": "^2.5.0",
     "@types/prismjs": "^1.26.0",
-    "@typescript-eslint/eslint-plugin": "^5.38.1",
-    "@typescript-eslint/parser": "^5.38.1",
-    "autoprefixer": "^10.4.12",
-    "concurrently": "^7.4.0",
-    "eslint": "^8.24.0",
+    "@typescript-eslint/eslint-plugin": "^5.46.1",
+    "@typescript-eslint/parser": "^5.46.1",
+    "autoprefixer": "^10.4.13",
+    "concurrently": "^7.6.0",
+    "eslint": "^8.30.0",
     "immer": "^9.0.16",
     "open": "^8.4.0",
-    "postcss": "^8.4.16",
-    "preact": "^10.11.2",
-    "sass": "^1.54.9",
-    "tailwindcss": "^3.1.8",
-    "typescript": "^4.8.4",
-    "vite": "^3.1.1"
+    "postcss": "^8.4.20",
+    "preact": "^10.11.3",
+    "sass": "^1.57.0",
+    "tailwindcss": "^3.2.4",
+    "typescript": "^4.9.4",
+    "vite": "^4.0.2"
   }
 }
