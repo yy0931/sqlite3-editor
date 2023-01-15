@@ -2,10 +2,9 @@ import { useEffect, useLayoutEffect, MutableRef, useState, useRef, Ref } from "p
 import produce from "immer"
 import type { JSXInternal } from "preact/src/jsx"
 import * as remote from "./remote"
-import { BigintMath, reloadTable, useMainStore } from "./main"
 import { Button, Checkbox, Highlight, Select } from "./components"
 import { blob2hex, escapeSQLIdentifier, renderValue, type2color, unsafeEscapeValue, useTableStore } from "./table"
-import { createStore } from "./util"
+import { BigintMath, createStore } from "./util"
 
 type State =
     // SQL statements that require a table name
@@ -163,7 +162,7 @@ const mountInput = () => {
     }
 }
 
-export const useEditorStore = createStore({
+export const useEditorStore = createStore("useEditorStore", {
     tableName: undefined,
     statement: "CREATE TABLE",
     strict: true,
@@ -289,13 +288,13 @@ export const useEditorStore = createStore({
     const commit = async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => {
         await remote.query(query, params, "w+")
         if (opts.reload === "allTables") {
-            await useMainStore.getState().reloadAllTables(opts.selectTable)
+            await useTableStore.getState().reloadAllTables(opts.selectTable)
         } else {
-            await reloadTable(true, true)
+            await useTableStore.getState().reloadTable(true, true)
             if (opts.scrollToBottom) {
-                let state = useMainStore.getState()
+                let state = useTableStore.getState()
                 await state.setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.visibleAreaSize, 0n) })
-                state = useMainStore.getState()
+                state = useTableStore.getState()
             }
         }
         if (!preserveEditorState) { await clearInputs() }
@@ -315,7 +314,7 @@ export const useEditorStore = createStore({
         clearInputs,
         switchTable: async (tableName: string | undefined) => {
             const state = get()
-            if (useMainStore.getState().useCustomViewerQuery) {
+            if (useTableStore.getState().useCustomViewerQuery) {
                 custom(tableName)
                 return
             } else if (tableName === undefined) {
@@ -341,7 +340,7 @@ export const useEditorStore = createStore({
         },
         cancel: async () => {
             const state = get()
-            if (useMainStore.getState().useCustomViewerQuery) {
+            if (useTableStore.getState().useCustomViewerQuery) {
                 custom(state.tableName)
             } else if (state.tableName === undefined) {
                 createTable(state.tableName)
@@ -354,7 +353,7 @@ export const useEditorStore = createStore({
             const state = get()
             if (state.statement !== "UPDATE" || (!explicit && !state.isTextareaDirty)) { return }
             if (!explicit) {
-                if (!await useMainStore.getState().confirm()) { return }
+                if (!await useTableStore.getState().confirm()) { return }
             }
             setPartial({ isTextareaDirty: false })
             const columns = state.constraintChoices[state.selectedConstraint]!

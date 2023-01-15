@@ -1,6 +1,5 @@
 import { Packr, Unpackr } from "msgpackr"
-import { useMainStore } from "./main"
-import { escapeSQLIdentifier } from "./table"
+import { escapeSQLIdentifier, useTableStore } from "./table"
 
 export type TableInfo = { cid: bigint, dflt_value: bigint | string | null, name: string, notnull: bigint, type: string, pk: bigint }[]
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
@@ -40,7 +39,7 @@ export const post = async (url: string, body: unknown, opts: PostOptions = {}) =
                 if (data.type !== "sqlite3-editor-server" || data.requestId !== requestId) { return }
                 window.removeEventListener("message", callback)
                 if ("err" in data) {
-                    if (!opts.withoutLogging) { useMainStore.getState().addErrorMessage(data.err) }
+                    if (!opts.withoutLogging) { useTableStore.getState().addErrorMessage(data.err) }
                     reject(new Error(data.err))
                     return
                 }
@@ -56,12 +55,12 @@ export const post = async (url: string, body: unknown, opts: PostOptions = {}) =
             try {
                 res = await fetch("http://localhost:8080" + url, { method: "POST", body: packr.pack(body), headers: { "Content-Type": "application/octet-stream" } })
             } catch (err) {
-                if (!opts.withoutLogging) { useMainStore.getState().addErrorMessage(typeof err === "object" && err !== null && "message" in err ? err.message + "" : err + "") }
+                if (!opts.withoutLogging) { useTableStore.getState().addErrorMessage(typeof err === "object" && err !== null && "message" in err ? err.message + "" : err + "") }
                 throw err
             }
             if (!res.ok) {
                 const message = await res.text()
-                if (!opts.withoutLogging) { useMainStore.getState().addErrorMessage(message) }
+                if (!opts.withoutLogging) { useTableStore.getState().addErrorMessage(message) }
                 throw new Error(message)
             }
             return unpackr.unpack(new Uint8Array(await res.arrayBuffer()))

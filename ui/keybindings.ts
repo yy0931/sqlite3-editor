@@ -1,5 +1,4 @@
 import * as editor from "./editor"
-import { useMainStore } from "./main"
 import { useTableStore } from "./table"
 
 const isInSingleClickState = () => document.querySelector(".single-click") !== null
@@ -15,7 +14,7 @@ const toSingleClick = () => {
 const moveSelectionUp = async () => {
     const state = editor.useEditorStore.getState()
     if (state.statement !== "UPDATE") { return }
-    const { paging, setPaging } = useMainStore.getState()
+    const { paging, setPaging } = useTableStore.getState()
     const rowNumber = Number(paging.visibleAreaTop) + state.row
     if (rowNumber >= 1) {
         if (state.row === 0) {
@@ -32,7 +31,7 @@ const moveSelectionUp = async () => {
 const moveSelectionDown = async () => {
     const state = editor.useEditorStore.getState()
     if (state.statement !== "UPDATE") { return }
-    const { paging, setPaging } = useMainStore.getState()
+    const { paging, setPaging } = useTableStore.getState()
     const rowNumber = Number(paging.visibleAreaTop) + state.row
     if (rowNumber <= Number(paging.numRecords) - 2) {
         if (state.row === Number(paging.visibleAreaSize) - 1) {
@@ -73,7 +72,7 @@ const moveSelectionLeft = () => {
 }
 
 export const onKeydown = async (ev: KeyboardEvent) => {
-    if (useMainStore.getState().isConfirmDialogVisible) {
+    if (useTableStore.getState().isConfirmDialogVisible) {
         return
     }
     try {
@@ -97,33 +96,32 @@ export const onKeydown = async (ev: KeyboardEvent) => {
         if (findWidgetFocus && key("+Escape")) {
             ev.preventDefault()
             ev.target.blur()
-            await useMainStore.getState().setFindWidgetVisibility(false)
+            await useTableStore.getState().setFindWidgetVisibility(false)
         } else if (inputFocus && key("+Escape")) {
             ev.preventDefault()
             ev.target.blur()
         } else if (key("c!s!a+KeyF")) {
             ev.preventDefault()
-            const isFindWidgetVisible = useMainStore.getState().isFindWidgetVisibleWhenValueIsEmpty || useMainStore.getState().findWidget.value !== ""
-            if (isFindWidgetVisible) {
+            if (useTableStore.getState().isFindWidgetVisible) {
                 const findWidget = document.querySelector<HTMLInputElement>("#findWidget")
                 if (findWidget) {
                     findWidget.focus()
                     findWidget.select()
                 }
             } else {
-                await useMainStore.getState().setFindWidgetVisibility(true)
+                await useTableStore.getState().setFindWidgetVisibility(true)
             }
         } else if (findWidgetFocus && key("a+KeyC")) {
             ev.preventDefault()
-            const mainState = useMainStore.getState()
+            const mainState = useTableStore.getState()
             await mainState.setFindWidgetState({ caseSensitive: !mainState.findWidget.caseSensitive })
         } else if (findWidgetFocus && key("a+KeyW")) {
             ev.preventDefault()
-            const mainState = useMainStore.getState()
+            const mainState = useTableStore.getState()
             await mainState.setFindWidgetState({ wholeWord: !mainState.findWidget.wholeWord })
         } else if (findWidgetFocus && key("a+KeyR")) {
             ev.preventDefault()
-            const mainState = useMainStore.getState()
+            const mainState = useTableStore.getState()
             await mainState.setFindWidgetState({ regex: !mainState.findWidget.regex })
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("+Escape")) {
             ev.preventDefault()
@@ -173,27 +171,27 @@ export const onKeydown = async (ev: KeyboardEvent) => {
             await state.clearInputs()
         } else if (!inputFocus && key("!c!s!a+ArrowDown")) {
             ev.preventDefault()
-            const mainState = useMainStore.getState()
+            const mainState = useTableStore.getState()
             await mainState.setPaging({ visibleAreaTop: mainState.paging.visibleAreaTop + 1n })
         } else if (!inputFocus && key("!c!s!a+ArrowUp")) {
             ev.preventDefault()
-            const mainState = useMainStore.getState()
+            const mainState = useTableStore.getState()
             await mainState.setPaging({ visibleAreaTop: mainState.paging.visibleAreaTop - 1n })
         } else if (!inputFocus && key("!c!s!a+PageDown")) {
             ev.preventDefault()
-            const mainState = useMainStore.getState()
+            const mainState = useTableStore.getState()
             await mainState.setPaging({ visibleAreaTop: mainState.paging.visibleAreaTop + mainState.paging.visibleAreaSize })
         } else if (!inputFocus && key("!c!s!a+PageUp")) {
             ev.preventDefault()
-            const mainState = useMainStore.getState()
+            const mainState = useTableStore.getState()
             await mainState.setPaging({ visibleAreaTop: mainState.paging.visibleAreaTop - mainState.paging.visibleAreaSize })
         } else if (!inputFocus && key("c!s!a+Home")) {
             ev.preventDefault()
-            const mainState = useMainStore.getState()
+            const mainState = useTableStore.getState()
             await mainState.setPaging({ visibleAreaTop: 0n })
         } else if (!inputFocus && key("c!s!a+End")) {
             ev.preventDefault()
-            const mainState = useMainStore.getState()
+            const mainState = useTableStore.getState()
             await mainState.setPaging({ visibleAreaTop: mainState.paging.numRecords - mainState.paging.visibleAreaSize })
         }
     } catch (err) {

@@ -4,10 +4,14 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "concurrently \"cd ui && npm start\" \"cd node-http && npm start\"",
     "install": "cd vscode && npm i",
     "start:node-http": "pnpm -F node-http -F ui start"
   },
   "keywords": [],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  }
 }
