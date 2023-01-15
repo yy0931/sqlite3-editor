@@ -4,8 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "//": "Vite's HMR breaks zustand and import.meta.hmr.decline() didn't work so I switched to a static server",
-    "start": "open http://localhost:5173/ && concurrently -k \"vite build --watch --minify false --sourcemap true\" \"echo 'http://localhost:5173' && python3 -m http.server --bind 127.0.0.1 --directory dist 5173\"",
+    "start": "vite",
     "build": "vite build",
     "build-dev": "vite build --minify false --sourcemap true"
   },
