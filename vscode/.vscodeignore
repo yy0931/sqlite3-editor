@@ -9,3 +9,4 @@ tsconfig.json
 **/__pycache__
 **/.gitignore
 node_modules
+screenshot.png
