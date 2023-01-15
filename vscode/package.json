@@ -2,8 +2,16 @@
   "name": "vscode-sqlite3-editor",
   "displayName": "SQLite3 Editor",
   "version": "1.0.0",
-  "description": "Edit SQLite files like you would in Excel.",
+  "description": "Edit SQLite3 files like you would in Excel.",
   "main": "extension.js",
+  "publisher": "yy0931",
+  "repository": {
+		"url": "https://github.com/yy0931/sqlite3-editor",
+		"type": "git"
+	},
+	"bugs": {
+		"url": "https://github.com/yy0931/sqlite3-editor/issues"
+	},
   "scripts": {
     "build": "./build.sh",
     "vscode:prepublish": "npm run build"
