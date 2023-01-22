@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, Ref, useState } from "preact/hooks"
+import { useLayoutEffect, useRef, useState } from "preact/hooks"
 import type { JSXInternal } from "preact/src/jsx"
 import type { ReadonlyDeep } from "type-fest"
 import * as remote from "./remote"
@@ -43,7 +43,7 @@ export const Button = (props: { class?: string, disabled?: boolean, children?: p
     return <button disabled={props.disabled} style={props.style} class={"border-0 outline-0 pl-2 pr-2 cursor-pointer [font-family:inherit] bg-[var(--button-primary-background)] text-[var(--button-primary-foreground)] hover:[background-color:var(--button-primary-hover-background)] disabled:cursor-not-allowed disabled:text-[#737373] disabled:bg-[#c1bbbb] " + (props.class ?? "")} onClick={props.onClick} title={props.title}>{props.children}</button>
 }
 
-/** useRef() but persists the value in the server. */
+/** {@link useRef} but persists the value to the server. */
 export const persistentRef = <T extends unknown>(key: string, defaultValue: T) => {
     return useState(() => {
         let value: ReadonlyDeep<T> = remote.getState(key) ?? defaultValue as ReadonlyDeep<T>
@@ -54,6 +54,7 @@ export const persistentRef = <T extends unknown>(key: string, defaultValue: T) =
     })[0]
 }
 
+/** {@link useState} but the value is persisted to the server. */
 export const persistentUseState = <T extends unknown>(key: string, defaultValue: T) => {
     const [state, setState] = useState<ReadonlyDeep<T>>(remote.getState(key) ?? defaultValue as ReadonlyDeep<T>)
     return [state, (value: T) => {
@@ -84,4 +85,5 @@ export const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: bo
         {props.text}
     </label>
 
+/** Displays text in blue. */
 export const Highlight = (props: { children: preact.ComponentChildren }) => <span class="[color:var(--button-primary-background)]">{props.children}</span>

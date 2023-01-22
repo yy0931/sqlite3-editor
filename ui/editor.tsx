@@ -8,6 +8,7 @@ import { blob2hex, escapeSQLIdentifier, renderValue, type2color, unsafeEscapeVal
 import { createStore } from "./util"
 
 type State =
+    // SQL statements that require a table name
     | {
         tableName: string
     } & (
@@ -61,6 +62,8 @@ type State =
             where: string
         }
     )
+
+    // SQL statements that don't require a table name
     | { tableName: string | undefined } & (
         | {
             statement: "CREATE TABLE"
@@ -80,19 +83,25 @@ type State =
         }
     )
 
+/** This function infers the data type of the input based on the column affinity of the given column.  */
 const inferTypeFromInputAndColumnAffinity = (input: string, column: string): EditorDataType => {
     const columnAffinity = useTableStore.getState().tableInfo.find(({ name }) => name === column)?.type.toUpperCase() ?? "ANY"
     // https://www.sqlite.org/datatype3.html#determination_of_column_affinity
     if (columnAffinity.includes("INT") || columnAffinity.includes("REAL") || columnAffinity.includes("FLOR") || columnAffinity.includes("DOUB")) {
+        // INTEGER or REAL
         return "number"
     } else if (columnAffinity.includes("CHAR") || columnAffinity.includes("CLOB") || columnAffinity.includes("TEXT")) {
+        // TEXT
         return "string"
     } else {
+        // NUMERIC or ANY
         return /^[+\-\d\.]/.test(input) ? "number" : "string"
     }
 }
 
 let unmountInput: (() => void) | null = null
+
+/** Appends a `<textarea>` to a table cell. */
 const mountInput = () => {
     unmountInput?.()
     const state = useEditorStore.getState()
@@ -153,6 +162,7 @@ const mountInput = () => {
         })
     }
 }
+
 export const useEditorStore = createStore({
     tableName: undefined,
     statement: "CREATE TABLE",
@@ -286,7 +296,6 @@ export const useEditorStore = createStore({
                 let state = useMainStore.getState()
                 await state.setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.visibleAreaSize, 0n) })
                 state = useMainStore.getState()
-                state.scrollerRef.current?.scrollBy({ behavior: "smooth", top: state.scrollerRef.current!.scrollHeight - state.scrollerRef.current!.offsetHeight })
             }
         }
         if (!preserveEditorState) { await clearInputs() }
