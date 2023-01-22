@@ -39,7 +39,13 @@
       }
     ]
   },
-  "keywords": [],
+  "keywords": [
+    "sqlite",
+    "sqlite3",
+    "editor",
+    "viewer",
+    "table"
+  ],
   "author": "",
   "license": "",
   "capabilities": {

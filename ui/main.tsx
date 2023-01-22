@@ -90,13 +90,17 @@ const buildFindWidgetQuery = (tableInfo: remote.TableInfo) => {
     return { findWidgetQuery, findWidgetParams }
 }
 
+/** Queries the visible area of the database table. */
 export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: boolean) => {
     try {
         let state = useMainStore.getState()
         const { useCustomViewerQuery, customViewerQuery } = state
 
+        /** The table name, or a subquery if using a custom query. */
         let subquery: string
+        /** True if `SELECT * FROM subquery` has row ids. */
         let hasRowId: boolean
+        /** The list of columns of `SELECT * FROM subquery`. */
         let tableInfo: remote.TableInfo
         if (!useCustomViewerQuery) {
             if (state.tableName === undefined) { useTableStore.setState({ invalidQuery: "" }); return }
@@ -113,6 +117,7 @@ export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: bool
             tableInfo = !reloadSchema ? useTableStore.getState().tableInfo : (await remote.query(`SELECT * FROM ${subquery} LIMIT 0`, [], "r", { withoutLogging: true })).columns.map((column, i): remote.TableInfo[number] => ({ name: column, cid: BigInt(i), dflt_value: null, notnull: 0n, pk: 0n, type: "" }))
         }
 
+        // Filter records by the state of the find widget
         const { findWidgetQuery, findWidgetParams } = buildFindWidgetQuery(tableInfo)
         if (reloadRecordCount) {
             const numRecords = (await remote.query(`SELECT COUNT(*) as count FROM ${subquery}${findWidgetQuery}`, findWidgetParams, "r", { withoutLogging: true })).records[0]!.count
@@ -121,8 +126,10 @@ export const reloadTable = async (reloadSchema: boolean, reloadRecordCount: bool
             state = useMainStore.getState() // state.paging will be updated
         }
 
+        // Query the database
         const records = (await remote.query(`SELECT${hasRowId ? " rowid AS rowid," : ""} * FROM ${subquery}${findWidgetQuery} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.visibleAreaSize, state.paging.visibleAreaTop], "r", { withoutLogging: true })).records
 
+        // Update the store
         if (!reloadSchema) {
             useTableStore.setState({ records })
         } else {
@@ -179,7 +186,6 @@ export const useMainStore = createStore({
     },
     isFindWidgetVisible: false,
     tableList: [] as remote.TableListItem[],
-    scrollerRef: { current: null as HTMLDivElement | null },
     autoReload: true,
     _rerender: {} as Record<string, never>,
 }, (set, get) => {
@@ -197,6 +203,7 @@ export const useMainStore = createStore({
     }
     return {
         setViewerQuery,
+        /** Displays `confirm("Commit changes?")` using a `<dialog>`. */
         confirm: async (): Promise<boolean> => {
             return new Promise<boolean>((resolve) => {
                 set({

@@ -186,6 +186,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     </>
 }
 
+/** Renders a search widget with toggle buttons for case sensitivity, whole word, and regular expression. */
 const FindWidget = () => {
     const { value, caseSensitive, wholeWord, regex } = useMainStore((s) => s.findWidget)
     const setFindWidgetState = useMainStore((s) => s.setFindWidgetState)
@@ -230,6 +231,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
     const onBlurOrUnmount = useCallback(() => { setCursorVisibility(false) }, [])
 
     return useMemo(() => <tr class={props.selected ? "editing" : ""}>
+        {/* Row number */}
         <td
             class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (props.tableName !== undefined ? "clickable" : "")}
             style={{ borderRight: "1px solid var(--td-border-color)" }}
@@ -238,6 +240,8 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                     if (props.tableName !== undefined) { delete_(props.tableName, props.record, props.row).catch(console.error) }
                 }).catch(console.error)
             }}>{props.rowNumber}</td>
+
+        {/* Cells */}
         {props.tableInfo.map(({ name }, i) => {
             const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
@@ -260,6 +264,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
     </tr>, [props.selected, props.selectedColumn, props.input?.draftValue, props.input?.textarea, props.tableName, props.tableInfo, props.record, props.rowNumber, cursorVisibility])  // excluded: props.columnWidth
 }
 
+/** Renders `<span>{props.element}</span>` and focuses the `props.element`. `props.onFocusOrMount` and `props.onBlurOrUnmount` will be called when the `props.element` is focused/unfocused or the value of `props.element` is changed. */
 const MountInput = (props: { element: HTMLTextAreaElement, onFocusOrMount: () => void, onBlurOrUnmount: () => void }) => {
     const ref = useRef<HTMLSpanElement>(null)
     useLayoutEffect(() => {

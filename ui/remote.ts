@@ -71,22 +71,29 @@ export const post = async (url: string, body: unknown, opts: PostOptions = {}) =
     }
 }
 
+/** A local copy of the persisted data in the server. */
 let state: Record<string, unknown> = {}
+
+/** Retrieves and stores the persisted data in the server. */
+export const downloadState = (opts: PostOptions = {}): Promise<void> => post("/downloadState", {}, opts).then((value) => { state = value })
+
+/** Stores the value with the given key to the server. */
 export const setState = async <T>(key: string, value: T, opts: PostOptions = {} = {}) => {
     state[key] = value
     await post("/setState", { key, value }, opts)
 }
+
+/** Returns the value associated with the given key from local copy of the persisted data in the server. `downloadState()` have be called beforehand. */
 export const getState = <T>(key: string): T | undefined => {
     return state[key] as T | undefined
 }
-/** Called only once, before any getState() or setState() calls. */
-export const downloadState = (opts: PostOptions = {}): Promise<void> => post("/downloadState", {}, opts).then((value) => { state = value })
 
 type QueryResult<T extends string> = Promise<{
     columns: string[]
     records: T extends `SELECT ${string}` | `PRAGMA pragma_list` ? Record<string, SQLite3Value>[] : (Record<string, SQLite3Value>[] | undefined)
 }>
 
+/** Queries the database, and commits if `mode` is "w+". */
 export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+", opts: PostOptions = {}): QueryResult<T> =>
     post(`/query`, { query, params, mode }, opts)
 
@@ -109,24 +116,30 @@ export const hasTableAutoincrementColumn = async (tableName: string, opts: PostO
 
 export type IndexInfo = { seqno: bigint, cid: bigint, name: string }[]
 
+/** Queries `PRAGMA index_info(indexName)`. */
 export const getIndexInfo = async (indexName: string, opts: PostOptions = {}) =>
     (await query(`PRAGMA index_info(${escapeSQLIdentifier(indexName)})`, [], "r", opts)).records as IndexInfo
 
 export type IndexList = { seq: bigint, name: string, unique: 0n | 1n, origin: "c" | "u" | "pk", partial: 0n | 1n }[]
 
+/** Queries `PRAGMA index_list(tableName)`. */
 export const getIndexList = async (tableName: string, opts: PostOptions = {}) =>
     (await query(`PRAGMA index_list(${escapeSQLIdentifier(tableName)})`, [], "r", opts)).records as IndexList
 
+/** Queries `PRAGMA table_info(tableName)`. */
 export const getTableInfo = async (tableName: string, opts: PostOptions = {}) =>
     (await query(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r", opts)).records as TableInfo
 
+/** Lists tables in the database by querying `PRAGMA table_list`, excluding internal tables. */
 export const getTableList = async (opts: PostOptions = {}) => {
     return ((await query("PRAGMA table_list", [], "r", opts)).records as TableListItem[])
         .filter(({ name }) => !name.startsWith("sqlite_"))  // https://www.sqlite.org/fileformat2.html#intschema
 }
 
+/** Retrieves the table schema. */
 export const getTableSchema = async (tableName: string, opts: PostOptions = {}) =>
     (await query(`SELECT sql FROM sqlite_schema WHERE name = ?`, [tableName], "r", opts)).records[0]?.sql as string | undefined
 
+/** Retrieves the index schema. */
 export const getIndexSchema = async (indexName: string, opts: PostOptions = {}) =>
     (await query(`SELECT sql FROM sqlite_schema WHERE type = ? AND name = ?`, ["index", indexName], "r", opts)).records[0]?.sql as string | null | undefined
