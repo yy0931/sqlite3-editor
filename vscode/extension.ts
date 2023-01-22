@@ -102,7 +102,7 @@ export const activate = (context: vscode.ExtensionContext) => {
                         conn,
                         watcher,
                     }
-                } else {  // unsupportedScheme diff view etc.
+                } else {  // unsupportedScheme such as the diff view.
                     return {
                         uri,
                         unsupportedScheme: true,
@@ -112,7 +112,17 @@ export const activate = (context: vscode.ExtensionContext) => {
             },
             async resolveCustomEditor(document, webviewPanel, token) {
                 if (document.unsupportedScheme) {
-                    webviewPanel.webview.html = `Unsupported file scheme: ${escapeHTML(document.uri.scheme)}`
+                    if (document.uri.scheme === "git") {
+                        let options = ""
+                        try {
+                            if (JSON.parse(decodeURIComponent(document.uri.query)).ref === "") {
+                                options = " --staged"
+                            }
+                        } catch (err) { console.error(err) }
+                        webviewPanel.webview.html = `The sqlite3-editor extension doesn't support the git-diff view. Use the following command instead.<br /><code>${escapeHTML(`git -c 'diff.default.textconv=echo .dump | sqlite3' diff${options} '${document.uri.fsPath}'`)}</code>`
+                    } else {
+                        webviewPanel.webview.html = `Unsupported file scheme: ${escapeHTML(document.uri.scheme)}`
+                    }
                     return
                 }
                 webviewPanel.webview.options = {
