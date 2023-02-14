@@ -272,6 +272,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const selectedDataRow = useEditorStore((s) => s.statement === "UPDATE" ? s.row : null)
     const selectedDataColumn = useEditorStore((s) => s.statement === "UPDATE" ? s.column : null)
     const commitUpdate = useEditorStore((s) => s.commitUpdate)
+    const isDirty = useEditorStore((s) => s.isDirty)
 
     const columnWidthCaches = persistentRef<Record<string, (number | undefined | null)[]>>("columnWidths_v3", {})
     const getColumnWidths = () => {
@@ -324,32 +325,35 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                                 }
                             }}
                             onMouseDown={(ev) => {
-                                commitUpdate().then(() => {
-                                    const th = ev.currentTarget
-                                    const rect = th.getBoundingClientRect()
-                                    if (rect.right - ev.clientX < 20) {
-                                        const mouseMove = (ev: MouseEvent) => {
-                                            columnWidthCaches.current = produce(columnWidthCaches.current, (d) => {
-                                                if (!Array.isArray(d[tableName ?? ""])) {
-                                                    d[tableName ?? ""] = []
-                                                }
-                                                d[tableName ?? ""]![i] = Math.max(50, ev.clientX - rect.left)
-                                            })
-                                            th.style.width = columnWidthCaches.current[tableName ?? ""]![i]! + "px"
-                                            for (const td of tableRef.current?.querySelectorAll<HTMLElement>(`td:nth-child(${i + 2})`) ?? []) {
-                                                td.style.maxWidth = columnWidthCaches.current[tableName ?? ""]![i]! + "px"
+                                if (isDirty()) {
+                                    commitUpdate().catch(console.error)
+                                    return
+                                }
+
+                                const th = ev.currentTarget
+                                const rect = th.getBoundingClientRect()
+                                if (rect.right - ev.clientX < 20) {
+                                    const mouseMove = (ev: MouseEvent) => {
+                                        columnWidthCaches.current = produce(columnWidthCaches.current, (d) => {
+                                            if (!Array.isArray(d[tableName ?? ""])) {
+                                                d[tableName ?? ""] = []
                                             }
+                                            d[tableName ?? ""]![i] = Math.max(50, ev.clientX - rect.left)
+                                        })
+                                        th.style.width = columnWidthCaches.current[tableName ?? ""]![i]! + "px"
+                                        for (const td of tableRef.current?.querySelectorAll<HTMLElement>(`td:nth-child(${i + 2})`) ?? []) {
+                                            td.style.maxWidth = columnWidthCaches.current[tableName ?? ""]![i]! + "px"
                                         }
-                                        document.body.classList.add("ew-resize")
-                                        window.addEventListener("mousemove", mouseMove)
-                                        window.addEventListener("mouseup", () => {
-                                            window.removeEventListener("mousemove", mouseMove)
-                                            document.body.classList.remove("ew-resize")
-                                        }, { once: true })
-                                    } else if (tableName !== undefined && tableType === "table") { // center
-                                        alterTable(tableName, name).catch(console.error)
                                     }
-                                }).catch(console.error)
+                                    document.body.classList.add("ew-resize")
+                                    window.addEventListener("mousemove", mouseMove)
+                                    window.addEventListener("mouseup", () => {
+                                        window.removeEventListener("mousemove", mouseMove)
+                                        document.body.classList.remove("ew-resize")
+                                    }, { once: true })
+                                } else if (tableName !== undefined && tableType === "table") { // center
+                                    alterTable(tableName, name).catch(console.error)
+                                }
                             }}
                             onMouseLeave={(ev) => {
                                 ev.currentTarget.classList.remove("ew-resize")
