@@ -629,12 +629,6 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
 
     const ref = useRef<HTMLTextAreaElement>(null)
 
-    useEffect(() => {
-        if (props.ref) {
-            (props.ref as MutableRef<HTMLTextAreaElement>).current = ref.current!
-        }
-    }, [ref.current])
-
     useLayoutEffect(() => {
         if (!ref.current) { return }
         const textarea = ref.current
