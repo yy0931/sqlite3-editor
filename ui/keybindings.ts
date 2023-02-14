@@ -62,13 +62,16 @@ export const onKeydown = async (ev: KeyboardEvent) => {
         const inputFocus = ev.target instanceof HTMLElement && !ev.target.matches("table textarea") && ev.target.matches("label, button, input, textarea, select, option")
         const findWidgetFocus = ev.target instanceof HTMLInputElement && ev.target.id === "findWidget"
 
-        let preventDefault = true
+        const p = () => ev.preventDefault()
         if (findWidgetFocus && key("Escape")) {
+            p()
             ev.target.blur()
             await useTableStore.getState().setFindWidgetVisibility(false)
         } else if (inputFocus && key("Escape")) {
+            p()
             ev.target.blur()
         } else if (key("Ctrl + KeyF")) {
+            p()
             if (useTableStore.getState().isFindWidgetVisible) {
                 const findWidget = document.querySelector<HTMLInputElement>("#findWidget")
                 if (findWidget) {
@@ -79,63 +82,81 @@ export const onKeydown = async (ev: KeyboardEvent) => {
                 await useTableStore.getState().setFindWidgetVisibility(true)
             }
         } else if (findWidgetFocus && key("Alt + KeyC")) {
+            p()
             const mainState = useTableStore.getState()
             await mainState.setFindWidgetState({ caseSensitive: !mainState.findWidget.caseSensitive })
         } else if (findWidgetFocus && key("Alt + KeyW")) {
+            p()
             const mainState = useTableStore.getState()
             await mainState.setFindWidgetState({ wholeWord: !mainState.findWidget.wholeWord })
         } else if (findWidgetFocus && key("Alt + KeyR")) {
+            p()
             const mainState = useTableStore.getState()
             await mainState.setFindWidgetState({ regex: !mainState.findWidget.regex })
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("Escape")) {
+            p()
             await state.clearInputs()
         } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("Escape")) {
+            p()
             state.update(state.tableName, state.column, state.row)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("ArrowUp")) {
+            p()
             await moveSelectionRow(-1n)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("ArrowDown")) {
+            p()
             await moveSelectionRow(1n)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("ArrowLeft")) {
+            p()
             moveSelectionColumn(-1)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("ArrowRight")) {
+            p()
             moveSelectionColumn(1)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && (key("Ctrl + ArrowUp") || key("Ctrl + Home"))) {
+            p()
             await moveSelectionRow(-useTableStore.getState().paging.numRecords)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && (key("Ctrl + ArrowDown") || key("Ctrl + End"))) {
+            p()
             await moveSelectionRow(useTableStore.getState().paging.numRecords)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && (key("Ctrl + ArrowLeft") || key("Home"))) {
+            p()
             moveSelectionColumn(-useTableStore.getState().tableInfo.length)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && (key("Ctrl + ArrowRight") || key("End"))) {
+            p()
             moveSelectionColumn(useTableStore.getState().tableInfo.length)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("PageUp")) {
+            p()
             await moveSelectionRow(-useTableStore.getState().paging.visibleAreaSize)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("PageDown")) {
+            p()
             await moveSelectionRow(useTableStore.getState().paging.visibleAreaSize)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("(Shift +) Enter")) {
+            p()
             document.querySelector(".single-click")!.classList.remove("single-click")
         } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("Enter")) {
+            p()
             await editor.useEditorStore.getState().commitUpdate(true)
             await moveSelectionRow(1n)
         } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("Shift + Enter")) {
+            p()
             await editor.useEditorStore.getState().commitUpdate(true)
             await moveSelectionRow(-1n)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("Tab")) {
+            p()
             moveSelectionColumn(1)
         } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("Tab")) {
+            p()
             await editor.useEditorStore.getState().commitUpdate(true)
             moveSelectionColumn(1)
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("Shift + Tab")) {
+            p()
             moveSelectionColumn(-1)
         } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("Shift + Tab")) {
+            p()
             await editor.useEditorStore.getState().commitUpdate(true)
             moveSelectionColumn(-1)
         } else if (!inputFocus && state.statement === "DELETE" && key("Escape")) {
+            p()
             await state.clearInputs()
-        } else {
-            preventDefault = false
-        }
-        if (preventDefault) {
-            ev.preventDefault()
         }
     } catch (err) {
         console.error(err)
