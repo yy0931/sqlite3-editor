@@ -348,16 +348,19 @@ export const useEditorStore = createStore("useEditorStore", {
                 await insert(state.tableName)
             }
         },
+        isDirty: () => {
+            const s = get()
+            return s.statement === "UPDATE" && s.isTextareaDirty
+        },
         commitUpdate: async (preserveEditorState?: true, explicit?: true) => {
-            // <textarea> replaces \r\n with \n
-            const state = get()
-            if (state.statement !== "UPDATE" || (!explicit && !state.isTextareaDirty)) { return }
+            const s = get()
+            if (!(s.statement === "UPDATE" && (explicit || s.isTextareaDirty))) { return }
             if (!explicit) {
                 if (!await useTableStore.getState().confirm()) { return }
             }
             setPartial({ isTextareaDirty: false })
-            const columns = state.constraintChoices[state.selectedConstraint]!
-            await commit(`UPDATE ${escapeSQLIdentifier(state.tableName)} SET ${escapeSQLIdentifier(state.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(state.textareaValue, state.blobValue, state.type), ...columns.map((column) => state.record[column] as remote.SQLite3Value)], { reload: "currentTable" }, preserveEditorState)
+            const columns = s.constraintChoices[s.selectedConstraint]!
+            await commit(`UPDATE ${escapeSQLIdentifier(s.tableName)} SET ${escapeSQLIdentifier(s.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(s.textareaValue, s.blobValue, s.type), ...columns.map((column) => s.record[column] as remote.SQLite3Value)], { reload: "currentTable" }, preserveEditorState)
         }
     }
 })
