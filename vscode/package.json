@@ -41,6 +41,12 @@
         "selector": [
           {
             "filenamePattern": "*.db"
+          },
+          {
+            "filenamePattern": "*.sqlite"
+          },
+          {
+            "filenamePattern": "*.sqlite3"
           }
         ],
         "priority": "default"

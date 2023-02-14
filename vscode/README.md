@@ -14,3 +14,13 @@ This extension uses the `sqlite3` module in the standard library of Python to qu
 - **Find widget** to filter records with **regex**, **whole word**, and **case-sensitivity** switches.
 - **Efficiently** edit large tables by **only querying the visible area**.
 - **Auto-reload** when the table is modified by another process.
+
+# Usage
+This extension recognizes `.db`, `.sqlite`, and `.sqlite3` files as Sqlite3 databases. To open other files, add the following settings to your [user or workspace settings.json](https://code.visualstudio.com/docs/getstarted/settings):
+
+```json
+// Associates *.ext to the SQLite3 editor
+"workbench.editorAssociations": {
+    "*.ext": "sqlite3-editor.editor"
+},
+```
