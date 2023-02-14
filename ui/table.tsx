@@ -460,7 +460,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             return <td
                 class={"pl-[10px] pr-[10px] overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
-                onMouseDown={(ev) => {
+                onMouseDown={() => {
                     const editorState = useEditorStore.getState()
                     if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
                     editorState.commitUpdate().then(() => {
