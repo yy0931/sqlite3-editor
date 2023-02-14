@@ -623,7 +623,8 @@ type EditorDataType = "string" | "number" | "null" | "blob" | "default"
 
 let editorHeight = new Map<string, string>()
 
-const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.CSSProperties, ref?: Ref<HTMLTextAreaElement & HTMLInputElement>, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, class?: string, onTypeChange: (type: EditorDataType) => void }) => {
+/** Renders a textarea for the given data type `props.type`. */
+const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.CSSProperties, type: EditorDataType, textareaValue: string, onTextareaValueChange: (value: string) => void, blobValue: Uint8Array | null, onBlobValueChange: (value: Uint8Array) => void, tabIndex?: number, class?: string, onTypeChange: (type: EditorDataType) => void }) => {
     const [filename, setFilename] = useState("")
 
     const ref = useRef<HTMLTextAreaElement>(null)
@@ -653,6 +654,7 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
         return () => { observer.disconnect() }
     }, [ref.current, props.type, props.column])
 
+    // BLOB
     if (props.type === "blob") {
         return <div>
             <input value={"x'" + blob2hex(props.blobValue ?? new Uint8Array(), 8) + "'"} disabled={true} class={"w-40 inline mr-[10px] " + (props.class ?? "")} />
@@ -674,7 +676,7 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
         }
     })()
 
-
+    // TEXT, INTEGER, REAL, NULL
     return <textarea
         placeholder={placeholder}
         ref={ref}
