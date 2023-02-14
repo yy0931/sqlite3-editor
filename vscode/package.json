@@ -6,12 +6,12 @@
   "main": "extension.js",
   "publisher": "yy0931",
   "repository": {
-		"url": "https://github.com/yy0931/sqlite3-editor",
-		"type": "git"
-	},
-	"bugs": {
-		"url": "https://github.com/yy0931/sqlite3-editor/issues"
-	},
+    "url": "https://github.com/yy0931/sqlite3-editor",
+    "type": "git"
+  },
+  "bugs": {
+    "url": "https://github.com/yy0931/sqlite3-editor/issues"
+  },
   "scripts": {
     "build": "./build.sh",
     "vscode:prepublish": "npm run build"
