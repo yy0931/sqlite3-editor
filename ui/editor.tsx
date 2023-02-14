@@ -162,9 +162,10 @@ const mountInput = () => {
     }
 }
 
+/** A store for the editor component. */
 export const useEditorStore = createStore("useEditorStore", {
-    tableName: undefined,
     statement: "CREATE TABLE",
+    tableName: undefined,
     strict: true,
     tableConstraints: "",
     newTableName: "",
@@ -172,6 +173,8 @@ export const useEditorStore = createStore("useEditorStore", {
     columnDefs: [],
 } satisfies State as State, (setPartial, get) => {
     const set = (state: State) => { setPartial(state) }
+
+    /** Switches the editor to the ALTER TABLE editor. */
     const alterTable = async (tableName: string, column: string | undefined) => {
         unmountInput?.()
         set({
@@ -185,10 +188,14 @@ export const useEditorStore = createStore("useEditorStore", {
             strict: !!(await remote.getTableList()).find(({ name }) => name === tableName)?.strict,
         })
     }
+
+    /** Switches the editor to the CREATE TABLE editor. */
     const createTable = (tableName: string | undefined) => {
         unmountInput?.()
         set({ statement: "CREATE TABLE", strict: true, newTableName: "", tableConstraints: "", withoutRowId: false, columnDefs: [], tableName })
     }
+
+    /** Switches the editor to the DELETE editor. */
     const delete_ = async (tableName: string, record: Record<string, remote.SQLite3Value>, row: number) => {
         unmountInput?.()
         set({
@@ -200,14 +207,20 @@ export const useEditorStore = createStore("useEditorStore", {
             row,
         })
     }
+
+    /** Switches the editor to the DROP TABLE editor. */
     const dropTable = (tableName: string) => {
         unmountInput?.()
         set({ statement: "DROP TABLE", tableName })
     }
+
+    /** Switches the editor to the DROP VIEW editor. */
     const dropView = (tableName: string) => {
         unmountInput?.()
         set({ statement: "DROP VIEW", tableName })
     }
+
+    /** Switches the editor to the INSERT editor. */
     const insert = async (tableName: string) => {
         unmountInput?.()
         const { tableInfo } = useTableStore.getState()
@@ -234,10 +247,14 @@ export const useEditorStore = createStore("useEditorStore", {
             }),
         })
     }
+
+    /** Switches the editor to the custom query editor. */
     const custom = (tableName: string | undefined) => {
         unmountInput?.()
         set({ statement: "Custom Query", query: "", tableName })
     }
+
+    /** Switches the editor to the UPDATE editor. */
     const update = (tableName: string, column: string, row: number) => {
         unmountInput?.()
         const record = useTableStore.getState().records[row]!
@@ -263,14 +280,20 @@ export const useEditorStore = createStore("useEditorStore", {
         })
         mountInput()
     }
+
+    /** Switches the editor to the CREATE INDEX editor. */
     const createIndex = (tableName: string) => {
         unmountInput?.()
         set({ statement: "CREATE INDEX", tableName, unique: false, indexName: "", indexedColumns: "", where: "" })
     }
+
+    /** Switches the editor to the DROP INDEX editor. */
     const dropIndex = (tableName: string | undefined, indexName: string) => {
         unmountInput?.()
         set({ statement: "DROP INDEX", indexName, tableName })
     }
+
+    /** Clears input without changing the SQL statement for the editor. */
     const clearInputs = async () => {
         const state = get()
         switch (state.statement) {
@@ -285,6 +308,8 @@ export const useEditorStore = createStore("useEditorStore", {
             case "DROP INDEX": dropIndex(state.tableName, state.indexName); break
         }
     }
+
+    /** Commits changes. */
     const commit = async (query: string, params: remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => {
         await remote.query(query, params, "w+")
         if (opts.reload === "allTables") {
@@ -299,6 +324,7 @@ export const useEditorStore = createStore("useEditorStore", {
         }
         if (!preserveEditorState) { await clearInputs() }
     }
+
     return {
         alterTable,
         createTable,
