@@ -41,35 +41,53 @@ const buildFindWidgetQuery = (tableInfo: remote.TableInfo) => {
 }
 
 export const useTableStore = createStore("useTableStore", {
+    /** True if a change to the database by another process is detected but the table is not reloaded yet. */
     reloadRequired: false,
+    /** True while the "Commit changes?" dialog is visible. */
     isConfirmDialogVisible: false as false | ((value: boolean) => void),
     paging: {
+        /** scrollTop */
         visibleAreaTop: 0n,
+        /** the number of records in the table */
         numRecords: 0n,
+        /** the number of rows visible at a time */
         visibleAreaSize: 20n,
     },
+    /** error messages */
     errorMessage: "",
+    /** a custom query `customViewerQuery` instead of "SELECT * FROM tableName" is used for the viewer if true */
     useCustomViewerQuery: false,
+    /** a custom query for the viewer */
     customViewerQuery: "",
+    /** the state of the find widget */
     findWidget: {
         value: "",
         caseSensitive: false,
         wholeWord: false,
         regex: false,
     },
+    /** whether the find widget is visible */
     isFindWidgetVisible: false,
+    /** The viewer reloads the table when the database is changed by another process when true. */
     autoReload: true,
     _rerender: {} as Record<string, never>,
+    /** the list of tables in the database */
     tableList: [] as remote.TableListItem[],
+    /** the name of the active table */
     tableName: undefined as string | undefined,
+    /** error messages of the viewer */
     invalidQuery: null as string | null,
+    /** the list of columns in the table */
     tableInfo: [] as remote.TableInfo,
     indexList: [] as remote.IndexList,
     indexInfo: [] as remote.IndexInfo[],
     indexSchema: [] as (string | null)[],
     tableSchema: null as string | null,
+    /** Represents whether the active table has an AUTOINCREMENT column. */
     autoIncrement: false,
+    /** the records in the visible area */
     records: [] as readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[],
+    /** the state of the textbox shown over a cell */
     input: null as { readonly draftValue: string, readonly draftValueType: string, readonly textarea: HTMLTextAreaElement | null } | null,
 }, (set, get) => {
     /** Queries the visible area of the database table. */
