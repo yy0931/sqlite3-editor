@@ -293,8 +293,7 @@ export const useEditorStore = createStore("useEditorStore", {
         set({ statement: "DROP INDEX", indexName, tableName })
     }
 
-    /** Clears input without changing the SQL statement for the editor. */
-    const clearInputs = async () => {
+    const discardChanges = async () => {
         const state = get()
         switch (state.statement) {
             case "INSERT": setPartial({ textareaValues: state.textareaValues.map(() => ""), blobValues: state.blobValues.map(() => null) }); break
@@ -322,7 +321,7 @@ export const useEditorStore = createStore("useEditorStore", {
                 state = useTableStore.getState()
             }
         }
-        if (!preserveEditorState) { await clearInputs() }
+        if (!preserveEditorState) { await discardChanges() }
     }
 
     return {
@@ -337,7 +336,7 @@ export const useEditorStore = createStore("useEditorStore", {
         createIndex,
         dropIndex,
         commit,
-        clearInputs,
+        clearInputs: discardChanges,
         switchTable: async (tableName: string | undefined) => {
             const state = get()
             if (useTableStore.getState().useCustomViewerQuery) {
@@ -378,6 +377,10 @@ export const useEditorStore = createStore("useEditorStore", {
             const s = get()
             return s.statement === "UPDATE" && s.isTextareaDirty
         },
+        /**
+         * Commits changes in the UPDATE editor if any.
+         * @param explicit - If it is false or undefined, the "Commit changes?" dialog is displayed before committing changes.
+         */
         commitUpdate: async (preserveEditorState?: true, explicit?: true) => {
             const s = get()
             if (!(s.statement === "UPDATE" && (explicit || s.isTextareaDirty))) { return }
