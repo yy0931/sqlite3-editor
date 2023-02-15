@@ -73,6 +73,7 @@ const App = () => {
     useEffect(() => {
         if (isConfirmationDialogVisible) {
             confirmDialogRef.current?.showModal()
+            document.querySelector<HTMLButtonElement>(".confirm-dialog-commit")?.focus()
         } else {
             confirmDialogRef.current?.close()
         }
