@@ -40,7 +40,7 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
 }
 
 export const Button = (props: { class?: string, disabled?: boolean, children?: preact.ComponentChildren, style?: JSXInternal.CSSProperties, title?: string, onClick?: () => void }) => {
-    return <button disabled={props.disabled} style={props.style} class={"border-0 outline-0 pl-2 pr-2 cursor-pointer [font-family:inherit] bg-[var(--button-primary-background)] text-[var(--button-primary-foreground)] hover:[background-color:var(--button-primary-hover-background)] disabled:cursor-not-allowed disabled:text-[#737373] disabled:bg-[#c1bbbb] " + (props.class ?? "")} onClick={props.onClick} title={props.title}>{props.children}</button>
+    return <button disabled={props.disabled} style={props.style} class={"border-0 outline-0 pl-2 pr-2 cursor-pointer [font-family:inherit] bg-[var(--button-primary-background)] text-[var(--button-primary-foreground)] hover:[background-color:var(--button-primary-hover-background)] disabled:cursor-not-allowed disabled:text-[#737373] disabled:bg-[#c1bbbb] focus:outline focus:outline-2 focus:outline-blue-300 " + (props.class ?? "")} onClick={props.onClick} title={props.title}>{props.children}</button>
 }
 
 /** {@link useRef} but persists the value to the server. */
