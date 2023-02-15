@@ -385,7 +385,10 @@ export const useEditorStore = createStore("useEditorStore", {
             const s = get()
             if (!(s.statement === "UPDATE" && (explicit || s.isTextareaDirty))) { return }
             if (!explicit) {
-                if (!await useTableStore.getState().confirm()) { return }
+                if (!await useTableStore.getState().confirm()) {
+                    await discardChanges()
+                    return
+                }
             }
             setPartial({ isTextareaDirty: false })
             const columns = s.constraintChoices[s.selectedConstraint]!
