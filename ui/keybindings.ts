@@ -172,6 +172,7 @@ export const onKeydown = async (ev: KeyboardEvent) => {
 // Fixes a problem where the user is unable to undo/redo on inputs due to VSCode calling preventDefault() on the events.
 if (window.acquireVsCodeApi) {
     window.addEventListener("keydown", (ev) => {
+        if (!ev.defaultPrevented) { return }
         if (!(document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLTextAreaElement)) { return }
         const key = createKeyboardShortcutMatcher(ev)
         if (key("Ctrl + KeyZ")) {
