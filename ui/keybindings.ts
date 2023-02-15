@@ -64,7 +64,7 @@ export const onKeydown = async (ev: KeyboardEvent) => {
         /** True when a textarea, button, input, select, option, or label is active. */
         const inputFocus = ev.target instanceof HTMLElement && !ev.target.matches("table textarea") && ev.target.matches("label, button, input, textarea, select, option")
         /** True when a textarea shown over a cell is active. */
-        const cellInputFocus = ev.target instanceof HTMLElement && !ev.target.matches("table textarea")
+        const cellInputFocus = ev.target instanceof HTMLElement && ev.target.matches("table textarea")
         const findWidgetFocus = ev.target instanceof HTMLInputElement && ev.target.id === "findWidget"
 
         const p = () => ev.preventDefault()
