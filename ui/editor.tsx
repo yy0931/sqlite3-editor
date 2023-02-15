@@ -336,7 +336,7 @@ export const useEditorStore = createStore("useEditorStore", {
         createIndex,
         dropIndex,
         commit,
-        clearInputs: discardChanges,
+        discardChanges,
         switchTable: async (tableName: string | undefined) => {
             const state = get()
             if (useTableStore.getState().useCustomViewerQuery) {
@@ -380,19 +380,23 @@ export const useEditorStore = createStore("useEditorStore", {
         /**
          * Commits changes in the UPDATE editor if any.
          * @param explicit - If it is false or undefined, the "Commit changes?" dialog is displayed before committing changes.
+         * @returns false if canceled, true otherwise
          */
-        commitUpdate: async (preserveEditorState?: true, explicit?: true) => {
+        commitUpdate: async (preserveEditorState?: true, explicit?: true): Promise<boolean> => {
             const s = get()
-            if (!(s.statement === "UPDATE" && (explicit || s.isTextareaDirty))) { return }
+            if (!(s.statement === "UPDATE" && (explicit || s.isTextareaDirty))) { return true }
             if (!explicit) {
-                if (!await useTableStore.getState().confirm()) {
-                    await discardChanges()
-                    return
+                const returnValue = await useTableStore.getState().confirm()
+                if (returnValue === "cancel") { return false }
+                if (returnValue === "discard changes") {
+                    if (!preserveEditorState) { await discardChanges() }
+                    return true
                 }
             }
             setPartial({ isTextareaDirty: false })
             const columns = s.constraintChoices[s.selectedConstraint]!
             await commit(`UPDATE ${escapeSQLIdentifier(s.tableName)} SET ${escapeSQLIdentifier(s.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(s.textareaValue, s.blobValue, s.type), ...columns.map((column) => s.record[column] as remote.SQLite3Value)], { reload: "currentTable" }, preserveEditorState)
+            return true
         }
     }
 })

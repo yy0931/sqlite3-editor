@@ -44,7 +44,7 @@ export const useTableStore = createStore("useTableStore", {
     /** True if a change to the database by another process is detected but the table is not reloaded yet. */
     reloadRequired: false,
     /** True while the "Commit changes?" dialog is visible. */
-    isConfirmDialogVisible: false as false | ((value: boolean) => void),
+    isConfirmDialogVisible: false as false | ((value: "commit" | "discard changes" | "cancel") => void),
     paging: {
         /** scrollTop */
         visibleAreaTop: 0n,
@@ -196,10 +196,10 @@ export const useTableStore = createStore("useTableStore", {
         paging.visibleAreaSize = BigintMath.max(1n, BigintMath.min(200n, paging.visibleAreaSize))
         paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize, paging.visibleAreaTop))
         if (deepEqual(get().paging, paging)) { return }
+        if (!await useEditorStore.getState().commitUpdate()) { return }
 
         await remote.setState("visibleAreaSize", Number(paging.visibleAreaSize))
-        await useEditorStore.getState().commitUpdate()
-        if (!preserveEditorState) { await useEditorStore.getState().clearInputs() }
+        if (!preserveEditorState) { await useEditorStore.getState().discardChanges() }
         paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize, paging.visibleAreaTop))
         set({ paging })
         if (!withoutTableReloading) {
@@ -212,16 +212,14 @@ export const useTableStore = createStore("useTableStore", {
         reloadTable,
         setPaging,
         /** Displays `confirm("Commit changes?")` using a `<dialog>`. */
-        confirm: async (): Promise<boolean> => {
-            return new Promise<boolean>((resolve) => {
-                set({
-                    isConfirmDialogVisible: (value) => {
-                        set({ isConfirmDialogVisible: false })
-                        resolve(value)
-                    }
-                })
+        confirm: async () => new Promise<"commit" | "discard changes" | "cancel">((resolve) => {
+            set({
+                isConfirmDialogVisible: (value) => {
+                    set({ isConfirmDialogVisible: false })
+                    resolve(value)
+                }
             })
-        },
+        }),
         getPageMax: () => BigInt(Math.ceil(Number(get().paging.numRecords) / Number(get().paging.visibleAreaSize))),
         setFindWidgetVisibility: async (value: boolean) => {
             if (get().isFindWidgetVisible === value) { return }
@@ -470,9 +468,11 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (props.tableName !== undefined ? "clickable" : "")}
             style={{ borderRight: "1px solid var(--td-border-color)" }}
             onMouseDown={() => {
-                commitUpdate().then(() => {
-                    if (props.tableName !== undefined) { delete_(props.tableName, props.record, props.row).catch(console.error) }
-                }).catch(console.error)
+                (async () => {
+                    if (!await commitUpdate()) { return }
+                    if (props.tableName === undefined) { return }
+                    await delete_(props.tableName, props.record, props.row)
+                })().catch(console.error)
             }}>{props.rowNumber}</td>
 
         {/* Cells */}
@@ -483,11 +483,13 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                 class={"pl-[10px] pr-[10px] overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
                 onMouseDown={() => {
-                    const editorState = useEditorStore.getState()
-                    if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
-                    editorState.commitUpdate().then(() => {
-                        if (props.tableName !== undefined) { update(props.tableName, name, props.row) }
-                    }).catch(console.error)
+                    (async () => {
+                        const editorState = useEditorStore.getState()
+                        if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
+                        if (!await commitUpdate()) { return }
+                        if (props.tableName === undefined) { return }
+                        update(props.tableName, name, props.row)
+                    })().catch(console.error)
                 }}>
                 <pre class={"overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: input?.draftValue ? type2color(input?.draftValueType) : type2color(typeof value) }}>
                     <span class="select-none">{input?.draftValue ?? renderValue(value)}</span>
