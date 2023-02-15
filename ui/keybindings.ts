@@ -97,7 +97,7 @@ export const onKeydown = async (ev: KeyboardEvent) => {
             await mainState.setFindWidgetState({ regex: !mainState.findWidget.regex })
         } else if (!inputFocus && state.statement === "UPDATE" && singleClick && key("Escape")) {
             p()
-            await state.clearInputs()
+            await state.discardChanges()
         } else if (!inputFocus && state.statement === "UPDATE" && !singleClick && key("Escape")) {
             p()
             state.update(state.tableName, state.column, state.row)
@@ -158,7 +158,7 @@ export const onKeydown = async (ev: KeyboardEvent) => {
             moveSelectionColumn(-1)
         } else if (!inputFocus && state.statement === "DELETE" && key("Escape")) {
             p()
-            await state.clearInputs()
+            await state.discardChanges()
         }
     } catch (err) {
         console.error(err)

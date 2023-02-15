@@ -80,7 +80,7 @@ const App = () => {
     useEventListener("close", () => {
         const { isConfirmDialogVisible } = useTableStore.getState()
         if (isConfirmDialogVisible) {
-            isConfirmDialogVisible(false)
+            isConfirmDialogVisible("cancel")
         }
     }, confirmDialogRef)
 
@@ -232,8 +232,9 @@ const App = () => {
         {/* Confirmation Dialog */}
         <dialog class="p-4 bg-[#f0f0f0] shadow-2xl mx-auto mt-[10vh]" ref={confirmDialogRef}>
             <p class="pb-2">Commit changes?</p>
-            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible(true) } }} class="mr-1">Commit</Button>
-            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible(false) } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e]">Discard changes</Button>
+            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("commit") } }} class="confirm-dialog-commit mr-1">Commit</Button>
+            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("discard changes") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e] mr-1">Discard changes</Button>
+            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("cancel") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e]">Cancel</Button>
         </dialog>
     </>
 }
