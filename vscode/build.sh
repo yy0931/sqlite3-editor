@@ -6,7 +6,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$script_dir" || exit 1
 rm -rf ./webview
 cd ../ui || exit 1
-npm run build
+npm run _build
 cd "$script_dir" || exit 1
 cp -r ../ui/dist ./webview
 

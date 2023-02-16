@@ -4,9 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "vite",
-    "build": "vite build",
-    "build-dev": "vite build --minify false --sourcemap true"
+    "_start": "vite",
+    "_build": "vite build",
+    "_build-dev": "vite build --minify false --sourcemap true",
+    "_test": "playwright test",
+    "_test:debug": "playwright test --project=chromium --debug"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.20.5",
+    "@playwright/test": "^1.29.0",
     "@preact/preset-vite": "^2.5.0",
     "@types/prismjs": "^1.26.0",
     "@types/react": "^18.0.26",

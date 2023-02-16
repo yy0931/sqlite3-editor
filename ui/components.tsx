@@ -4,7 +4,7 @@ import type { ReadonlyDeep } from "type-fest"
 import * as remote from "./remote"
 
 /** Typed version of `<select>` */
-export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string, group?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, class?: string }) => {
+export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string, group?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, class?: string, "data-testid"?: string }) => {
     const ref1 = useRef<HTMLSelectElement>(null)
     const ref2 = useRef<HTMLSelectElement>(null)
     useLayoutEffect(() => {
@@ -20,7 +20,7 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
     }
 
     return <>
-        <select autocomplete="off" value={props.value} style={props.style} class={"pl-[15px] pr-[15px] " + (props.class ?? "")} ref={ref1} onChange={(ev) => props.onChange(ev.currentTarget.value as T)} tabIndex={props.tabIndex}>{
+        <select autocomplete="off" value={props.value} style={props.style} class={"pl-[15px] pr-[15px] " + (props.class ?? "")} ref={ref1} onChange={(ev) => props.onChange(ev.currentTarget.value as T)} tabIndex={props.tabIndex} data-testid={props["data-testid"]}>{
             ([...groups.entries()] as [string, T[]][]).map(([group, values]) => {
                 const options = values.map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].disabled ? props.options[value].disabledReason : undefined}>{props.options[value].text ?? value}</option>)
                 if (group === undefined) {
@@ -39,8 +39,8 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
     </>
 }
 
-export const Button = (props: { class?: string, disabled?: boolean, children?: preact.ComponentChildren, style?: JSXInternal.CSSProperties, title?: string, onClick?: () => void }) => {
-    return <button disabled={props.disabled} style={props.style} class={"border-0 outline-0 pl-2 pr-2 cursor-pointer [font-family:inherit] bg-[var(--button-primary-background)] text-[var(--button-primary-foreground)] hover:[background-color:var(--button-primary-hover-background)] disabled:cursor-not-allowed disabled:text-[#737373] disabled:bg-[#c1bbbb] focus:outline focus:outline-2 focus:outline-blue-300 " + (props.class ?? "")} onClick={props.onClick} title={props.title}>{props.children}</button>
+export const Button = (props: { class?: string, disabled?: boolean, children?: preact.ComponentChildren, style?: JSXInternal.CSSProperties, title?: string, onClick?: () => void, "data-testid"?: string }) => {
+    return <button disabled={props.disabled} style={props.style} class={"border-0 outline-0 pl-2 pr-2 cursor-pointer [font-family:inherit] bg-[var(--button-primary-background)] text-[var(--button-primary-foreground)] hover:[background-color:var(--button-primary-hover-background)] disabled:cursor-not-allowed disabled:text-[#737373] disabled:bg-[#c1bbbb] focus:outline focus:outline-2 focus:outline-blue-300 " + (props.class ?? "")} onClick={props.onClick} title={props.title} data-testid={props["data-testid"]}>{props.children}</button>
 }
 
 /** {@link useRef} but persists the value to the server. */
@@ -86,4 +86,4 @@ export const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: bo
     </label>
 
 /** Displays text in blue. */
-export const Highlight = (props: { children: preact.ComponentChildren }) => <span class="[color:var(--button-primary-background)]">{props.children}</span>
+export const Highlight = (props: { children: preact.ComponentChildren, "data-testid"?: string }) => <span class="[color:var(--button-primary-background)]" data-testid={props["data-testid"]}>{props.children}</span>

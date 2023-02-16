@@ -129,7 +129,7 @@ const App = () => {
                     <Highlight>SELECT </Highlight>
                     *
                     <Highlight> FROM </Highlight>
-                    {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(tableList.map(({ name: tableName, type }) => [tableName, { group: type }] as const).sort((a, b) => a[0].localeCompare(b[0])))} class="primary" />}
+                    {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(tableList.map(({ name: tableName, type }) => [tableName, { group: type }] as const).sort((a, b) => a[0].localeCompare(b[0])))} class="primary" data-testid="table-name" />}
                 </>}
 
                 {/* Custom Query */}
@@ -233,9 +233,9 @@ const App = () => {
         {/* Confirmation Dialog */}
         <dialog class="p-4 bg-[#f0f0f0] shadow-2xl mx-auto mt-[10vh]" ref={confirmDialogRef}>
             <p class="pb-2">Commit changes?</p>
-            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("commit") } }} class="confirm-dialog-commit mr-1">Commit</Button>
-            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("discard changes") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e] mr-1">Discard changes</Button>
-            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("cancel") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e]">Cancel</Button>
+            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("commit") } }} class="confirm-dialog-commit mr-1" data-testid="dialog > commit">Commit</Button>
+            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("discard changes") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e] mr-1" data-testid="dialog > discard-changes">Discard changes</Button>
+            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("cancel") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e]" data-testid="dialog > cancel">Cancel</Button>
         </dialog>
     </>
 }

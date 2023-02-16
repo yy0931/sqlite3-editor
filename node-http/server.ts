@@ -6,8 +6,12 @@ import fs from "fs"
 const packr = new Packr({ useRecords: false, preserveNumericTypes: true })
 const unpackr = new Unpackr({ largeBigIntToFloat: false, int64AsNumber: false, mapsAsObjects: true, useRecords: true, preserveNumericTypes: true })
 
-const readonlyConnection = sqlite3("../samples/employees_db-full-1.0.6.db", { readonly: true })
-const readWriteConnection = sqlite3("../samples/employees_db-full-1.0.6.db")
+const dbPath = process.env.DB_PATH || "../samples/employees_db-full-1.0.6.db"
+if (!fs.existsSync(dbPath)) {
+    fs.writeFileSync(dbPath, "")
+}
+const readonlyConnection = sqlite3(dbPath, { readonly: true })
+const readWriteConnection = sqlite3(dbPath)
 
 readonlyConnection.defaultSafeIntegers()
 readWriteConnection.defaultSafeIntegers()

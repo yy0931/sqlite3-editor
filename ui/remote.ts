@@ -93,7 +93,7 @@ type QueryResult<T extends string> = Promise<{
 }>
 
 /** Queries the database, and commits if `mode` is "w+". */
-export const query = <T extends string>(query: T, params: SQLite3Value[], mode: "r" | "w+", opts: PostOptions = {}): QueryResult<T> =>
+export const query = <T extends string>(query: T, params: readonly SQLite3Value[], mode: "r" | "w+", opts: PostOptions = {}): QueryResult<T> =>
     post(`/query`, { query, params, mode }, opts)
 
 /** Imports a BLOB from a file. */
