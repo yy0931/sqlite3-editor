@@ -323,7 +323,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
     return <>
         <div class="max-w-full overflow-x-auto w-max">
             {/* Table */}
-            <table ref={tableRef} class="viewer w-max border-collapse table-fixed bg-white" style={{ paddingRight: scrollbarWidth, boxShadow: "0 0 0px 2px #000000ad" }}>
+            <table ref={tableRef} class="viewer w-max border-collapse table-fixed bg-white" style={{ paddingRight: scrollbarWidth, boxShadow: "0 0 0px 2px #000000ad" }} data-testid="viewer-table">
                 {/* Table Header */}
                 <thead class="text-black bg-[var(--gutter-color)]" style={{ outline: "rgb(181, 181, 181) 1px solid" }}>
                     <tr>
@@ -473,7 +473,8 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                     if (props.tableName === undefined) { return }
                     await delete_(props.tableName, props.record, props.row)
                 })().catch(console.error)
-            }}>{props.rowNumber}</td>
+            }}
+            data-testid={`row number ${props.rowNumber}`}>{props.rowNumber}</td>
 
         {/* Cells */}
         {props.tableInfo.map(({ name }, i) => {
@@ -490,7 +491,8 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                         if (props.tableName === undefined) { return }
                         update(props.tableName, name, props.row)
                     })().catch(console.error)
-                }}>
+                }}
+                data-testid={`cell ${props.rowNumber - 1n}, ${i}`}>
                 <pre class={"overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: input?.draftValue ? type2color(input?.draftValueType) : type2color(typeof value) }}>
                     <span class="select-none">{input?.draftValue ?? renderValue(value)}</span>
                     {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
