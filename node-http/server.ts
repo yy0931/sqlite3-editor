@@ -2,6 +2,7 @@ import express from "express"
 import sqlite3 from "better-sqlite3"
 import { Packr, Unpackr } from "msgpackr"
 import fs from "fs"
+import cors from "cors"
 
 const packr = new Packr({ useRecords: false, preserveNumericTypes: true })
 const unpackr = new Unpackr({ largeBigIntToFloat: false, int64AsNumber: false, mapsAsObjects: true, useRecords: true, preserveNumericTypes: true })
@@ -31,6 +32,7 @@ const state: Record<string, unknown> = {}
 
 express()
     .use(express.raw())
+    .use(cors({ origin: ["http://localhost:5173", "http://127.0.0.1:5173"] }))
     .use("/", express.static("../../ui/dist"))
     .post("/query", (req, res) => {
         try {
