@@ -11,6 +11,8 @@ import "./scrollbar"
 import { SettingsView } from "./schema_view"
 import { onKeydown } from "./keybindings"
 import { useEventListener, useInterval } from "usehooks-ts"
+// @ts-ignore
+import codiconTxt from "./codicon.txt?raw"
 
 export type VSCodeAPI = {
     postMessage(data: unknown): void
@@ -104,6 +106,9 @@ const App = () => {
     useEventListener("keydown", onKeydown)
 
     return <>
+        {/* @vscode/codicons/dist/codicon.svg, https://github.com/microsoft/vscode-codicons, Attribution 4.0 International */}
+        <svg xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" dangerouslySetInnerHTML={{ __html: codiconTxt }}></svg>
+
         <LoadingIndicator />
 
         {/* Header `SELECT * FROM ...` */}
