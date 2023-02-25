@@ -6,6 +6,7 @@ import { scrollbarWidth, ScrollbarY } from "./scrollbar"
 import { persistentRef } from "./components"
 import { BigintMath, createStore } from "./util"
 import deepEqual from "fast-deep-equal"
+import type { JSXInternal } from "preact/src/jsx"
 
 /** Build the WHERE clause from the state of the find widget */
 const buildFindWidgetQuery = (tableInfo: remote.TableInfo) => {
@@ -88,7 +89,7 @@ export const useTableStore = createStore("useTableStore", {
     /** the records in the visible area */
     records: [] as readonly { readonly [key in string]: Readonly<remote.SQLite3Value> }[],
     /** the state of the textbox shown over a cell */
-    input: null as { readonly draftValue: string, readonly draftValueType: string, readonly textarea: HTMLTextAreaElement | null } | null,
+    input: null as { readonly draftValue: JSXInternal.Element, readonly textarea: HTMLTextAreaElement | null } | null,
 }, (set, get) => {
     /** Queries the visible area of the database table. */
     const reloadTable = async (reloadSchema: boolean, reloadRecordCount: boolean) => {
@@ -450,7 +451,7 @@ const FindWidget = () => {
     </div>
 }
 
-const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: string, readonly draftValueType: string, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: remote.TableInfo, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly number[] }) => {
+const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: JSXInternal.Element, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: remote.TableInfo, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly number[] }) => {
     if (props.rowNumber <= 0) {
         throw new Error(props.rowNumber + "")
     }
@@ -493,7 +494,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                     })().catch(console.error)
                 }}
                 data-testid={`cell ${props.rowNumber - 1n}, ${i}`}>
-                <pre class={"overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")} style={{ color: input?.draftValue ? type2color(input?.draftValueType) : type2color(typeof value) }}>
+                <pre class={"overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")}>
                     <span class="select-none">{input?.draftValue ?? renderValue(value)}</span>
                     {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
                 </pre>
@@ -535,17 +536,17 @@ export const unsafeEscapeValue = (value: remote.SQLite3Value) => {
     }
 }
 
-export const renderValue = (value: remote.SQLite3Value) => {
-    if (value instanceof Uint8Array) {
-        return `x'${blob2hex(value, 8)}'`
-    } else if (value === null) {
-        return "NULL"
-    } else if (typeof value === "string") {
-        return value.replaceAll("\r", "\\r").replaceAll("\n", "\\n") || /* nbsp */"\u00a0"
-    } else if (typeof value === "number") {
-        return /^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value
-    } else {
-        return "" + value
+export const renderValue = (value: remote.SQLite3Value): JSXInternal.Element => {
+    if (value instanceof Uint8Array) {  // BLOB
+        return <span class="[color:var(--data-null)]">{`x'${blob2hex(value, 8)}'`}</span>
+    } else if (value === null) {  // NULL
+        return <span class="[color:var(--data-null)]">NULL</span>
+    } else if (typeof value === "string") {  // TEXT
+        return <span class="[color:var(--data-string)]">{value.replaceAll("\\", "\\\\").replaceAll("\t", "\\t").replaceAll("\r", "\\r").replaceAll("\n", "\\n") || /* nbsp */"\u00a0"}</span>
+    } else if (typeof value === "number") {  // REAL
+        return <span class="[color:var(--data-number)]">{/^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value}</span>
+    } else {  // INTEGER
+        return <span class="[color:var(--data-number)]">{"" + value}</span>
     }
 }
 
@@ -558,7 +559,7 @@ export const escapeSQLIdentifier = (ident: string) => {
 export const blob2hex = (blob: Uint8Array, maxLength?: number) =>
     Array.from(blob.slice(0, maxLength), (x) => x.toString(16).padStart(2, "0")).join("") + (maxLength !== undefined && blob.length > maxLength ? "..." : "")
 
-export const type2color = (type: string) => {
+export const type2color = (type: "number" | "bigint" | "string" | "null" | "blob" | "default") => {
     if (type === "number" || type === "bigint") {
         return "var(--data-number)"
     } else if (type === "string") {

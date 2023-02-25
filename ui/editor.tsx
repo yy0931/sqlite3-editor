@@ -144,7 +144,6 @@ const mountInput = () => {
         useTableStore.setState({
             input: {
                 draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
-                draftValueType: state.type,
                 textarea,
             }
         })
@@ -156,7 +155,6 @@ const mountInput = () => {
         useTableStore.setState({
             input: {
                 draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
-                draftValueType: state.type,
                 textarea: null,
             }
         })
@@ -428,7 +426,7 @@ export const Editor = () => {
         if (input.textarea !== null) {
             input.textarea.value = state.textareaValue
         }
-        useTableStore.setState({ input: { ...input, draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)), draftValueType: state.type } })
+        useTableStore.setState({ input: { ...input, draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)) } })
     }, state.statement === "UPDATE" ? [state.textareaValue, state.blobValue, state.type] : [undefined, undefined, undefined])
 
     let header: JSXInternal.Element
