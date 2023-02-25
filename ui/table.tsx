@@ -3,7 +3,7 @@ import * as remote from "./remote"
 import { useEditorStore } from "./editor"
 import produce from "immer"
 import { scrollbarWidth, ScrollbarY } from "./scrollbar"
-import { persistentRef } from "./components"
+import { persistentRef, Tooltip } from "./components"
 import { BigintMath, createStore } from "./util"
 import deepEqual from "fast-deep-equal"
 import type { JSXInternal } from "preact/src/jsx"
@@ -435,19 +435,19 @@ const FindWidget = () => {
         <input id="findWidget" ref={ref} class="mr-1" placeholder="Find" value={value} onChange={(ev) => setFindWidgetState({ value: ev.currentTarget.value })} />
 
         {/* Match Case button */}
-        <span title="Match Case" class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
+        <Tooltip content="Match Case" ><span class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#case-sensitive" /></svg>
-        </span>
+        </span></Tooltip>
 
         {/* Match Whole Word button */}
-        <span title="Match Whole Word" class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={wholeWord ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ wholeWord: !wholeWord })}>
+        <Tooltip content="Match Whole Word"><span class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={wholeWord ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ wholeWord: !wholeWord })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#whole-word" /></svg>
-        </span>
+        </span></Tooltip>
 
         {/* Use Regular Expression button */}
-        <span title="Use Regular Expression" class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={regex ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ regex: !regex })}>
+        <Tooltip content="Use Regular Expression"><span class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={regex ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ regex: !regex })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#regex" /></svg>
-        </span>
+        </span></Tooltip>
     </div>
 }
 

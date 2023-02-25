@@ -238,3 +238,12 @@ body > svg {
 dialog::backdrop {
     @apply bg-black bg-opacity-50;
 }
+
+.tippy-box {
+    font-size: 10px !important;
+    border-radius: 0 !important;
+}
+
+.tippy-content {
+    padding: 1px 4px !important;
+}
