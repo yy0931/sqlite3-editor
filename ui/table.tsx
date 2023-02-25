@@ -275,7 +275,7 @@ export const useTableStore = createStore("useTableStore", {
 
 export const Table = ({ tableName }: { tableName: string | undefined }) => {
     const visibleAreaTop = useTableStore((s) => Number(s.paging.visibleAreaTop))
-    const pageSize = useTableStore((s) => Number(s.paging.visibleAreaSize))
+    const visibleAreaSize = useTableStore((s) => Number(s.paging.visibleAreaSize))
     const numRecords = useTableStore((s) => Number(s.paging.numRecords))
     const invalidQuery = useTableStore((s) => s.invalidQuery)
     const tableInfo = useTableStore((s) => s.tableInfo)
@@ -393,13 +393,11 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                         </td>
                     </tr>}
 
-                    {/* Placeholder that is displayed when the table has no rows */}
-                    {records.length === 0 && <tr>
-                        <td class="overflow-hidden no-hover inline-block cursor-default h-[1.2em] pl-[10px] pr-[10px]" style={{ borderRight: "1px solid var(--td-border-color)" }}></td>
-                    </tr>}
-
                     {/* Rows */}
                     {records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? input : null} tableName={tableName} tableInfo={tableInfo} record={record} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
+
+                    {/* Margin */}
+                    {Array(visibleAreaSize - records.length).fill(0).map((_, row) => <EmptyTableRow tableInfo={tableInfo} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + records.length + row) + 1n} />)}
                 </tbody>
             </table>
         </div>
@@ -410,7 +408,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                 ref={scrollbarRef}
                 min={0}
                 max={numRecords}
-                size={pageSize}
+                size={visibleAreaSize}
                 value={visibleAreaTop}
                 class="h-full right-0 top-0 absolute"
                 style={{ width: scrollbarWidth }}
@@ -501,6 +499,26 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             </td>
         })}
     </tr>, [props.selected, props.selectedColumn, props.input?.draftValue, props.input?.textarea, props.tableName, props.tableInfo, props.record, props.rowNumber, cursorVisibility])  // excluded: props.columnWidth
+}
+
+const EmptyTableRow = (props: { tableInfo: remote.TableInfo, rowNumber: bigint, columnWidths: readonly number[] }) => {
+    return <tr>
+        {/* Row number */}
+        <td
+            class="pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-gray-400 select-none"
+            style={{ borderRight: "1px solid var(--td-border-color)" }}>{props.rowNumber}</td>
+
+        {/* Cells */}
+        {props.tableInfo.map(({ }, i) => {
+            return <td
+                class="pl-[10px] pr-[10px] overflow-hidden "
+                style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}>
+                <pre class="overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] ">
+                    <span class="select-none">&nbsp;</span>
+                </pre>
+            </td>
+        })}
+    </tr>
 }
 
 /** Renders `<span>{props.element}</span>` and focuses the `props.element`. `props.onFocusOrMount` and `props.onBlurOrUnmount` will be called when the `props.element` is focused/unfocused or the value of `props.element` is changed. */
