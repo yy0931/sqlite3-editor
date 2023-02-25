@@ -397,7 +397,8 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                     {records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? input : null} tableName={tableName} tableInfo={tableInfo} record={record} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
 
                     {/* Margin */}
-                    {Array(visibleAreaSize - records.length).fill(0).map((_, row) => <EmptyTableRow tableInfo={tableInfo} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + records.length + row) + 1n} />)}
+                    {/* NOTE: `visibleAreaSize - records.length` can be negative while resizing the table. */}
+                    {Array(Math.max(0, visibleAreaSize - records.length)).fill(0).map((_, row) => <EmptyTableRow tableInfo={tableInfo} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + records.length + row) + 1n} />)}
                 </tbody>
             </table>
         </div>
