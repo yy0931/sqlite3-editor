@@ -2,6 +2,9 @@ import { useLayoutEffect, useRef, useState } from "preact/hooks"
 import type { JSXInternal } from "preact/src/jsx"
 import type { ReadonlyDeep } from "type-fest"
 import * as remote from "./remote"
+import Tippy from "@tippyjs/react"
+import 'tippy.js/dist/tippy.css'
+import type { ReactElement } from "react"
 
 /** Typed version of `<select>` */
 export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string, group?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, class?: string, "data-testid"?: string }) => {
@@ -39,9 +42,8 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
     </>
 }
 
-export const Button = (props: { class?: string, disabled?: boolean, children?: preact.ComponentChildren, style?: JSXInternal.CSSProperties, title?: string, onClick?: () => void, "data-testid"?: string }) => {
-    return <button disabled={props.disabled} style={props.style} class={"border-0 outline-0 pl-2 pr-2 cursor-pointer [font-family:inherit] bg-[var(--button-primary-background)] text-[var(--button-primary-foreground)] hover:[background-color:var(--button-primary-hover-background)] disabled:cursor-not-allowed disabled:text-[#737373] disabled:bg-[#c1bbbb] focus:outline focus:outline-2 focus:outline-blue-300 " + (props.class ?? "")} onClick={props.onClick} title={props.title} data-testid={props["data-testid"]}>{props.children}</button>
-}
+export const Button = (props: { class?: string, disabled?: boolean, children?: preact.ComponentChildren, style?: JSXInternal.CSSProperties, title?: string, onClick?: () => void, "data-testid"?: string }) =>
+    <button disabled={props.disabled} style={props.style} class={"border-0 outline-0 pl-2 pr-2 cursor-pointer [font-family:inherit] bg-[var(--button-primary-background)] text-[var(--button-primary-foreground)] hover:[background-color:var(--button-primary-hover-background)] disabled:cursor-not-allowed disabled:text-[#737373] disabled:bg-[#c1bbbb] focus:outline focus:outline-2 focus:outline-blue-300 " + (props.class ?? "")} onClick={props.onClick} data-testid={props["data-testid"]}>{props.children}</button>
 
 /** {@link useRef} but persists the value to the server. */
 export const persistentRef = <T extends unknown>(key: string, defaultValue: T) => {
@@ -63,16 +65,20 @@ export const persistentUseState = <T extends unknown>(key: string, defaultValue:
     }] as const
 }
 
+export const Tooltip = (props: { content: string, children: preact.ComponentChildren }) =>
+    <Tippy arrow={false} content={props.content} animation={false} placement={"right"}>{props.children as ReactElement}</Tippy>
+
 export const SVGOnlyCheckbox = (props: { icon: string, checked?: boolean, onClick: (checked: boolean) => void, class?: string, title: string }) => {
-    return <span class={"align-middle hover:bg-gray-300 active:bg-inherit select-none px-1 [border-radius:1px] inline-block cursor-pointer " + (props.class ? props.class : "")}
-        title={props.title}
-        onClick={() => props.onClick(!props.checked)}>
-        <svg class="inline w-[1em] h-[1em]"><use xlinkHref={props.icon} /></svg>
-    </span>
+    return <Tooltip content={props.title}>
+        <span class={"align-middle hover:bg-gray-300 active:bg-inherit select-none px-1 [border-radius:1px] inline-block cursor-pointer " + (props.class ?? "")}
+            onClick={() => props.onClick(!props.checked)}>
+            <svg class="inline w-[1em] h-[1em]"><use xlinkHref={props.icon} /></svg>
+        </span>
+    </Tooltip>
 }
 
 export const SVGCheckbox = (props: { icon: string, tabIndex?: number, checked?: boolean, onClick: (checked: boolean) => void, class?: string, title?: string, children?: preact.ComponentChildren }) => {
-    return <span tabIndex={props.tabIndex} class={"align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer " + (props.class ? props.class : "")}
+    return <span tabIndex={props.tabIndex} class={"align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer " + (props.class ?? "")}
         title={props.title}
         onClick={() => props.onClick(!props.checked)}>
         <svg class="inline w-[1em] h-[1em]"><use xlinkHref={props.icon} /></svg>
