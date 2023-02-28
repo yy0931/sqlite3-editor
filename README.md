@@ -61,7 +61,7 @@ Although this extension was initially created to fill the need for an extension 
 
 ![](https://raw.githubusercontent.com/yy0931/sqlite3-editor/main/query-editor.gif)
 
-*TODO: The image is from the version before the syntax validator was implemented.*
+*TODO: The image above is from a version before the syntax validator was added.*
 
 To access the query editor, click the "Custom Query" button.
 
