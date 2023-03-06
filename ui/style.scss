@@ -247,3 +247,13 @@ dialog::backdrop {
 .tippy-content {
     padding: 1px 4px !important;
 }
+
+.flash {
+    animation: flash forwards 0.4s;
+}
+
+@keyframes flash {
+    from { background: rgba(0, 225, 255, 0.1); }
+    90% { background: rgba(0, 225, 255, 0.1); }
+    to { }
+}

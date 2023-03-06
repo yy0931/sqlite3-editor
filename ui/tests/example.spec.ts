@@ -32,12 +32,12 @@ test('Insert records', async ({ page }) => {
     await page.goto('http://localhost:5173/')
 
     /* Check if the INSERT editor is visible. */await expect(page.getByTestId("INSERT")).toBeVisible()
-    /* Input a value for the text-column. */await page.getByTestId('INSERT > column 1').getByTestId('editor-textarea').fill('hello')
-    /* Input a value for the integer-column. */await page.getByTestId('INSERT > column 2').getByTestId('editor-textarea').fill('12345');
-    /* Input a value for the real-column. */await page.getByTestId('INSERT > column 3').getByTestId('editor-textarea').fill('1.234');
-    /* Input a value for the any-column. */await page.getByTestId('INSERT > column 5').getByTestId('editor-textarea').fill('test');
+    /* Input a value for the text-column. */await page.getByTestId('insert-column 1').getByTestId('editor-textarea').fill('hello')
+    /* Input a value for the integer-column. */await page.getByTestId('insert-column 2').getByTestId('editor-textarea').fill('12345');
+    /* Input a value for the real-column. */await page.getByTestId('insert-column 3').getByTestId('editor-textarea').fill('1.234');
+    /* Input a value for the any-column. */await page.getByTestId('insert-column 5').getByTestId('editor-textarea').fill('test');
     /* Check if the correct sql query is generated. */await expect(page.getByTitle('INSERT INTO "test-table" ("text-column", "integer-column", "real-column", "any-column") VALUES (?, ?, ?, ?)')).toBeVisible()
-    /* Press Ctrl+Enter to commit. */await page.getByTestId('INSERT > column 5').getByTestId('editor-textarea').press('Control+Enter')
+    /* Press Ctrl+Enter to commit. */await page.getByTestId('insert-column 5').getByTestId('editor-textarea').press('Control+Enter')
 
     /* Check if the data on the 1st column is displayed in a cell. */await expect(page.getByTestId('viewer-table').getByText('hello')).toBeVisible()
     /* Check if the data on the 2nd column is displayed in a cell. */await expect(page.getByTestId('viewer-table').getByText('12345')).toBeVisible()
@@ -52,9 +52,9 @@ test("Populate records", async ({ page }) => {
     /* Check if the INSERT editor is visible. */await expect(page.getByTestId("INSERT")).toBeVisible()
 
     for (let i = 2; i <= 50; i++) {
-        /* Input a value. */await page.getByTestId('INSERT > column 1').getByTestId('editor-textarea').fill(`row ${i}`)
+        /* Input a value. */await page.getByTestId('insert-column 1').getByTestId('editor-textarea').fill(`row ${i}`)
         /* Check if the correct sql query is generated. */await expect(page.getByTitle('INSERT INTO "test-table" ("text-column") VALUES (?)')).toBeVisible()
-        /* Commit. */await page.getByTestId('INSERT > column 1').getByTestId('editor-textarea').press('Control+Enter')
+        /* Commit. */await page.getByTestId('insert-column 1').getByTestId('editor-textarea').press('Control+Enter')
         /* Check if the table is scrolled down to the bottom. */await expect(page.getByTestId(`row number ${i}`)).toBeVisible()
     }
 })
