@@ -273,7 +273,8 @@ export const useTableStore = createStore("useTableStore", {
     }
 })
 
-export const Table = ({ tableName }: { tableName: string | undefined }) => {
+export const Table = () => {
+    const tableName = useTableStore((s) => s.tableName)
     const visibleAreaTop = useTableStore((s) => Number(s.paging.visibleAreaTop))
     const visibleAreaSize = useTableStore((s) => Number(s.paging.visibleAreaSize))
     const numRecords = useTableStore((s) => Number(s.paging.numRecords))
@@ -394,11 +395,11 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
                     </tr>}
 
                     {/* Rows */}
-                    {records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? input : null} tableName={tableName} tableInfo={tableInfo} record={record} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
+                    {records.map((record, row) => <TableRow selected={selectedRow === row} key={row} row={row} selectedColumn={selectedDataColumn} input={selectedDataRow === row ? input : null} record={record} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + row) + 1n} />)}
 
                     {/* Margin */}
                     {/* NOTE: `visibleAreaSize - records.length` can be negative while resizing the table. */}
-                    {Array(Math.max(0, visibleAreaSize - records.length)).fill(0).map((_, row) => <EmptyTableRow row={row} tableName={tableName} tableInfo={tableInfo} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + records.length + row) + 1n} />)}
+                    {Array(Math.max(0, visibleAreaSize - records.length)).fill(0).map((_, row) => <EmptyTableRow key={row} row={row} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + records.length + row) + 1n} />)}
                 </tbody>
             </table>
         </div>
@@ -450,10 +451,13 @@ const FindWidget = () => {
     </div>
 }
 
-const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: JSXInternal.Element, readonly textarea: HTMLTextAreaElement | null } | null, tableName: string | undefined, tableInfo: remote.TableInfo, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly number[] }) => {
+const TableRow = (props: { selected: boolean, readonly selectedColumn: string | null, input: { readonly draftValue: JSXInternal.Element, readonly textarea: HTMLTextAreaElement | null } | null, record: { readonly [key in string]: Readonly<remote.SQLite3Value> }, rowNumber: bigint, row: number, columnWidths: readonly number[] }) => {
     if (props.rowNumber <= 0) {
         throw new Error(props.rowNumber + "")
     }
+    const tableName = useTableStore((s) => s.tableName)
+    const tableInfo = useTableStore((s) => s.tableInfo)
+
     const delete_ = useEditorStore((s) => s.delete_)
     const update = useEditorStore((s) => s.update)
     const commitUpdate = useEditorStore((s) => s.commitUpdate)
@@ -465,33 +469,33 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
     return useMemo(() => <tr class={props.selected ? "editing" : ""}>
         {/* Row number */}
         <td
-            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (props.tableName !== undefined ? "clickable" : "")}
+            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (tableName !== undefined ? "clickable" : "")}
             style={{ borderRight: "1px solid var(--td-border-color)" }}
             onMouseDown={(ev) => {
                 ev.preventDefault();
                 (async () => {
                     if (!await commitUpdate()) { return }
-                    if (props.tableName === undefined) { return }
-                    await delete_(props.tableName, props.record, props.row)
+                    if (tableName === undefined) { return }
+                    await delete_(tableName, props.record, props.row)
                 })().catch(console.error)
             }}
             data-testid={`row number ${props.rowNumber}`}>{props.rowNumber}</td>
 
         {/* Cells */}
-        {props.tableInfo.map(({ name }, i) => {
+        {tableInfo.map(({ name }, i) => {
             const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
             return <td
-                class={"pl-[10px] pr-[10px] overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
+                class={"pl-[10px] pr-[10px] overflow-hidden " + (tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
                 onMouseDown={(ev) => {
                     ev.preventDefault();
                     (async () => {
                         const editorState = useEditorStore.getState()
                         if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
-                        if (props.tableName === undefined) { return }
+                        if (tableName === undefined) { return }
                         if (!await commitUpdate()) { return }
-                        update(props.tableName, name, props.row)
+                        update(tableName, name, props.row)
                     })().catch(console.error)
                 }}
                 data-testid={`cell ${props.rowNumber - 1n}, ${i}`}>
@@ -501,27 +505,30 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                 </pre>
             </td>
         })}
-    </tr>, [props.selected, props.selectedColumn, props.input?.draftValue, props.input?.textarea, props.tableName, props.tableInfo, props.record, props.rowNumber, cursorVisibility])  // excluded: props.columnWidth
+    </tr>, [props.selected, props.selectedColumn, props.input?.draftValue, props.input?.textarea, tableName, tableInfo, props.record, props.rowNumber, cursorVisibility])  // excluded: props.columnWidth
 }
 
 /** Renders an empty row that is shown at the bottom of the table. */
-const EmptyTableRow = (props: { row: number, tableName: string | undefined, tableInfo: remote.TableInfo, rowNumber: bigint, columnWidths: readonly number[] }) => {
+const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: readonly number[] }) => {
+    const tableName = useTableStore((s) => s.tableName)
+    const tableInfo = useTableStore((s) => s.tableInfo)
+
     const insert = useEditorStore((s) => s.insert)
     const commitUpdate = useEditorStore((s) => s.commitUpdate)
     const statement = useEditorStore((s) => s.statement)
 
     const openInsertEditor = async () => {
-        if (!props.tableName) { return }
+        if (!tableName) { return }
         if (statement !== "INSERT") {
             if (!await commitUpdate()) { return }
-            await insert(props.tableName)
+            await insert(tableName)
         }
     }
 
     return <tr>
         {/* Row number */}
         <td
-            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-center text-black select-none " + (props.tableName !== undefined && props.row === 0 ? "clickable" : "")}
+            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-center text-black select-none " + (tableName !== undefined && props.row === 0 ? "clickable" : "")}
             style={{ borderRight: "1px solid var(--td-border-color)" }}
             onMouseDown={(ev) => {
                 ev.preventDefault();
@@ -542,9 +549,9 @@ const EmptyTableRow = (props: { row: number, tableName: string | undefined, tabl
             }}>{props.row === 0 && <svg class="inline w-[1em] h-[1em]"><use xlinkHref="#add" /></svg>}</td>
 
         {/* Cells */}
-        {props.tableInfo.map(({ }, i) => {
+        {tableInfo.map(({ }, i) => {
             return <td
-                class={"pl-[10px] pr-[10px] overflow-hidden " + (props.tableName !== undefined ? "clickable" : "")}
+                class={"pl-[10px] pr-[10px] overflow-hidden " + (tableName !== undefined ? "clickable" : "")}
                 style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
                 onMouseDown={(ev) => {
                     ev.preventDefault()

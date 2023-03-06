@@ -194,7 +194,7 @@ const App = () => {
         {/* Table */}
         {!isSettingsViewOpen && <>
             <div class="relative w-max max-w-full pl-[var(--page-padding)] pr-[var(--page-padding)]">
-                <Table tableName={tableName} />
+                <Table />
             </div>
 
             {/* The horizontal handle to resize the height of the table */}
