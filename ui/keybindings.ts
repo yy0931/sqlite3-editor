@@ -9,7 +9,7 @@ const moveSelectionRow = async (delta: bigint) => {
     const state = editor.useEditorStore.getState()
     if (state.statement !== "UPDATE") { return }
     const { paging, setPaging } = useTableStore.getState()
-    let newRelativeRow = BigintMath.min(BigInt(state.row) + delta, paging.numRecords - paging.visibleAreaTop - 1n)
+    let newRelativeRow = BigInt(state.row) + delta
 
     // Scroll down
     if (newRelativeRow >= paging.visibleAreaSize) {
@@ -24,6 +24,9 @@ const moveSelectionRow = async (delta: bigint) => {
         await setPaging({ visibleAreaTop: paging.visibleAreaTop - scrollDistance }, true)
         newRelativeRow += scrollDistance
     }
+
+    // Clip
+    newRelativeRow = BigintMath.min(newRelativeRow, paging.numRecords - useTableStore.getState().paging.visibleAreaTop - 1n)
 
     state.update(state.tableName, state.column, Number(newRelativeRow))
 }
