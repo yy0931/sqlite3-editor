@@ -316,7 +316,7 @@ export const useEditorStore = createStore("useEditorStore", {
             await useTableStore.getState().reloadTable(true, true)
             if (opts.scrollToBottom) {
                 let state = useTableStore.getState()
-                await state.setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.visibleAreaSize, 0n) })
+                await state.setPaging({ visibleAreaTop: BigintMath.max(state.paging.numRecords - state.paging.visibleAreaSize + 1n, 0n) })
                 state = useTableStore.getState()
             }
         }
