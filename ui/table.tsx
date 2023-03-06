@@ -195,13 +195,13 @@ export const useTableStore = createStore("useTableStore", {
     const setPaging = async (opts: { visibleAreaTop?: bigint, numRecords?: bigint, visibleAreaSize?: bigint }, preserveEditorState?: true, withoutTableReloading?: true) => {
         const paging = { ...get().paging, ...opts }
         paging.visibleAreaSize = BigintMath.max(1n, BigintMath.min(200n, paging.visibleAreaSize))
-        paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize, paging.visibleAreaTop))
+        paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize + 1n, paging.visibleAreaTop))
         if (deepEqual(get().paging, paging)) { return }
         if (!await useEditorStore.getState().commitUpdate()) { return }
 
         await remote.setState("visibleAreaSize", Number(paging.visibleAreaSize))
         if (!preserveEditorState) { await useEditorStore.getState().discardChanges() }
-        paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize, paging.visibleAreaTop))
+        paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize + 1n, paging.visibleAreaTop))
         set({ paging })
         if (!withoutTableReloading) {
             await reloadTable(false, false)
@@ -398,7 +398,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
 
                     {/* Margin */}
                     {/* NOTE: `visibleAreaSize - records.length` can be negative while resizing the table. */}
-                    {Array(Math.max(0, visibleAreaSize - records.length)).fill(0).map((_, row) => <EmptyTableRow tableInfo={tableInfo} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + records.length + row) + 1n} />)}
+                    {Array(Math.max(0, visibleAreaSize - records.length)).fill(0).map((_, row) => <EmptyTableRow row={row} tableName={tableName} tableInfo={tableInfo} columnWidths={getColumnWidths()} rowNumber={BigInt(visibleAreaTop + records.length + row) + 1n} />)}
                 </tbody>
             </table>
         </div>
@@ -408,7 +408,7 @@ export const Table = ({ tableName }: { tableName: string | undefined }) => {
             <scrollbar-y
                 ref={scrollbarRef}
                 min={0}
-                max={numRecords}
+                max={numRecords + 1}
                 size={visibleAreaSize}
                 value={visibleAreaTop}
                 class="h-full right-0 top-0 absolute"
@@ -467,7 +467,8 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
         <td
             class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (props.tableName !== undefined ? "clickable" : "")}
             style={{ borderRight: "1px solid var(--td-border-color)" }}
-            onMouseDown={() => {
+            onMouseDown={(ev) => {
+                ev.preventDefault();
                 (async () => {
                     if (!await commitUpdate()) { return }
                     if (props.tableName === undefined) { return }
@@ -483,12 +484,13 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             return <td
                 class={"pl-[10px] pr-[10px] overflow-hidden " + (props.tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
-                onMouseDown={() => {
+                onMouseDown={(ev) => {
+                    ev.preventDefault();
                     (async () => {
                         const editorState = useEditorStore.getState()
                         if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
-                        if (!await commitUpdate()) { return }
                         if (props.tableName === undefined) { return }
+                        if (!await commitUpdate()) { return }
                         update(props.tableName, name, props.row)
                     })().catch(console.error)
                 }}
@@ -502,18 +504,63 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
     </tr>, [props.selected, props.selectedColumn, props.input?.draftValue, props.input?.textarea, props.tableName, props.tableInfo, props.record, props.rowNumber, cursorVisibility])  // excluded: props.columnWidth
 }
 
-const EmptyTableRow = (props: { tableInfo: remote.TableInfo, rowNumber: bigint, columnWidths: readonly number[] }) => {
+/** Renders an empty row that is shown at the bottom of the table. */
+const EmptyTableRow = (props: { row: number, tableName: string | undefined, tableInfo: remote.TableInfo, rowNumber: bigint, columnWidths: readonly number[] }) => {
+    const insert = useEditorStore((s) => s.insert)
+    const commitUpdate = useEditorStore((s) => s.commitUpdate)
+    const statement = useEditorStore((s) => s.statement)
+
+    const openInsertEditor = async () => {
+        if (!props.tableName) { return }
+        if (statement !== "INSERT") {
+            if (!await commitUpdate()) { return }
+            await insert(props.tableName)
+        }
+    }
+
     return <tr>
         {/* Row number */}
         <td
-            class="pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-gray-400 select-none"
-            style={{ borderRight: "1px solid var(--td-border-color)" }}>{props.rowNumber}</td>
+            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-center text-black select-none " + (props.tableName !== undefined && props.row === 0 ? "clickable" : "")}
+            style={{ borderRight: "1px solid var(--td-border-color)" }}
+            onMouseDown={(ev) => {
+                ev.preventDefault();
+                if (props.row !== 0) { return }
+                openInsertEditor().then(() => {
+                    // Find a textarea
+                    const textarea = document.querySelector<HTMLTextAreaElement>("#editor textarea")
+                    if (!textarea) { return }
+
+                    // Select the textarea
+                    textarea.focus()
+                    textarea.select()
+
+                    // Play an animation
+                    textarea.classList.remove("flash")
+                    setTimeout(() => { textarea.classList.add("flash") }, 50)
+                }).catch(console.error)
+            }}>{props.row === 0 && <svg class="inline w-[1em] h-[1em]"><use xlinkHref="#add" /></svg>}</td>
 
         {/* Cells */}
         {props.tableInfo.map(({ }, i) => {
             return <td
-                class="pl-[10px] pr-[10px] overflow-hidden "
-                style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}>
+                class={"pl-[10px] pr-[10px] overflow-hidden " + (props.tableName !== undefined ? "clickable" : "")}
+                style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
+                onMouseDown={(ev) => {
+                    ev.preventDefault()
+                    openInsertEditor().then(() => {
+                        const textarea = document.querySelector<HTMLTextAreaElement>(`#insert-column${i + 1} textarea`)
+                        if (!textarea) { return }
+
+                        // Select the textarea
+                        textarea.focus()
+                        textarea.select()
+
+                        // Play an animation
+                        textarea.classList.remove("flash")
+                        setTimeout(() => { textarea.classList.add("flash") }, 50)
+                    }).catch(console.error)
+                }}>
                 <pre class="overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] ">
                     <span class="select-none">&nbsp;</span>
                 </pre>
@@ -530,8 +577,8 @@ const MountInput = (props: { element: HTMLTextAreaElement, onFocusOrMount: () =>
         props.onFocusOrMount()
         props.element.addEventListener("focus", () => { props.onFocusOrMount() })
         props.element.addEventListener("blur", () => { props.onBlurOrUnmount() })
-        props.element.select()
         props.element.focus()
+        props.element.select()
         return () => {
             props.onBlurOrUnmount()
             if (ref.current?.contains(props.element)) { ref.current.removeChild(props.element) }

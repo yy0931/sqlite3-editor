@@ -546,7 +546,7 @@ export const Editor = () => {
             editor = <>
                 <ul class="list-none">
                     {state.tableInfo.map(({ name }, i) => {
-                        return <li data-testid={`INSERT > column ${i + 1}`}>
+                        return <li id={`insert-column${i + 1}`} data-testid={`insert-column ${i + 1}`}>
                             <div class="mr-[1em]">{name}</div>
                             <DataEditor
                                 column={name}
@@ -645,14 +645,14 @@ export const Editor = () => {
         }
     }
 
-    return <>
+    return <div id="editor">
         <h2>
             {header}
         </h2>
         <div class="pl-[var(--page-padding)] pr-[var(--page-padding)]">
             {editor}
         </div>
-    </>
+    </div>
 }
 
 const DataTypeInput = (props: { value: EditorDataType, onChange: (value: EditorDataType) => void }) => {
