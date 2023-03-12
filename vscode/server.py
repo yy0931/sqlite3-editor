@@ -21,8 +21,12 @@ class Server:
         self.readonly_connection = sqlite3.connect("file:" + urllib.parse.quote(database_filepath) + "?mode=ro", uri=True)
         self.readwrite_connection = sqlite3.connect(database_filepath)
 
-        self.readonly_connection.create_function("find_widget_regexp", 4, find_widget_regexp, deterministic=True)
-        self.readwrite_connection.create_function("find_widget_regexp", 4, find_widget_regexp, deterministic=True)
+        if sys.version_info >= (3, 8, 3):  # `deterministic` is added in 3.8.3 https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.create_function
+            self.readonly_connection.create_function("find_widget_regexp", 4, find_widget_regexp, deterministic=True)
+            self.readwrite_connection.create_function("find_widget_regexp", 4, find_widget_regexp, deterministic=True)
+        else:
+            self.readonly_connection.create_function("find_widget_regexp", 4, find_widget_regexp)
+            self.readwrite_connection.create_function("find_widget_regexp", 4, find_widget_regexp)
 
         self.request_body_filepath = request_body_filepath
         self.response_body_filepath = response_body_filepath
