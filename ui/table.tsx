@@ -489,6 +489,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                 class={"pl-[10px] pr-[10px] overflow-hidden " + (tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
                 onMouseDown={(ev) => {
+                    if (ev.target instanceof HTMLTextAreaElement) { return }  // in-place input
                     ev.preventDefault();
                     (async () => {
                         const editorState = useEditorStore.getState()
