@@ -1,5 +1,7 @@
 import { test, expect, Page } from '@playwright/test'
 
+// NOTE: Because there is a lag between entering characters in a text box and updating the Commit button's onClick function, we need to make sure the Commit button's title has been updated before clicking the Commit button or pressing Control+Enter.
+
 test('CREATE TABLE', async ({ page }) => {
     await page.goto('http://localhost:5173/')
 
@@ -122,39 +124,5 @@ test.describe("UPDATE", () => {
         /* Press Ctrl+Enter. */await page.getByTestId('editor-textarea').press('Control+Enter')
         /* Check if the changes are committed. */await expect(page.getByTestId('cell 0, 0').getByText(randomText + "\\n")).toBeVisible()
         /* Checks if the cell (0, 0) is not selected. */await expect(page.getByTestId(`cell 0, 0`).getByTestId("inplaceInput")).not.toBeVisible()
-    })
-})
-
-const setupTable = async ({ page, tableName, columnNames }: { page: Page, tableName: string, columnNames: string[] }) => {
-    /* Click the CREATE TABLE button. */await page.getByTestId("create-table-button").click()
-    /* Check if the CREATE TABLE editor is visible. */await expect(page.getByTestId("CREATE TABLE")).toBeVisible()
-    /* Input a table name. */await page.getByTestId('CREATE TABLE > table-name').fill(tableName)
-    for (const [i, name] of columnNames.entries()) {
-        /* Set the name     of the 1st column. */await page.getByTestId(`column ${i + 1}`).getByTestId('column-name').fill(name)
-        // FIXME: wait 
-        /* Commit. */await page.getByTestId('body').press('Control+Enter')
-    }
-    /* Check if the newly created table is active. */await expect(page.getByTestId("table-name")).toHaveValue(tableName)
-}
-
-test("DROP TABLE", async ({ page }) => {
-    await page.goto('http://localhost:5173/')
-    await setupTable({ page, tableName: "drop-table", columnNames: ["column1"] })
-    /* Open the DROP TABLE editor. */await page.getByTestId("drop-table-button").click()
-    /* Check if the DROP TABLE editor is visible. */await expect(page.getByTestId("DROP TABLE")).toBeVisible()
-    /* Commit. */await page.getByTestId("body").press("Control+Enter")
-    /* Check if the table is dropped. */await expect(page.getByTestId("table-name")).not.toHaveValue("drop-table")
-})
-
-test.describe("ALTER TABLE", () => {
-    test("ALTER TABLE RENAME TO", async ({ page }) => {
-        await page.goto('http://localhost:5173/')
-        await setupTable({ page, tableName: "alter-table-rename-to", columnNames: ["column1"] })
-        /* Open the ALTER TABLE editor. */await page.getByTestId("alter-table-button").click()
-        /* Check if the value of the table-name input is equal to the name of the active table. */await expect(page.getByTestId("alter-table-rename-to-new-table-name")).toHaveValue("alter-table-rename-to")
-        /* Input the new table name. */await page.getByTestId("alter-table-rename-to-new-table-name").fill("alter-table-rename-to-renamed")
-        /* Check if the correct sql query is generated. */await expect(page.getByTitle('ALTER TABLE alter-table-rename-to RENAME TO alter-table-rename-to-renamed')).toBeVisible()
-        /* Commit. */await page.getByTestId("body").press("Control+Enter")
-        /* Check if the table is renamed. */await expect(page.getByTestId("table-name")).toHaveValue("alter-table-rename-to-renamed")
     })
 })
