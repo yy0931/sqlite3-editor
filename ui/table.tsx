@@ -197,7 +197,7 @@ export const useTableStore = createStore("useTableStore", {
         paging.visibleAreaSize = BigintMath.max(1n, BigintMath.min(200n, paging.visibleAreaSize))
         paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize + 1n, paging.visibleAreaTop))
         if (deepEqual(get().paging, paging)) { return }
-        if (!await useEditorStore.getState().commitUpdate()) { return }
+        if (!await useEditorStore.getState().beforeUnmount()) { return }
 
         await remote.setState("visibleAreaSize", Number(paging.visibleAreaSize))
         if (!preserveEditorState) { await useEditorStore.getState().discardChanges() }
@@ -289,7 +289,7 @@ export const Table = () => {
     const selectedRow = useEditorStore((s) => s.statement === "DELETE" ? s.row : null)
     const selectedDataRow = useEditorStore((s) => s.statement === "UPDATE" ? s.row : null)
     const selectedDataColumn = useEditorStore((s) => s.statement === "UPDATE" ? s.column : null)
-    const commitUpdate = useEditorStore((s) => s.commitUpdate)
+    const beforeUnmount = useEditorStore((s) => s.beforeUnmount)
     const isDirty = useEditorStore((s) => s.isDirty)
 
     const columnWidthCaches = persistentRef<Record<string, (number | undefined | null)[]>>("columnWidths_v3", {})
@@ -344,8 +344,8 @@ export const Table = () => {
                             }}
                             onMouseDown={(ev) => {
                                 if (isDirty()) {
-                                    commitUpdate().catch(console.error)
-                                    return
+                                    beforeUnmount().catch(console.error)
+                                    return  // Always return because the user needs to stop dragging when a dialog is displayed.
                                 }
 
                                 const th = ev.currentTarget
@@ -460,7 +460,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
 
     const delete_ = useEditorStore((s) => s.delete_)
     const update = useEditorStore((s) => s.update)
-    const commitUpdate = useEditorStore((s) => s.commitUpdate)
+    const beforeUnmount = useEditorStore((s) => s.beforeUnmount)
 
     const [cursorVisibility, setCursorVisibility] = useState(true)
     const onFocusOrMount = useCallback(() => { setCursorVisibility(true) }, [])
@@ -474,7 +474,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             onMouseDown={(ev) => {
                 ev.preventDefault();
                 (async () => {
-                    if (!await commitUpdate()) { return }
+                    if (!await beforeUnmount()) { return }
                     if (tableName === undefined) { return }
                     await delete_(tableName, props.record, props.row)
                 })().catch(console.error)
@@ -494,7 +494,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                         const editorState = useEditorStore.getState()
                         if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
                         if (tableName === undefined) { return }
-                        if (!await commitUpdate()) { return }
+                        if (!await beforeUnmount()) { return }
                         update(tableName, name, props.row)
                     })().catch(console.error)
                 }}
@@ -514,13 +514,13 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
     const tableInfo = useTableStore((s) => s.tableInfo)
 
     const insert = useEditorStore((s) => s.insert)
-    const commitUpdate = useEditorStore((s) => s.commitUpdate)
+    const beforeUnmount = useEditorStore((s) => s.beforeUnmount)
     const statement = useEditorStore((s) => s.statement)
 
     const openInsertEditor = async () => {
         if (!tableName) { return }
         if (statement !== "INSERT") {
-            if (!await commitUpdate()) { return }
+            if (!await beforeUnmount()) { return }
             await insert(tableName)
         }
     }

@@ -143,25 +143,25 @@ export const onKeydown = async (ev: KeyboardEvent) => {
             document.querySelector(".single-click")!.classList.remove("single-click")
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && !singleClick && key("Enter")) {
             p()
-            if (!await editor.useEditorStore.getState().commitUpdate(true)) { return }
+            if (!await editor.useEditorStore.getState().beforeUnmount(true)) { return }
             await moveSelectionRow(1n)
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && !singleClick && key("Shift + Enter")) {
             p()
-            if (!await editor.useEditorStore.getState().commitUpdate(true)) { return }
+            if (!await editor.useEditorStore.getState().beforeUnmount(true)) { return }
             await moveSelectionRow(-1n)
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && singleClick && key("Tab")) {
             p()
             moveSelectionColumn(1)
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && !singleClick && key("Tab")) {
             p()
-            if (!await editor.useEditorStore.getState().commitUpdate(true)) { return }
+            if (!await editor.useEditorStore.getState().beforeUnmount(true)) { return }
             moveSelectionColumn(1)
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && singleClick && key("Shift + Tab")) {
             p()
             moveSelectionColumn(-1)
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && !singleClick && key("Shift + Tab")) {
             p()
-            if (!await editor.useEditorStore.getState().commitUpdate(true)) { return }
+            if (!await editor.useEditorStore.getState().beforeUnmount(true)) { return }
             moveSelectionColumn(-1)
         } else if (!inputFocus && state.statement === "DELETE" && key("Escape")) {
             p()

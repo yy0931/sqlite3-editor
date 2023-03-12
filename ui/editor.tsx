@@ -292,6 +292,7 @@ export const useEditorStore = createStore("useEditorStore", {
         set({ statement: "DROP INDEX", indexName, tableName })
     }
 
+    /** Discards changes made in the editor. Keeps the SQL statement except for UPDATE. isDirty() should become false after calling this function. */
     const discardChanges = async () => {
         const state = get()
         switch (state.statement) {
@@ -304,6 +305,22 @@ export const useEditorStore = createStore("useEditorStore", {
             case "Custom Query": custom(state.tableName); break
             case "CREATE INDEX": createIndex(state.tableName); break
             case "DROP INDEX": dropIndex(state.tableName, state.indexName); break
+        }
+    }
+
+    const isDirty = () => {
+        const s = get()
+        switch (s.statement) {
+            case "UPDATE": return s.isTextareaDirty
+            case "INSERT": return s.textareaValues.some((value) => value !== "") || s.blobValues.some((value) => value !== null)
+            case "DROP TABLE": return false
+            case "DROP VIEW": return false
+            case "ALTER TABLE": return false
+            case "DELETE": return false
+            case "CREATE TABLE": return s.newTableName !== "" || s.tableConstraints !== "" || s.columnDefs.length !== 0
+            case "Custom Query": return s.query !== ""
+            case "CREATE INDEX": return s.indexName !== "" || s.indexedColumns !== "" || s.where !== ""
+            case "DROP INDEX": return false
         }
     }
 
@@ -323,11 +340,60 @@ export const useEditorStore = createStore("useEditorStore", {
         if (!preserveEditorState) { await discardChanges() }
     }
 
-    const buildUpdateQuery = () => {
+    const buildQuery = (): [string, remote.SQLite3Value[], OnWriteOptions] => {
         const s = get()
-        if (s.statement !== "UPDATE") { throw new Error() }
-        const columns = s.constraintChoices[s.selectedConstraint]!
-        return [`UPDATE ${escapeSQLIdentifier(s.tableName)} SET ${escapeSQLIdentifier(s.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`, [parseTextareaValue(s.textareaValue, s.blobValue, s.type), ...columns.map((column) => s.record[column] as remote.SQLite3Value)]] as const
+        switch (s.statement) {
+            case "UPDATE": {
+                const columns = s.constraintChoices[s.selectedConstraint]!
+                return [
+                    `UPDATE ${escapeSQLIdentifier(s.tableName)} SET ${escapeSQLIdentifier(s.column)} = ? WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`,
+                    [parseTextareaValue(s.textareaValue, s.blobValue, s.type), ...columns.map((column) => s.record[column] as remote.SQLite3Value)],
+                    { reload: "currentTable" },
+                ]
+            }
+            case "INSERT": {
+                const filterDefaults = <T extends unknown>(_: T, i: number) => s.dataTypes[i] !== "default"
+                return [
+                    s.dataTypes.every((d) => d === "default") ?
+                        `INSERT INTO ${escapeSQLIdentifier(s.tableName)} DEFAULT VALUES` :
+                        `INSERT INTO ${escapeSQLIdentifier(s.tableName)} (${s.tableInfo.filter(filterDefaults).map(({ name }) => name).map(escapeSQLIdentifier).join(", ")}) VALUES (${s.tableInfo.filter(filterDefaults).map(() => "?").join(", ")})`,
+                    s.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, s.blobValues[i]!, s.dataTypes[i]!)),
+                    { reload: "currentTable", scrollToBottom: true },
+                ]
+            }
+            case "DROP TABLE": return [`DROP TABLE ${escapeSQLIdentifier(s.tableName)}`, [], { reload: "allTables" }]
+            case "DROP VIEW": return [`DROP VIEW ${escapeSQLIdentifier(s.tableName)}`, [], { reload: "allTables" }]
+            case "ALTER TABLE": {
+                let query = `ALTER TABLE ${escapeSQLIdentifier(s.tableName)} ${s.statement2} `
+                switch (s.statement2) {
+                    case "RENAME TO": query += escapeSQLIdentifier(s.newTableName); break
+                    case "RENAME COLUMN": query += `${escapeSQLIdentifier(s.oldColumnName)} TO ${escapeSQLIdentifier(s.newColumnName)}`; break
+                    case "DROP COLUMN": query += escapeSQLIdentifier(s.oldColumnName); break
+                    case "ADD COLUMN": query += `${printColumnDef(s.columnDef)}`; break
+                }
+                return [query, [], { reload: "allTables", selectTable: s.statement2 === "RENAME TO" ? s.newTableName : undefined }]
+            }
+            case "DELETE": {
+                const columns = s.constraintChoices[s.selectedConstraint]!
+                return [
+                    `DELETE FROM ${escapeSQLIdentifier(s.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`,
+                    [...columns.map((column) => s.record[column] as remote.SQLite3Value)],
+                    { reload: "currentTable" },
+                ]
+            }
+            case "CREATE TABLE": return [
+                `CREATE TABLE ${escapeSQLIdentifier(s.newTableName)} (${s.columnDefs.map(printColumnDef).join(", ")}${s.tableConstraints.trim() !== "" ? (s.tableConstraints.trim().startsWith(",") ? s.tableConstraints : ", " + s.tableConstraints) : ""})${s.strict ? " STRICT" : ""}${s.withoutRowId ? " WITHOUT ROWID" : ""}`,
+                [],
+                { reload: "allTables", selectTable: s.newTableName },
+            ]
+            case "Custom Query": return [s.query, [], { reload: "allTables" }]
+            case "CREATE INDEX": return [
+                `CREATE${s.unique ? " UNIQUE" : ""} INDEX ${escapeSQLIdentifier(s.indexName)} ON ${escapeSQLIdentifier(s.tableName)} (${s.indexedColumns})${s.where ? ` WHERE ${s.where}` : ""}`,
+                [],
+                { reload: "allTables" },
+            ]
+            case "DROP INDEX": return [`DROP INDEX ${escapeSQLIdentifier(s.indexName)}`, [], { reload: "allTables" }]
+        }
     }
 
     return {
@@ -343,7 +409,8 @@ export const useEditorStore = createStore("useEditorStore", {
         dropIndex,
         commit,
         discardChanges,
-        buildUpdateQuery,
+        buildQuery,
+        isDirty,
         switchTable: async (tableName: string | undefined) => {
             const state = get()
             if (useTableStore.getState().useCustomViewerQuery) {
@@ -380,28 +447,31 @@ export const useEditorStore = createStore("useEditorStore", {
                 await insert(state.tableName)
             }
         },
-        isDirty: () => {
-            const s = get()
-            return s.statement === "UPDATE" && s.isTextareaDirty
-        },
         /**
-         * Commits changes in the UPDATE editor if any.
-         * @param explicit - If it is false or undefined, the "Commit changes?" dialog is displayed before committing changes.
+         * If the editor is dirty, this function asks the user whether the changes should be committed.
+         * @param keepUpdateEditor - Keep it open when the UPDATE editor is open.
          * @returns false if canceled, true otherwise
          */
-        commitUpdate: async (preserveEditorState?: true, explicit?: true): Promise<boolean> => {
-            const s = get()
-            if (!(s.statement === "UPDATE" && (explicit || s.isTextareaDirty))) { return true }
-            if (!explicit) {
-                const returnValue = await useTableStore.getState().confirm()
-                if (returnValue === "cancel") { return false }
-                if (returnValue === "discard changes") {
-                    if (!preserveEditorState) { await discardChanges() }
-                    return true
-                }
+        beforeUnmount: async (keepUpdateEditor?: true): Promise<boolean> => {
+            if (!isDirty()) { return true }
+            const returnValue = await useTableStore.getState().confirm()
+            if (returnValue === "cancel") { return false }
+            if (returnValue === "discard changes") {
+                if (!(get().statement === "UPDATE" && keepUpdateEditor)) { await discardChanges() }
+                return true
             }
-            setPartial({ isTextareaDirty: false })
-            await commit(...buildUpdateQuery(), { reload: "currentTable" }, preserveEditorState)
+
+            // Build a query before discarding changes
+            const query = buildQuery()
+
+            // prevent loops
+            if (get().statement === "UPDATE") {
+                setPartial({ isTextareaDirty: false })
+            } else {
+                await discardChanges()
+            }
+
+            await commit(...query, keepUpdateEditor)
             return true
         }
     }
@@ -446,14 +516,7 @@ export const Editor = () => {
                 {(state.statement2 === "RENAME COLUMN" || state.statement2 === "DROP COLUMN") && <input placeholder="column-name" value={state.oldColumnName} onInput={(ev) => useEditorStore.setState({ oldColumnName: ev.currentTarget.value })} />}
                 {state.statement2 === "RENAME COLUMN" && <>{" TO "}<input placeholder="column-name" value={state.newColumnName} onInput={(ev) => useEditorStore.setState({ newColumnName: ev.currentTarget.value })} /></>}
             </>
-
-            let query = `ALTER TABLE ${escapeSQLIdentifier(state.tableName)} ${state.statement2} `
-            switch (state.statement2) {
-                case "RENAME TO": query += escapeSQLIdentifier(state.newTableName); break
-                case "RENAME COLUMN": query += `${escapeSQLIdentifier(state.oldColumnName)} TO ${escapeSQLIdentifier(state.newColumnName)}`; break
-                case "DROP COLUMN": query += escapeSQLIdentifier(state.oldColumnName); break
-                case "ADD COLUMN": query += `${printColumnDef(state.columnDef)}`; break
-            }
+            const query = state.buildQuery()
             editor = <>
                 {state.statement2 === "ADD COLUMN" && <ColumnDefEditor value={state.columnDef} onChange={(columnDef) => useEditorStore.setState({ columnDef })} strict={state.strict} />}
                 <div class="mt-2">
@@ -463,7 +526,7 @@ export const Editor = () => {
                                 state.statement2 === "DROP COLUMN" ? state.oldColumnName === "" :
                                     state.statement2 === "ADD COLUMN" ? state.columnDef.name === "" :
                                         false
-                    } query={query} onClick={() => { state.commit(query, [], { reload: "allTables", selectTable: state.statement2 === "RENAME TO" ? state.newTableName : undefined }).catch(console.error) }} />
+                    } query={query[0]} onClick={() => { state.commit(...query).catch(console.error) }} />
                     <Cancel />
                 </div>
             </>
@@ -476,13 +539,13 @@ export const Editor = () => {
                 <Checkbox checked={state.withoutRowId} onChange={(checked) => useEditorStore.setState({ withoutRowId: checked })} class="ml-[8px]" text="WITHOUT ROWID" />
                 <Checkbox checked={state.strict} onChange={(checked) => useEditorStore.setState({ strict: checked })} text="STRICT" />
             </>
-            const query = `CREATE TABLE ${escapeSQLIdentifier(state.newTableName)} (${state.columnDefs.map(printColumnDef).join(", ")}${state.tableConstraints.trim() !== "" ? (state.tableConstraints.trim().startsWith(",") ? state.tableConstraints : ", " + state.tableConstraints) : ""})${state.strict ? " STRICT" : ""}${state.withoutRowId ? " WITHOUT ROWID" : ""}`
+            const query = state.buildQuery()
             editor = <>
                 <MultiColumnDefEditor value={state.columnDefs} onChange={(columnDefs) => useEditorStore.setState({ columnDefs })} strict={state.strict} />
                 <textarea autocomplete="off" spellcheck={false} class="mt-[10px] h-[20vh]" placeholder={"FOREIGN KEY(column-name) REFERENCES table-name(column-name)"} value={state.tableConstraints} onInput={(ev) => { useEditorStore.setState({ tableConstraints: ev.currentTarget.value }) }}></textarea>
                 <div class="mt-2">
-                    <Commit query={query} disabled={!state.newTableName || state.columnDefs.length === 0} class="mt-[10px] mb-[10px]" onClick={() => {
-                        state.commit(query, [], { reload: "allTables", selectTable: state.newTableName }).catch(console.error)
+                    <Commit query={query[0]} disabled={!state.newTableName || state.columnDefs.length === 0} class="mt-[10px] mb-[10px]" onClick={() => {
+                        state.commit(...query).catch(console.error)
                     }} />
                     <Cancel />
                 </div>
@@ -496,11 +559,10 @@ export const Editor = () => {
                     state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as remote.SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>
-            const columns = state.constraintChoices[state.selectedConstraint]!
-            const query = `DELETE FROM ${escapeSQLIdentifier(state.tableName)} WHERE ${columns.map((column) => `${column} = ?`).join(" AND ")}`
+            const query = state.buildQuery()
             editor = <>
                 <div>
-                    <Commit query={query} onClick={() => { state.commit(query, [...columns.map((column) => state.record[column] as remote.SQLite3Value)], { reload: "currentTable" }).catch(console.error) }} />
+                    <Commit query={query[0]} onClick={() => { state.commit(...query).catch(console.error) }} />
                     <Cancel />
                 </div>
             </>
@@ -511,10 +573,10 @@ export const Editor = () => {
                 <Highlight data-testid="DROP TABLE">DROP TABLE </Highlight>
                 {escapeSQLIdentifier(state.tableName)}
             </>
-            const query = `DROP TABLE ${escapeSQLIdentifier(state.tableName)}`
+            const query = state.buildQuery()
             editor = <>
                 <div>
-                    <Commit query={query} onClick={() => state.commit(query, [], { reload: "allTables" })} />
+                    <Commit query={query[0]} onClick={() => state.commit(...query)} />
                     <Cancel />
                 </div>
             </>
@@ -525,23 +587,20 @@ export const Editor = () => {
                 <Highlight data-testid="DROP VIEW">DROP VIEW </Highlight>
                 {escapeSQLIdentifier(state.tableName)}
             </>
-            const query = `DROP VIEW ${escapeSQLIdentifier(state.tableName)}`
+            const query = state.buildQuery()
             editor = <>
                 <div>
-                    <Commit query={query} onClick={() => state.commit(query, [], { reload: "allTables" })} />
+                    <Commit query={query[0]} onClick={() => state.commit(...query)} />
                     <Cancel />
                 </div>
             </>
             break
         }
         case "INSERT": {
-            const filterDefaults = <T extends unknown>(_: T, i: number) => state.dataTypes[i] !== "default"
-            const query = state.dataTypes.every((d) => d === "default") ?
-                `${escapeSQLIdentifier(state.tableName)} DEFAULT VALUES` :
-                `${escapeSQLIdentifier(state.tableName)} (${state.tableInfo.filter(filterDefaults).map(({ name }) => name).map(escapeSQLIdentifier).join(", ")}) VALUES (${state.tableInfo.filter(filterDefaults).map(() => "?").join(", ")})`
+            const query = state.buildQuery()
             header = <>
                 <Highlight data-testid="INSERT">INSERT INTO </Highlight>
-                {query}
+                {query[0].slice("INSERT INTO ".length)}
             </>
             editor = <>
                 <ul class="list-none">
@@ -564,8 +623,8 @@ export const Editor = () => {
                         </li>
                     })}
                 </ul>
-                <Commit class="mt-2" query={`INSERT INTO ${query}`} onClick={() => {
-                    state.commit(`INSERT INTO ${query}`, state.textareaValues.filter(filterDefaults).map((value, i) => parseTextareaValue(value, state.blobValues[i]!, state.dataTypes[i]!)), { reload: "currentTable", scrollToBottom: true }).catch(console.error)
+                <Commit class="mt-2" query={query[0]} onClick={() => {
+                    state.commit(...query).catch(console.error)
                 }} />
             </>
             break
@@ -577,6 +636,7 @@ export const Editor = () => {
                     state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as remote.SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>
+            const query = state.buildQuery()
             editor = <>
                 <DataEditor
                     column={state.column}
@@ -591,7 +651,10 @@ export const Editor = () => {
                 {"AS "}
                 <DataTypeInput value={state.type} onChange={(type) => { useEditorStore.setState({ type }); mountInput() }} />
                 <div class="mt-2">
-                    <Commit query={state.buildUpdateQuery()[0]} onClick={() => state.commitUpdate(undefined, true)} />
+                    <Commit query={query[0]} onClick={() => {
+                        useEditorStore.setState({ isTextareaDirty: false })  // TODO: can I remove this?
+                        state.commit(...query).catch(console.error)
+                    }} />
                     <Cancel />
                 </div>
             </>
@@ -613,9 +676,9 @@ export const Editor = () => {
                 <label class="mr-[8px]" style={{ color: state.where !== "" ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)" }}>WHERE</label>
                 <input placeholder="expr" value={state.where} onInput={(ev) => useEditorStore.setState({ where: ev.currentTarget.value })}></input>
             </>
-            const query = `CREATE${state.unique ? " UNIQUE" : ""} INDEX ${escapeSQLIdentifier(state.indexName)} ON ${escapeSQLIdentifier(state.tableName)} (${state.indexedColumns})${state.where ? ` WHERE ${state.where}` : ""}`
+            const query = state.buildQuery()
             editor = <>
-                <Commit query={query} onClick={() => state.commit(query, [], { reload: "allTables" }).catch(console.error)} />
+                <Commit query={query[0]} onClick={() => state.commit(...query).catch(console.error)} />
                 <Cancel />
             </>
             break
@@ -625,19 +688,20 @@ export const Editor = () => {
                 <Highlight data-testid="DROP INDEX">DROP INDEX </Highlight>
                 <span class="[color:var(--button-primary-background)]">DROP INDEX</span> {escapeSQLIdentifier(state.indexName)}
             </>
-            const query = `DROP INDEX ${escapeSQLIdentifier(state.indexName)}`
+            const query = state.buildQuery()
             editor = <>
-                <Commit query={query} onClick={() => state.commit(query, [], { reload: "allTables" }).catch(console.error)} />
+                <Commit query={query[0]} onClick={() => state.commit(...query).catch(console.error)} />
                 <Cancel />
             </>
             break
         }
         case "Custom Query": {
             header = <><Highlight data-testid="Custom Query">Custom Query </Highlight></>
+            const query = state.buildQuery()
             editor = <>
                 <textarea autocomplete="off" spellcheck={false} class="mb-2 h-[20vh]" placeholder={"CREATE TABLE table1(column1 INTEGER)"} value={state.query} onInput={(ev) => { useEditorStore.setState({ query: ev.currentTarget.value }) }}></textarea>
                 <div class="mt-2">
-                    <Commit query={state.query} onClick={() => state.commit(state.query, [], { reload: "allTables" })} />
+                    <Commit query={query[0]} onClick={() => state.commit(...query)} />
                     <Cancel />
                 </div>
             </>
