@@ -26,7 +26,13 @@ class LocalPythonClient {
             "--cwd", cwd,
         ])
         this.#p.stderr.on("data", (err: Buffer) => {
-            console.error(err.toString())
+            const errStr = err.toString()
+            if (errStr.includes("Traceback (")) {
+                // Show the error if it looks like a runtime error.
+                vscode.window.showErrorMessage(errStr)
+            } else {
+                console.error(errStr)
+            }
         })
         this.#p.stdout.on("data", (data: Buffer) => {
             const status = +data.toString().trim()
