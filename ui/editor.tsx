@@ -557,7 +557,7 @@ export const Editor = () => {
         case "DELETE": {
             header = <>
                 <Highlight data-testid="DELETE FROM">DELETE FROM </Highlight>
-                {escapeSQLIdentifier(state.tableName)} WHERE <select value={state.selectedConstraint} onInput={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
+                {escapeSQLIdentifier(state.tableName)} WHERE <select class="pl-1" value={state.selectedConstraint} onInput={(ev) => { useEditorStore.setState({ selectedConstraint: +ev.currentTarget.value }) }}>{
                     state.constraintChoices.map((columns, i) => <option value={i}>{columns.map((column) => `${column} = ${unsafeEscapeValue(state.record[column] as remote.SQLite3Value)}`).join(" AND ")}</option>)
                 }</select>
             </>
