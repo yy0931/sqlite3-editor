@@ -131,6 +131,7 @@ const setupTable = async ({ page, tableName, columnNames }: { page: Page, tableN
     /* Input a table name. */await page.getByTestId('CREATE TABLE > table-name').fill(tableName)
     for (const [i, name] of columnNames.entries()) {
         /* Set the name     of the 1st column. */await page.getByTestId(`column ${i + 1}`).getByTestId('column-name').fill(name)
+        // FIXME: wait 
         /* Commit. */await page.getByTestId('body').press('Control+Enter')
     }
     /* Check if the newly created table is active. */await expect(page.getByTestId("table-name")).toHaveValue(tableName)
@@ -152,6 +153,7 @@ test.describe("ALTER TABLE", () => {
         /* Open the ALTER TABLE editor. */await page.getByTestId("alter-table-button").click()
         /* Check if the value of the table-name input is equal to the name of the active table. */await expect(page.getByTestId("alter-table-rename-to-new-table-name")).toHaveValue("alter-table-rename-to")
         /* Input the new table name. */await page.getByTestId("alter-table-rename-to-new-table-name").fill("alter-table-rename-to-renamed")
+        /* Check if the correct sql query is generated. */await expect(page.getByTitle('ALTER TABLE alter-table-rename-to RENAME TO alter-table-rename-to-renamed')).toBeVisible()
         /* Commit. */await page.getByTestId("body").press("Control+Enter")
         /* Check if the table is renamed. */await expect(page.getByTestId("table-name")).toHaveValue("alter-table-rename-to-renamed")
     })
