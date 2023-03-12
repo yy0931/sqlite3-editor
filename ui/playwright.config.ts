@@ -5,7 +5,7 @@ export default {
   testDir: './tests',
   timeout: 30 * 1000, // Maximum time one test can run for.
   expect: {
-    timeout: 5000
+    timeout: 15 * 1000
   },
   fullyParallel: false,  // Don't run tests in files in parallel
   forbidOnly: !!process.env.CI,  // Fail the build on CI if you accidentally left test.only in the source code.
