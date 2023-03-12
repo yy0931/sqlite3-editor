@@ -66,7 +66,7 @@ export const persistentUseState = <T extends unknown>(key: string, defaultValue:
 }
 
 export const Tooltip = (props: { content: string, children: preact.ComponentChildren }) =>
-    <Tippy arrow={false} content={props.content} animation={false} placement={"right"}>{props.children as ReactElement}</Tippy>
+    <Tippy arrow={false} content={props.content} animation={false} placement={"left"}>{props.children as ReactElement}</Tippy>
 
 export const SVGOnlyCheckbox = (props: { icon: string, checked?: boolean, onClick: (checked: boolean) => void, class?: string, title: string, "data-testid"?: string }) => {
     return <Tooltip content={props.title}>
