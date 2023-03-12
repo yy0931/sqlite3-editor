@@ -126,21 +126,6 @@ const App = () => {
         {/* Header `SELECT * FROM ...` */}
         <h2 class="pt-[var(--page-padding)]">
             <div class="mb-2">
-                {/* The buttons placed at the top-right corner */}
-                <div class="mb-2 float-right">
-                    {/* Create Table button */}
-                    <SVGCheckbox icon="#empty-window" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
-                        if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
-                        useEditorStore.getState().createTable(tableName)
-                    }} data-testid="create-table-button">Create Table</SVGCheckbox>
-
-                    {/* Custom Query button */}
-                    <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} class="ml-2" onClick={(checked) => {
-                        if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
-                        useEditorStore.getState().custom(tableName)
-                    }} data-testid="custom-query-button">Custom Query</SVGCheckbox>
-                </div>
-
                 {/* SELECT * FROM ... */}
                 {!useCustomViewerQuery && <>
                     <Highlight>SELECT </Highlight>
@@ -157,7 +142,7 @@ const App = () => {
                 {/* Buttons placed right after the table name */}
                 <span class="ml-1">
                     {/* Schema */}
-                    {!useCustomViewerQuery && <SVGOnlyCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} title="Schema" checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)} data-testid="schema-button"></SVGOnlyCheckbox>}
+                    {!useCustomViewerQuery && <SVGOnlyCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} title="Show Table Schema and Indexes" checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)} data-testid="schema-button"></SVGOnlyCheckbox>}
 
                     {/* Drop Table */}
                     {!useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#trash" title="Drop Table" checked={editorStatement === "DROP TABLE"} onClick={(checked) => {
@@ -177,14 +162,26 @@ const App = () => {
                         useEditorStore.getState().alterTable(tableName, undefined).catch(console.error)
                     }} data-testid="alter-table-button"></SVGOnlyCheckbox>}
 
+                    {/* Create Table button */}
+                    <SVGOnlyCheckbox icon="#empty-window" title="Create Table" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
+                        if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
+                        useEditorStore.getState().createTable(tableName)
+                    }} data-testid="create-table-button"></SVGOnlyCheckbox>
+
                     {/* Create Index */}
                     {!useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#symbol-interface" title="Create Index" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
                         if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
                         useEditorStore.getState().createIndex(tableName)
                     }} data-testid="create-index-button"></SVGOnlyCheckbox>}
 
+                    {/* Custom Query button */}
+                    <SVGOnlyCheckbox icon="#terminal" title="Custom Query" checked={editorStatement === "Custom Query"} onClick={(checked) => {
+                        if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
+                        useEditorStore.getState().custom(tableName)
+                    }} data-testid="custom-query-button"></SVGOnlyCheckbox>
+
                     {/* Find */}
-                    {isTableRendered && !isSettingsViewOpen && <SVGOnlyCheckbox icon="#search" title="Find" checked={isFindWidgetVisible} onClick={(checked) => {
+                    {isTableRendered && !isSettingsViewOpen && <SVGOnlyCheckbox icon="#search" title="Find (Ctrl+f)" checked={isFindWidgetVisible} onClick={(checked) => {
                         useTableStore.getState().setFindWidgetVisibility(checked).catch(console.error)
                     }} data-testid="find-button"></SVGOnlyCheckbox>}
                 </span>
