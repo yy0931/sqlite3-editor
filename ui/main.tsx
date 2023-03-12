@@ -214,6 +214,7 @@ const App = () => {
                 ev.preventDefault()
                 document.body.classList.add("ns-resize")
                 let prev = ev.pageY
+                let visibleAreaSize = useTableStore.getState().paging.visibleAreaSize
                 const onMouseMove = (ev: MouseEvent) => {
                     const trHeight = 18  // TODO: measure the height of a tr
                     let pageSizeDelta = 0n
@@ -225,8 +226,9 @@ const App = () => {
                         pageSizeDelta -= 1n
                         prev -= trHeight
                     }
-                    setPaging({ visibleAreaSize: useTableStore.getState().paging.visibleAreaSize + pageSizeDelta })
-                        .catch(console.error)
+                    if (pageSizeDelta === 0n) { return }
+                    visibleAreaSize += pageSizeDelta
+                    setPaging({ visibleAreaSize }).catch(console.error)
                 }
                 window.addEventListener("mousemove", onMouseMove)
                 window.addEventListener("mouseup", () => {
