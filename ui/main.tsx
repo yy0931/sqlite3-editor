@@ -70,6 +70,7 @@ const App = () => {
     const isTableRendered = useTableStore((s) => s.invalidQuery === null)
     const [isSettingsViewOpen, setIsSettingsViewOpen] = persistentUseState("isSettingsViewOpen", false)
     const confirmDialogRef = useRef<HTMLDialogElement>(null)
+    const tableRef = useRef<HTMLDivElement>(null)
 
     // Show or close the confirmation dialog
     useEffect(() => {
@@ -104,6 +105,17 @@ const App = () => {
 
     // Register keyboard shortcuts
     useEventListener("keydown", onKeydown)
+
+    // Commit changes when the margin on the right side of table is clicked.
+    useEventListener("click", (ev) => {
+        if (!tableRef.current || ev.target !== document.body) { return }
+        const tableRect = tableRef.current.getBoundingClientRect()
+        if (!(tableRect.top <= ev.clientY && ev.clientY < tableRect.bottom)) { return }
+        (async () => {
+            if (!await editor.useEditorStore.getState().beforeUnmount()) { return }
+            await editor.useEditorStore.getState().discardChanges()
+        })().catch(console.error)
+    })
 
     return <>
         {/* @vscode/codicons/dist/codicon.svg, https://github.com/microsoft/vscode-codicons, Attribution 4.0 International */}
@@ -193,7 +205,7 @@ const App = () => {
 
         {/* Table */}
         {!isSettingsViewOpen && <>
-            <div class="relative w-max max-w-full pl-[var(--page-padding)] pr-[var(--page-padding)]">
+            <div ref={tableRef} class="relative w-max max-w-full pl-[var(--page-padding)] pr-[var(--page-padding)]">
                 <Table />
             </div>
 
@@ -236,11 +248,13 @@ const App = () => {
         <editor.Editor />
 
         {/* Confirmation Dialog */}
-        <dialog class="p-4 bg-[#f0f0f0] shadow-2xl mx-auto mt-[10vh]" ref={confirmDialogRef}>
-            <p class="pb-2">Commit changes?</p>
-            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("commit") } }} class="confirm-dialog-commit mr-1" data-testid="dialog > commit">Commit</Button>
-            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("discard changes") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e] mr-1" data-testid="dialog > discard-changes">Discard changes</Button>
-            <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("cancel") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e]" data-testid="dialog > cancel">Cancel</Button>
+        <dialog class="py-4 px-8 bg-[#f0f0f0] shadow-lg mx-auto mt-[10vh]" ref={confirmDialogRef}>
+            <h2 class="pb-2 pl-0 text-center [font-size:120%]">Commit changes to the database?</h2>
+            <div class="float-right">
+                <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("commit") } }} class="confirm-dialog-commit mr-1" data-testid="dialog > commit">Commit</Button>
+                <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("discard changes") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e] mr-1" data-testid="dialog > discard-changes">Discard changes</Button>
+                <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("cancel") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e]" data-testid="dialog > cancel">Cancel</Button>
+            </div>
         </dialog>
     </>
 }
