@@ -326,7 +326,16 @@ export const useEditorStore = createStore("useEditorStore", {
 
     /** Commits changes. */
     const commit = async (query: string, params: readonly remote.SQLite3Value[], opts: OnWriteOptions, preserveEditorState?: true) => {
+        // Prevent loops
+        if (get().statement === "UPDATE") {
+            setPartial({ isTextareaDirty: false })
+        } else {
+            await discardChanges()
+        }
+
+        // Query
         await remote.query(query, params, "w+")
+
         if (opts.reload === "allTables") {
             await useTableStore.getState().reloadAllTables(opts.selectTable)
         } else {
@@ -463,13 +472,6 @@ export const useEditorStore = createStore("useEditorStore", {
 
             // Build a query before discarding changes
             const query = buildQuery()
-
-            // prevent loops
-            if (get().statement === "UPDATE") {
-                setPartial({ isTextareaDirty: false })
-            } else {
-                await discardChanges()
-            }
 
             await commit(...query, keepUpdateEditor)
             return true
