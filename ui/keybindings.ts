@@ -1,4 +1,4 @@
-import * as editor from "./editor"
+import { useEditorStore } from "./editor"
 import { useTableStore } from "./table"
 import { BigintMath } from "./util"
 
@@ -6,7 +6,7 @@ const isInSingleClickState = () => document.querySelector(".single-click") !== n
 
 /** Moves the selection up if delta < 0n, down if delta > 0n. */
 const moveSelectionRow = async (delta: bigint) => {
-    const state = editor.useEditorStore.getState()
+    const state = useEditorStore.getState()
     if (state.statement !== "UPDATE") { return }
     const { paging, setPaging } = useTableStore.getState()
     let newRelativeRow = BigInt(state.row) + delta
@@ -33,7 +33,7 @@ const moveSelectionRow = async (delta: bigint) => {
 
 /** Moves the selection left if delta < 0, right if delta > 0. */
 const moveSelectionColumn = (delta: number) => {
-    const state = editor.useEditorStore.getState()
+    const state = useEditorStore.getState()
     if (state.statement !== "UPDATE") { return }
     const { tableInfo } = useTableStore.getState()
     const columnIndex = Math.max(0, Math.min(tableInfo.length - 1, tableInfo.findIndex(({ name }) => name === state.column) + delta))
@@ -61,7 +61,7 @@ export const onKeydown = async (ev: KeyboardEvent) => {
         return
     }
     try {
-        const state = editor.useEditorStore.getState()
+        const state = useEditorStore.getState()
 
         const singleClick = isInSingleClickState()
         /** True when a textarea, button, input, select, option, or label is active. */
@@ -143,25 +143,25 @@ export const onKeydown = async (ev: KeyboardEvent) => {
             document.querySelector(".single-click")!.classList.remove("single-click")
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && !singleClick && key("Enter")) {
             p()
-            if (!await editor.useEditorStore.getState().beforeUnmount(true)) { return }
+            if (!await useEditorStore.getState().beforeUnmount(true)) { return }
             await moveSelectionRow(1n)
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && !singleClick && key("Shift + Enter")) {
             p()
-            if (!await editor.useEditorStore.getState().beforeUnmount(true)) { return }
+            if (!await useEditorStore.getState().beforeUnmount(true)) { return }
             await moveSelectionRow(-1n)
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && singleClick && key("Tab")) {
             p()
             moveSelectionColumn(1)
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && !singleClick && key("Tab")) {
             p()
-            if (!await editor.useEditorStore.getState().beforeUnmount(true)) { return }
+            if (!await useEditorStore.getState().beforeUnmount(true)) { return }
             moveSelectionColumn(1)
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && singleClick && key("Shift + Tab")) {
             p()
             moveSelectionColumn(-1)
         } else if ((!inputFocus || cellInputFocus) && state.statement === "UPDATE" && !singleClick && key("Shift + Tab")) {
             p()
-            if (!await editor.useEditorStore.getState().beforeUnmount(true)) { return }
+            if (!await useEditorStore.getState().beforeUnmount(true)) { return }
             moveSelectionColumn(-1)
         } else if (!inputFocus && state.statement === "DELETE" && key("Escape")) {
             p()

@@ -2,7 +2,7 @@ import { enableMapSet } from "immer"
 enableMapSet()
 
 import { render } from "preact"
-import * as editor from "./editor"
+import { Editor, useEditorStore } from "./editor"
 import { useEffect, useRef } from "preact/hooks"
 import * as remote from "./remote"
 import { Button, Highlight, persistentUseState, Select, SVGCheckbox, SVGOnlyCheckbox } from "./components"
@@ -66,7 +66,7 @@ const App = () => {
     const customViewerQuery = useTableStore((s) => s.customViewerQuery)
     const tableName = useTableStore((s) => s.tableName)
     const tableType = useTableStore((s) => s.tableList.find(({ name }) => name === tableName)?.type)
-    const editorStatement = editor.useEditorStore((s) => s.statement)
+    const editorStatement = useEditorStore((s) => s.statement)
     const isTableRendered = useTableStore((s) => s.invalidQuery === null)
     const [isSettingsViewOpen, setIsSettingsViewOpen] = persistentUseState("isSettingsViewOpen", false)
     const confirmDialogRef = useRef<HTMLDialogElement>(null)
@@ -112,8 +112,8 @@ const App = () => {
         const tableRect = tableRef.current.getBoundingClientRect()
         if (!(tableRect.top <= ev.clientY && ev.clientY < tableRect.bottom)) { return }
         (async () => {
-            if (!await editor.useEditorStore.getState().beforeUnmount()) { return }
-            await editor.useEditorStore.getState().discardChanges()
+            if (!await useEditorStore.getState().beforeUnmount()) { return }
+            await useEditorStore.getState().discardChanges()
         })().catch(console.error)
     })
 
@@ -130,14 +130,14 @@ const App = () => {
                 <div class="mb-2 float-right">
                     {/* Create Table button */}
                     <SVGCheckbox icon="#empty-window" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
-                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                        editor.useEditorStore.getState().createTable(tableName)
+                        if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
+                        useEditorStore.getState().createTable(tableName)
                     }} data-testid="create-table-button">Create Table</SVGCheckbox>
 
                     {/* Custom Query button */}
                     <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} class="ml-2" onClick={(checked) => {
-                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                        editor.useEditorStore.getState().custom(tableName)
+                        if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
+                        useEditorStore.getState().custom(tableName)
                     }} data-testid="custom-query-button">Custom Query</SVGCheckbox>
                 </div>
 
@@ -161,26 +161,26 @@ const App = () => {
 
                     {/* Drop Table */}
                     {!useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#trash" title="Drop Table" checked={editorStatement === "DROP TABLE"} onClick={(checked) => {
-                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                        editor.useEditorStore.getState().dropTable(tableName)
+                        if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
+                        useEditorStore.getState().dropTable(tableName)
                     }} data-testid="drop-table-button"></SVGOnlyCheckbox>}
 
                     {/* Drop View */}
                     {!useCustomViewerQuery && tableName && tableType === "view" && <SVGOnlyCheckbox icon="#trash" title="Drop View" checked={editorStatement === "DROP VIEW"} onClick={(checked) => {
-                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                        editor.useEditorStore.getState().dropView(tableName)
+                        if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
+                        useEditorStore.getState().dropView(tableName)
                     }} data-testid="drop-view-button"></SVGOnlyCheckbox>}
 
                     {/* Alter Table */}
                     {!useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#edit" title="Alter Table" checked={editorStatement === "ALTER TABLE"} onClick={(checked) => {
-                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                        editor.useEditorStore.getState().alterTable(tableName, undefined).catch(console.error)
+                        if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
+                        useEditorStore.getState().alterTable(tableName, undefined).catch(console.error)
                     }} data-testid="alter-table-button"></SVGOnlyCheckbox>}
 
                     {/* Create Index */}
                     {!useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#symbol-interface" title="Create Index" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
-                        if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
-                        editor.useEditorStore.getState().createIndex(tableName)
+                        if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
+                        useEditorStore.getState().createIndex(tableName)
                     }} data-testid="create-index-button"></SVGOnlyCheckbox>}
 
                     {/* Find */}
@@ -247,7 +247,7 @@ const App = () => {
         </p>}
 
         {/* Editor */}
-        <editor.Editor />
+        <Editor />
 
         {/* Confirmation Dialog */}
         <dialog class="py-4 px-8 bg-[#f0f0f0] shadow-lg mx-auto mt-[10vh]" ref={confirmDialogRef}>
@@ -276,7 +276,7 @@ const App = () => {
         const restored = remote.getState<number>("visibleAreaSize")
         await useTableStore.getState().setPaging({ visibleAreaSize: restored === undefined ? undefined : BigInt(restored) })
     }
-    await editor.useEditorStore.getState().switchTable(tableName)
+    await useEditorStore.getState().switchTable(tableName)
     render(<App />, document.body)
 })().catch((err) => {
     console.error(err)
