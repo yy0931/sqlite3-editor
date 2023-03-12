@@ -653,10 +653,7 @@ export const Editor = () => {
                 {"AS "}
                 <DataTypeInput value={state.type} onChange={(type) => { useEditorStore.setState({ type }); mountInput() }} />
                 <div class="mt-2">
-                    <Commit query={query[0]} onClick={() => {
-                        useEditorStore.setState({ isTextareaDirty: false })  // TODO: can I remove this?
-                        state.commit(...query).catch(console.error)
-                    }} />
+                    <Commit query={query[0]} onClick={() => { state.commit(...query).catch(console.error) }} />
                     <Cancel />
                 </div>
             </>

@@ -150,7 +150,6 @@ export const activate = (context: vscode.ExtensionContext) => {
                                 .then(() => { res.send(packr.pack(null)) }, (err) => { res.status(400).send((err as Error).message) })
                             break
                         } case "/downloadState": {
-                            // TODO: return only this extension's state?
                             res.send(packr.pack(Object.fromEntries(context.workspaceState.keys().map((key) => [key, context.workspaceState.get(key)]))))
                             break
                         } default:
