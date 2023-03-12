@@ -68,19 +68,21 @@ export const persistentUseState = <T extends unknown>(key: string, defaultValue:
 export const Tooltip = (props: { content: string, children: preact.ComponentChildren }) =>
     <Tippy arrow={false} content={props.content} animation={false} placement={"right"}>{props.children as ReactElement}</Tippy>
 
-export const SVGOnlyCheckbox = (props: { icon: string, checked?: boolean, onClick: (checked: boolean) => void, class?: string, title: string }) => {
+export const SVGOnlyCheckbox = (props: { icon: string, checked?: boolean, onClick: (checked: boolean) => void, class?: string, title: string, "data-testid"?: string }) => {
     return <Tooltip content={props.title}>
         <span class={"align-middle hover:bg-gray-300 active:bg-inherit select-none px-1 [border-radius:1px] inline-block cursor-pointer " + (props.class ?? "")}
-            onClick={() => props.onClick(!props.checked)}>
+            onClick={() => props.onClick(!props.checked)}
+            data-testid={props["data-testid"]}>
             <svg class="inline w-[1em] h-[1em]"><use xlinkHref={props.icon} /></svg>
         </span>
     </Tooltip>
 }
 
-export const SVGCheckbox = (props: { icon: string, tabIndex?: number, checked?: boolean, onClick: (checked: boolean) => void, class?: string, title?: string, children?: preact.ComponentChildren }) => {
+export const SVGCheckbox = (props: { icon: string, tabIndex?: number, checked?: boolean, onClick: (checked: boolean) => void, class?: string, title?: string, children?: preact.ComponentChildren, "data-testid"?: string }) => {
     return <span tabIndex={props.tabIndex} class={"align-middle hover:bg-gray-300 active:bg-inherit select-none pl-2 pr-2 [border-radius:1px] inline-block cursor-pointer " + (props.class ?? "")}
         title={props.title}
-        onClick={() => props.onClick(!props.checked)}>
+        onClick={() => props.onClick(!props.checked)}
+        data-testid={props["data-testid"]}>
         <svg class="inline w-[1em] h-[1em]"><use xlinkHref={props.icon} /></svg>
         <span class="ml-1">{props.children}</span>
     </span>

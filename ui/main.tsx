@@ -120,13 +120,13 @@ const App = () => {
                     <SVGCheckbox icon="#empty-window" checked={editorStatement === "CREATE TABLE"} onClick={(checked) => {
                         if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                         editor.useEditorStore.getState().createTable(tableName)
-                    }}>Create Table</SVGCheckbox>
+                    }} data-testid="create-table-button">Create Table</SVGCheckbox>
 
                     {/* Custom Query button */}
                     <SVGCheckbox icon="#terminal" checked={editorStatement === "Custom Query"} class="ml-2" onClick={(checked) => {
                         if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                         editor.useEditorStore.getState().custom(tableName)
-                    }}>Custom Query</SVGCheckbox>
+                    }} data-testid="custom-query-button">Custom Query</SVGCheckbox>
                 </div>
 
                 {/* SELECT * FROM ... */}
@@ -145,36 +145,36 @@ const App = () => {
                 {/* Buttons placed right after the table name */}
                 <span class="ml-1">
                     {/* Schema */}
-                    {!useCustomViewerQuery && <SVGOnlyCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} title="Schema" checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)}></SVGOnlyCheckbox>}
+                    {!useCustomViewerQuery && <SVGOnlyCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} title="Schema" checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)} data-testid="schema-button"></SVGOnlyCheckbox>}
 
                     {/* Drop Table */}
                     {!useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#trash" title="Drop Table" checked={editorStatement === "DROP TABLE"} onClick={(checked) => {
                         if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                         editor.useEditorStore.getState().dropTable(tableName)
-                    }}></SVGOnlyCheckbox>}
+                    }} data-testid="drop-table-button"></SVGOnlyCheckbox>}
 
                     {/* Drop View */}
                     {!useCustomViewerQuery && tableName && tableType === "view" && <SVGOnlyCheckbox icon="#trash" title="Drop View" checked={editorStatement === "DROP VIEW"} onClick={(checked) => {
                         if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                         editor.useEditorStore.getState().dropView(tableName)
-                    }}></SVGOnlyCheckbox>}
+                    }} data-testid="drop-view-button"></SVGOnlyCheckbox>}
 
                     {/* Alter Table */}
                     {!useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#edit" title="Alter Table" checked={editorStatement === "ALTER TABLE"} onClick={(checked) => {
                         if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                         editor.useEditorStore.getState().alterTable(tableName, undefined).catch(console.error)
-                    }}></SVGOnlyCheckbox>}
+                    }} data-testid="alter-table-button"></SVGOnlyCheckbox>}
 
                     {/* Create Index */}
                     {!useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#symbol-interface" title="Create Index" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
                         if (!checked) { editor.useEditorStore.getState().cancel().catch(console.error); return }
                         editor.useEditorStore.getState().createIndex(tableName)
-                    }}></SVGOnlyCheckbox>}
+                    }} data-testid="create-index-button"></SVGOnlyCheckbox>}
 
                     {/* Find */}
                     {isTableRendered && !isSettingsViewOpen && <SVGOnlyCheckbox icon="#search" title="Find" checked={isFindWidgetVisible} onClick={(checked) => {
                         useTableStore.getState().setFindWidgetVisibility(checked).catch(console.error)
-                    }}></SVGOnlyCheckbox>}
+                    }} data-testid="find-button"></SVGOnlyCheckbox>}
                 </span>
 
                 {/* The checkbox to toggle the custom query mode */}
