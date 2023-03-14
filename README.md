@@ -36,6 +36,7 @@ This extension lets you edit [SQLite 3](https://www.sqlite.org/index.html) files
   - [Common Table Expression (CTE) Support](#common-table-expression-cte-support)
 - Database Management
   - [Creating a Database](#creating-a-database)
+  - [Diff Editor](#diff-editor)
   - [File Associations](#file-associations)
   - [Links to Tables or Queries](#links-to-tables-or-queries)
   - [CSV/JSON/SQL Import/Export](#csvjsonsql-importexport)
