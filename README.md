@@ -102,7 +102,7 @@ You can switch between tables by clicking a table name in either the editor or t
 
 ![](https://raw.githubusercontent.com/yy0931/sqlite3-editor/main/switch-table-2.gif)
 
-When the `sqlite3-editor.nativeTableSelector` configuration option is set to true, the quick pick widget will be displayed instead of a drop-down menu. It is faster to render many tables, but it may be less intuitive to use.
+When the `sqlite3-editor.nativeTableSelector` configuration option is set to true, the [quick pick](https://code.visualstudio.com/api/ux-guidelines/quick-picks) widget will be displayed instead of a drop-down menu. It is faster to render many tables, but it may be less intuitive to use.
 
 ![](https://raw.githubusercontent.com/yy0931/sqlite3-editor/main/switch-table-1.gif)
 
@@ -265,9 +265,9 @@ For example, to load the `crypto` module in sqlean, download and extract a relea
 ```
 
 ## sqlite3-editor.nativeTableSelector
-The drop-down in the top left corner, used to select a table, has performance problems when the number of tables is large (> 1000). To address this issue, this extension displays a notification to recommend enabling this configuration for handling large numbers of tables.
+The drop-down in the top left corner, used to select a table, has performance problems when the number of tables is large (> 1000). To address this issue, this extension displays a notification to recommend enabling this configuration when a large database is opened.
 
-When this configuration set to true, mouse clicks on a table name in the top left corner will open a VSCode's quick pick widget instead of the drop-down menu. This configuration provides faster rendering, but it may be less intuitive to use.
+When this configuration set to true, mouse clicks on a table name in the top left corner will open a [VSCode's quick pick](https://code.visualstudio.com/api/ux-guidelines/quick-picks) widget instead of the drop-down menu. This configuration provides faster rendering, but it may be less intuitive to use.
 
 # Monitoring and Reporting
 ## Error Reporting
