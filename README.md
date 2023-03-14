@@ -135,7 +135,7 @@ To display the differences between the two versions, click the "Compare database
 ![](https://raw.githubusercontent.com/yy0931/sqlite3-editor/main/diff.gif)
 
 ## Full 64-bit integer support
-This extension is capable of processing 64-bit integers without any loss of information, which is not straightforward in JavaScript, the language used to implement the UI, as its number type only supports 53-bit integers. To prevent any rounding of large integers, such as occurs in [SQLite Viewer](https://github.com/qwtel/sqlite-viewer-vscode) ([relevant issue](https://github.com/qwtel/sqlite-viewer-vscode/issues/24)), we store all integer values as [bigints](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt).
+This extension is capable of processing 64-bit integers without any loss of information, which is not straightforward in JavaScript, the language used to implement the UI, as its number type only supports 53-bit integers. To prevent any rounding of large integers, we store all integer values as [bigints](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt).
 
 ![](https://raw.githubusercontent.com/yy0931/sqlite3-editor/main/i64.png)
 
