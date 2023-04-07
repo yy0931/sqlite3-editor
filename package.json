@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "//": "We do not include vscode/ in npm workspaces because vsce does not support it. We use concurrently instead of npm -ws because it has nicer output.",
     "start": "concurrently \"cd ui && npm run _start\" \"cd node-http && npm start\"",
     "test": "rm -f node-http/_test.db && concurrently --names \"ui,server,test\" --success \"command-test\" --kill-others \"cd ui && npm run _start\" \"cd node-http && DB_PATH=_test.db npm start\" \"cd ui && npm run _test\"",
     "test:debug": "rm -f node-http/_test.db && concurrently --names \"ui,server,test\" --success \"command-test\" --kill-others \"cd ui && npm run _start\" \"cd node-http && DB_PATH=_test.db npm start\" \"cd ui && npm run _test:debug\"",
@@ -12,6 +13,10 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
+  "workspaces": [
+    "ui",
+    "node-http"
+  ],
   "devDependencies": {
     "concurrently": "^7.6.0"
   }
