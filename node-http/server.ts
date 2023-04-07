@@ -25,8 +25,8 @@ const find_widget_regexp = (text: string, pattern: string, wholeWord: 0n | 1n, c
         throw err
     }
 }
-readonlyConnection.function("find_widget_regexp", { deterministic: true, varargs: false, safeIntegers: true }, find_widget_regexp)
-readWriteConnection.function("find_widget_regexp", { deterministic: true, varargs: false, safeIntegers: true }, find_widget_regexp)
+readonlyConnection.function("find_widget_regexp", { deterministic: true, varargs: false, safeIntegers: true }, find_widget_regexp as any)
+readWriteConnection.function("find_widget_regexp", { deterministic: true, varargs: false, safeIntegers: true }, find_widget_regexp as any)
 
 const state: Record<string, unknown> = {}
 
