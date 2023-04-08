@@ -1,4 +1,4 @@
-import { useRef, useMemo, useLayoutEffect, useCallback, useState, useEffect } from "preact/hooks"
+import { useRef, useMemo, useCallback, useState, useEffect } from "preact/hooks"
 import * as remote from "./remote"
 import { useEditorStore } from "./editor"
 import produce from "immer"
