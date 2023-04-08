@@ -25,10 +25,13 @@ class LocalPythonClient {
             "--response-body-filepath", this.#responseBody,
             "--cwd", cwd,
         ])
+        this.#p.on("error", (err) => {
+            vscode.window.showErrorMessage(err.message)
+        })
         this.#p.stderr.on("data", (err: Buffer) => {
             const errStr = err.toString()
             if (errStr.includes("Traceback (")) {
-                // Show the error if it looks like a runtime error.
+                // Show the error if it is a runtime error.
                 vscode.window.showErrorMessage(errStr)
             } else {
                 console.error(errStr)
