@@ -750,7 +750,6 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
         if (props.type !== "string") { return }
         const observer = new ResizeObserver((a) => {
             if (!textarea || !textarea.style.height) { return }
-            console.log(props.column, textarea.style.height)
             editorHeight.set(props.column, textarea.style.height)
         })
         observer.observe(textarea)
