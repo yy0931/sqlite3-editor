@@ -106,15 +106,14 @@ const App = () => {
     // Register keyboard shortcuts
     useEventListener("keydown", onKeydown)
 
-    // Commit changes when the margin on the right side of table is clicked.
-    useEventListener("click", (ev) => {
+    // Commit changes in the UPDATE editor when the margin on the right side of table is clicked.
+    useEventListener("click", async (ev) => {
+        if (useEditorStore.getState().statement !== "UPDATE") { return }
         if (!tableRef.current || ev.target !== document.body) { return }
         const tableRect = tableRef.current.getBoundingClientRect()
         if (!(tableRect.top <= ev.clientY && ev.clientY < tableRect.bottom)) { return }
-        (async () => {
-            if (!await useEditorStore.getState().beforeUnmount()) { return }
-            await useEditorStore.getState().discardChanges()
-        })().catch(console.error)
+        if (!await useEditorStore.getState().beforeUnmount()) { return }
+        await useEditorStore.getState().discardChanges()
     })
 
     return <>
