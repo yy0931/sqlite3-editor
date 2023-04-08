@@ -127,7 +127,7 @@ export const useTableStore = createStore("useTableStore", {
             }
 
             // Query the database
-            const records = (await remote.query(`SELECT${hasRowId ? " rowid AS rowid," : ""} * FROM ${subquery}${findWidgetQuery} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.visibleAreaSize, state.paging.visibleAreaTop], "r", { withoutLogging: true })).records
+            const records = (await remote.query(`SELECT${hasRowId ? " rowid AS rowid," : ""} * FROM ${subquery}${findWidgetQuery}${hasRowId ? " ORDER BY rowid" : ""} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.visibleAreaSize, state.paging.visibleAreaTop], "r", { withoutLogging: true })).records
 
             // Update the store
             if (!reloadSchema) {
