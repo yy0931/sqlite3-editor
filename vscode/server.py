@@ -17,7 +17,7 @@ def find_widget_regexp(text: str, pattern: str, whole_word: int, case_sensitive:
 
 
 class Server:
-    def __init__(self, database_filepath, request_body_filepath, response_body_filepath, cwd):
+    def __init__(self, database_filepath: str, request_body_filepath: str, response_body_filepath: str, cwd: str):
         self.readonly_connection = sqlite3.connect("file:" + urllib.parse.quote(database_filepath) + "?mode=ro", uri=True)
         self.readwrite_connection = sqlite3.connect(database_filepath)
 
