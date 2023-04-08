@@ -1,3 +1,5 @@
+// https://gist.github.com/yy0931/9e5fe637b861e1c669be24fdb3f6da58
+
 class ScrollbarEvent extends Event {
     constructor(type: string, public delta: number) { super(type) }
 }
