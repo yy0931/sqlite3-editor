@@ -271,7 +271,9 @@ const App = () => {
     await useTableStore.getState().setViewerQuery({ tableName })
     {
         const restored = remote.getState<number>("visibleAreaSize")
-        await useTableStore.getState().setPaging({ visibleAreaSize: restored === undefined ? undefined : BigInt(restored) })
+        if (restored !== undefined) {
+            await useTableStore.getState().setPaging({ visibleAreaSize: BigInt(restored) })
+        }
     }
     await useEditorStore.getState().switchTable(tableName)
     render(<App />, document.body)
