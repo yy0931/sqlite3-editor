@@ -672,7 +672,7 @@ export const Editor = () => {
                 {" ("}
                 <input placeholder="column1, column2" value={state.indexedColumns} onInput={(ev) => useEditorStore.setState({ indexedColumns: ev.currentTarget.value })}></input>
                 {") "}
-                <label class="mr-[8px]" style={{ color: state.where !== "" ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)" }}>WHERE</label>
+                <label class={"mr-[8px] " + (state.where !== "" ? "" : "opacity-40")}>WHERE</label>
                 <input placeholder="expr" value={state.where} onInput={(ev) => useEditorStore.setState({ where: ev.currentTarget.value })}></input>
             </>
             const query = state.buildQuery()
@@ -788,11 +788,10 @@ const DataEditor = (props: { column: string, rows?: number, style?: JSXInternal.
         spellcheck={false}
         style={{
             color: type2color(props.type),
-            resize: props.type === "string" ? "vertical" : "none",
             ...props.type === "string" ? { height: editorHeight.get(props.column) ?? "" } : { height: "" },
             ...props.style,
         }}
-        class={`data-editor-${props.type} ` + (props.class ?? "")}
+        class={`data-editor-${props.type} ${props.type === "string" ? "resize-y" : "resize-none"} ` + (props.class ?? "")}
         value={props.type === "null" || props.type === "default" ? "" : props.textareaValue}
         onInput={(ev) => {
             if (props.type === "null" || props.type === "default") {
@@ -862,7 +861,7 @@ const ColumnDefEditor = (props: { columnNameOnly?: boolean, value: ColumnDef, on
             <Checkbox tabIndex={-1} checked={props.value.autoIncrement} onChange={(checked) => props.onChange({ ...props.value, autoIncrement: checked })} text="AUTOINCREMENT" />
             <Checkbox tabIndex={-1} checked={props.value.unique} onChange={(checked) => props.onChange({ ...props.value, unique: checked })} text="UNIQUE" />
             <Checkbox tabIndex={-1} checked={props.value.notNull} onChange={(checked) => props.onChange({ ...props.value, notNull: checked })} text="NOT NULL" />
-            <label class="mr-[8px]" style={{ color: props.value.default ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)" }}>DEFAULT</label><input placeholder="CURRENT_TIMESTAMP" value={props.value.default} onChange={(el) => props.onChange({ ...props.value, default: el.currentTarget.value })} />
+            <label class={`mr-[8px] ${props.value.default ? "" : "opacity-40"}`}>DEFAULT</label><input placeholder="CURRENT_TIMESTAMP" value={props.value.default} onChange={(el) => props.onChange({ ...props.value, default: el.currentTarget.value })} />
         </>}
     </>
 }

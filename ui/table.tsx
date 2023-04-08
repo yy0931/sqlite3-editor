@@ -325,9 +325,9 @@ export const Table = () => {
     return <>
         <div class="max-w-full overflow-x-auto w-max">
             {/* Table */}
-            <table ref={tableRef} class="viewer w-max border-collapse table-fixed bg-white" style={{ paddingRight: scrollbarWidth, boxShadow: "0 0 0px 2px #000000ad" }} data-testid="viewer-table">
+            <table ref={tableRef} class="viewer w-max border-collapse table-fixed bg-white [box-shadow:0_0_0px_2px_#000000ad]" style={{ paddingRight: scrollbarWidth }} data-testid="viewer-table">
                 {/* Table Header */}
-                <thead class="text-black bg-[var(--gutter-color)]" style={{ outline: "rgb(181, 181, 181) 1px solid" }}>
+                <thead class="text-black bg-[var(--gutter-color)] [outline:rgb(181,181,181)_1px_solid]">
                     <tr>
                         <th class="font-normal select-none pt-[3px] pb-[3px] pl-[1em] pr-[1em]"></th>
                         {tableInfo.map(({ name, notnull, pk, type, dflt_value }, i) => <th
@@ -435,17 +435,17 @@ const FindWidget = () => {
         <input id="findWidget" ref={ref} class="mr-1" placeholder="Find" value={value} onChange={(ev) => setFindWidgetState({ value: ev.currentTarget.value })} />
 
         {/* Match Case button */}
-        <Tooltip content="Match Case" ><span class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={caseSensitive ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
+        <Tooltip content="Match Case" ><span class={"[font-size:130%] align-middle select-none p-[2px] [border-radius:1px] inline-block cursor-pointer " + (caseSensitive ? "bg-[rgba(66,159,202,0.384)] text-black" : "text-gray-600 hover:bg-gray-300")} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#case-sensitive" /></svg>
         </span></Tooltip>
 
         {/* Match Whole Word button */}
-        <Tooltip content="Match Whole Word"><span class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={wholeWord ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ wholeWord: !wholeWord })}>
+        <Tooltip content="Match Whole Word"><span class={"[font-size:130%] align-middle select-none p-[2px] [border-radius:1px] inline-block cursor-pointer " + (wholeWord ? "bg-[rgba(66,159,202,0.384)] text-black" : "text-gray-600 hover:bg-gray-300")} onClick={() => setFindWidgetState({ wholeWord: !wholeWord })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#whole-word" /></svg>
         </span></Tooltip>
 
         {/* Use Regular Expression button */}
-        <Tooltip content="Use Regular Expression"><span class="[font-size:130%] align-middle text-gray-600 hover:bg-gray-300 select-none p-[2px] [border-radius:1px] inline-block cursor-pointer" style={regex ? { background: "rgba(66, 159, 202, 0.384)", color: "black" } : {}} onClick={() => setFindWidgetState({ regex: !regex })}>
+        <Tooltip content="Use Regular Expression"><span class={"[font-size:130%] align-middle select-none p-[2px] [border-radius:1px] inline-block cursor-pointer " + (regex ? "bg-[rgba(66,159,202,0.384)] text-black" : "text-gray-600 hover:bg-gray-300")} onClick={() => setFindWidgetState({ regex: !regex })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#regex" /></svg>
         </span></Tooltip>
     </div>
@@ -469,8 +469,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
     return useMemo(() => <tr class={props.selected ? "editing" : ""}>
         {/* Row number */}
         <td
-            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none " + (tableName !== undefined ? "clickable" : "")}
-            style={{ borderRight: "1px solid var(--td-border-color)" }}
+            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none [border-right:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
             onMouseDown={(ev) => {
                 ev.preventDefault();
                 (async () => {
@@ -486,8 +485,8 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
             return <td
-                class={"pl-[10px] pr-[10px] overflow-hidden " + (tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
-                style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
+                class={"pl-[10px] pr-[10px] overflow-hidden [border-right:1px_solid_var(--td-border-color)] [border-bottom:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
+                style={{ maxWidth: props.columnWidths[i] }}
                 onMouseDown={(ev) => {
                     if (ev.target instanceof HTMLTextAreaElement) { return }  // in-place input
                     ev.preventDefault();
@@ -529,8 +528,7 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
     return <tr>
         {/* Row number */}
         <td
-            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-center text-black select-none " + (tableName !== undefined && props.row === 0 ? "clickable" : "")}
-            style={{ borderRight: "1px solid var(--td-border-color)" }}
+            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-center text-black select-none [border-right:1px_solid_var(--td-border-color)] " + (tableName !== undefined && props.row === 0 ? "clickable" : "")}
             onMouseDown={(ev) => {
                 ev.preventDefault();
                 if (props.row !== 0) { return }
@@ -552,8 +550,8 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
         {/* Cells */}
         {tableInfo.map(({ }, i) => {
             return <td
-                class={"pl-[10px] pr-[10px] overflow-hidden " + (tableName !== undefined ? "clickable" : "")}
-                style={{ borderRight: "1px solid var(--td-border-color)", maxWidth: props.columnWidths[i], borderBottom: "1px solid var(--td-border-color)" }}
+                class={"pl-[10px] pr-[10px] overflow-hidden [border-right:1px_solid_var(--td-border-color)] [border-bottom:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
+                style={{ maxWidth: props.columnWidths[i] }}
                 onMouseDown={(ev) => {
                     ev.preventDefault()
                     openInsertEditor().then(() => {

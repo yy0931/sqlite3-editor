@@ -89,7 +89,7 @@ export const SVGCheckbox = (props: { icon: string, tabIndex?: number, checked?: 
 }
 
 export const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: boolean, onChange: (value: boolean) => void, text: string, tabIndex?: number, class?: string }) =>
-    <label class={"select-none mr-2 cursor-pointer " + (props.class ?? "")} tabIndex={props.tabIndex ?? 0} style={{ borderBottom: "1px solid gray", color: props.checked ? "rgba(0, 0, 0)" : "rgba(0, 0, 0, 0.4)", ...props.style }} onClick={() => props.onChange(!props.checked)} onKeyDown={(ev) => { if (["Enter", "Space"].includes(ev.code)) { props.onChange(!props.checked) } }}>
+    <label class={"select-none mr-2 cursor-pointer [border-bottom:1px_solid_gray] " + (props.checked ? "text-black " : "[color:rgba(0,0,0,0.4)] ") + (props.class ?? "")} tabIndex={props.tabIndex ?? 0} style={props.style} onClick={() => props.onChange(!props.checked)} onKeyDown={(ev) => { if (["Enter", "Space"].includes(ev.code)) { props.onChange(!props.checked) } }}>
         {props.text}
     </label>
 
