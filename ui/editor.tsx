@@ -174,12 +174,12 @@ export const useEditorStore = createStore("useEditorStore", {
     const set = (state: State) => { setPartial(state) }
 
     /** Switches the editor to the ALTER TABLE editor. */
-    const alterTable = async (tableName: string, column: string | undefined) => {
+    const alterTable = async (tableName: string, column: string | undefined, statement2?: "RENAME TO" | "RENAME COLUMN" | "ADD COLUMN" | "DROP COLUMN") => {
         unmountInput?.()
         set({
             statement: "ALTER TABLE",
             tableName,
-            statement2: column ? "RENAME COLUMN" : "RENAME TO",
+            statement2: statement2 ?? (column ? "RENAME COLUMN" : "RENAME TO"),
             oldColumnName: column ?? "",
             columnDef: { name: "", affinity: "TEXT", autoIncrement: false, notNull: false, primary: false, unique: false, default: "" },
             newColumnName: column ?? "",

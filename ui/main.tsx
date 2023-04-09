@@ -1,18 +1,19 @@
-import { enableMapSet } from "immer"
+import produce, { enableMapSet } from "immer"
 enableMapSet()
 
 import { render } from "preact"
 import { Editor, useEditorStore } from "./editor"
 import { useEffect, useRef } from "preact/hooks"
 import * as remote from "./remote"
-import { Button, Highlight, persistentUseState, Select, SVGOnlyCheckbox } from "./components"
+import { Button, Checkbox, Highlight, persistentUseState, Select, SVGOnlyCheckbox } from "./components"
 import { Table, useTableStore } from "./table"
 import "./scrollbar"
 import { SettingsView } from "./schema_view"
 import { onKeydown } from "./keybindings"
-import { useEventListener, useInterval } from "usehooks-ts"
 // @ts-ignore
 import codiconTxt from "./codicon.txt?raw"
+import { useBoolean, useEventListener, useInterval } from "usehooks-ts"
+import type { JSXInternal } from "preact/src/jsx"
 
 export type VSCodeAPI = {
     postMessage(data: unknown): void
@@ -66,11 +67,13 @@ const App = () => {
     const customViewerQuery = useTableStore((s) => s.customViewerQuery)
     const tableName = useTableStore((s) => s.tableName)
     const tableType = useTableStore((s) => s.tableList.find(({ name }) => name === tableName)?.type)
-    const editorStatement = useEditorStore((s) => s.statement)
     const isTableRendered = useTableStore((s) => s.invalidQuery === null)
+    const visibleColumnsSQL = useTableStore((s) => s.getVisibleColumnsSQL())
+    const editorStatement = useEditorStore((s) => s.statement)
     const [isSettingsViewOpen, setIsSettingsViewOpen] = persistentUseState("isSettingsViewOpen", false)
     const confirmDialogRef = useRef<HTMLDialogElement>(null)
     const tableRef = useRef<HTMLDivElement>(null)
+    const columnSelectDialogRef = useRef<HTMLDialogElement>(null)
 
     // Show or close the confirmation dialog
     useEffect(() => {
@@ -116,6 +119,13 @@ const App = () => {
         await useEditorStore.getState().discardChanges()
     })
 
+    const closeOnClickOutside = (ev: JSXInternal.TargetedMouseEvent<HTMLDialogElement>) => {
+        const rect = ev.currentTarget.getBoundingClientRect()
+        if (rect.left <= ev.clientX && ev.clientX < rect.right &&
+            rect.top <= ev.clientY && ev.clientY < rect.bottom) { return }
+        ev.currentTarget.close()
+    }
+
     return <>
         {/* @vscode/codicons/dist/codicon.svg, https://github.com/microsoft/vscode-codicons, Attribution 4.0 International */}
         <svg xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" dangerouslySetInnerHTML={{ __html: codiconTxt }}></svg>
@@ -128,7 +138,7 @@ const App = () => {
                 {/* SELECT * FROM ... */}
                 {!useCustomViewerQuery && <>
                     <Highlight>SELECT </Highlight>
-                    *
+                    <span class="px-2 cursor-pointer hover:bg-gray-300 [border-bottom:1px_solid_gray]" onClick={() => { columnSelectDialogRef.current?.showModal() }}>{visibleColumnsSQL}</span>
                     <Highlight> FROM </Highlight>
                     {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(tableList.map(({ name: tableName, type }) => [tableName, { group: type }] as const).sort((a, b) => a[0].localeCompare(b[0])))} class="primary" data-testid="table-name" />}
                 </>}
@@ -139,7 +149,7 @@ const App = () => {
                 </>}
 
                 {/* Buttons placed right after the table name */}
-                <span class="ml-1">
+                <div class="my-2">
                     {/* Schema */}
                     {!useCustomViewerQuery && <SVGOnlyCheckbox icon={isSettingsViewOpen ? "#close" : "#settings-gear"} title="Show Table Schema and Indexes" checked={isSettingsViewOpen} onClick={() => setIsSettingsViewOpen(!isSettingsViewOpen)} data-testid="schema-button"></SVGOnlyCheckbox>}
 
@@ -183,13 +193,13 @@ const App = () => {
                     {isTableRendered && !isSettingsViewOpen && <SVGOnlyCheckbox icon="#search" title="Find (Ctrl+f)" checked={isFindWidgetVisible} onClick={(checked) => {
                         useTableStore.getState().setFindWidgetVisibility(checked).catch(console.error)
                     }} data-testid="find-button"></SVGOnlyCheckbox>}
-                </span>
 
-                {/* The checkbox to toggle the custom query mode */}
-                <label class="ml-2 select-none cursor-pointer"><input type="checkbox" checked={useCustomViewerQuery} onChange={() => { setViewerQuery({ useCustomViewerQuery: !useCustomViewerQuery }).catch(console.error) }}></input> Custom</label>
+                    {/* The checkbox to toggle the custom query mode */}
+                    <label class="ml-2 select-none cursor-pointer"><input type="checkbox" checked={useCustomViewerQuery} onChange={() => { setViewerQuery({ useCustomViewerQuery: !useCustomViewerQuery }).catch(console.error) }}></input> Custom</label>
 
-                {/* The checkbox to toggle auto reloading */}
-                <label class="select-none cursor-pointer ml-2" title="Reload the table when the database is updated by another process."><input type="checkbox" checked={autoReload} onChange={() => { useTableStore.setState({ autoReload: !autoReload }) }}></input> Auto reload</label>
+                    {/* The checkbox to toggle auto reloading */}
+                    <label class="select-none cursor-pointer ml-2" title="Reload the table when the database is updated by another process."><input type="checkbox" checked={autoReload} onChange={() => { useTableStore.setState({ autoReload: !autoReload }) }}></input> Auto reload</label>
+                </div>
             </div>
         </h2>
 
@@ -254,9 +264,54 @@ const App = () => {
                 <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("cancel") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e]" data-testid="dialog > cancel">Cancel</Button>
             </div>
         </dialog>
+
+        {/* SELECT dialog */}
+        <dialog class="py-4 px-8 bg-[#f0f0f0] shadow-lg mx-auto mt-[10vh]" ref={columnSelectDialogRef} onClick={closeOnClickOutside}>
+            <SelectedColumnEditor />
+        </dialog>
+
+        {/* ORDER BY dialog */}
+        <dialog class="py-4 px-8 bg-[#f0f0f0] shadow-lg mx-auto mt-[10vh]" onClick={closeOnClickOutside}>
+            <input value="rowid" />
+            <ul>
+                <li>rowid <Button>ASC</Button> <Button>DSC</Button></li>
+                <li>column 1 <Button>ASC</Button> <Button>DSC</Button></li>
+                <li>column 2 <Button>ASC</Button> <Button>DSC</Button></li>
+            </ul>
+        </dialog>
+
+        <dialog id="contextmenu" class="contextmenu" onClick={(ev) => {
+            ev.currentTarget.close()
+        }}></dialog>
     </>
 }
 
+const SelectedColumnEditor = () => {
+    const visibleColumns = useTableStore((s) => s.visibleColumns)
+    const tableInfo = useTableStore((s) => s.tableInfo)
+    const setVisibleColumns = useTableStore((s) => s.setVisibleColumns)
+    const error = useBoolean()
+    return <>
+        <Highlight>SELECT </Highlight>
+        {tableInfo.map(({ name }, i) => <>{i !== 0 && ", "}<Checkbox
+            checked={visibleColumns.includes(name)}
+            onChange={(checked) => {
+                error.setFalse()
+                if (checked) {
+                    setVisibleColumns([...visibleColumns, name])
+                } else {
+                    if (visibleColumns.length === 1) {
+                        error.setTrue()
+                        return
+                    }
+                    setVisibleColumns(visibleColumns.filter((v) => v !== name))
+                }
+            }}
+            text={name}
+            class="mr-0" /></>)}
+        {error.value && <p class="text-red-700 mt-1">Please select at least one column.</p>}
+    </>
+}
 (async () => {
     await remote.downloadState()
     const tableList = await remote.getTableList()

@@ -34,43 +34,30 @@
 }
 
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+    @apply m-0 p-0 box-border;
 }
 
 body {
+    @apply bg-[#f0f0f0] text-black h-[100vh] [font-size:12px] overflow-x-hidden;
     padding: 0 !important; // Override the VSCode's default
-    overflow-x: hidden;
-    background: #f0f0f0;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
-    color: black;
-    font-size: 12px;
-    height: 100vh;
 }
 
 h2 {
-    font-weight: normal;
-    margin-bottom: 5px;
+    @apply font-normal mb-[5px];
     font-size: inherit;
     padding-left: var(--page-padding);
     padding-right: var(--page-padding);
 }
 
 li+li {
-    margin-top: 5px;
+    @apply mt-[5px];
 }
 
 select {
+    @apply border-none outline-none cursor-pointer py-[0.15em] [background-color:var(--dropdown-background)] [color:var(--dropdown-foreground)];
     font-size: inherit;
-    border: 0;
-    outline: 0;
     font-family: inherit;
-    background-color: var(--dropdown-background);
-    color: var(--dropdown-foreground);
-    padding-top: 0.15em;
-    padding-bottom: 0.15em;
-    cursor: pointer;
 
     &.primary {
         background-color: var(--button-primary-background);
@@ -96,13 +83,9 @@ input[type=button]:focus {
 
 input:not([type]),
 input[type=text] {
-    border: 0;
-    outline: 0;
-    background-color: var(--input-background);
-    color: var(--input-foreground);
+    @apply border-none outline-none [background-color:var(--input-background)] [color:var(--input-foreground)] pl-[0.5em];
     font-family: inherit;
     font-size: inherit;
-    padding-left: 0.5em;
 
     &:focus {
         outline: 2px solid rgb(142, 197, 226);
@@ -110,16 +93,7 @@ input[type=text] {
 }
 
 textarea {
-    border: 0;
-    outline: 0;
-    background-color: var(--input-background);
-    color: var(--input-foreground);
-    width: 100%;
-    resize: vertical;
-    display: block;
-    font-family: inherit;
-    font-size: inherit;
-    padding-left: 0.5em;
+    @apply border-none outline-none [background-color:var(--input-background)] [color:var(--input-foreground)] w-full resize-y block [font-family:inherit] [font-size:inherit] pl-[0.5em];
 
     &:focus {
         outline: 2px solid rgb(142, 197, 226);
@@ -160,52 +134,43 @@ textarea {
 table.viewer {
     /* column */
     th.clickable:hover {
-        background-color: var(--td-border-color-hover);
-        cursor: pointer;
+        @apply cursor-pointer [background-color:var(--td-border-color-hover)];
     }
 
     /* row */
     td.clickable:nth-child(1):hover:not(.no-hover) {
-        background-color: var(--td-border-color-hover);
-        cursor: pointer;
+        @apply cursor-pointer [background-color:var(--td-border-color-hover)];
     }
 
     /* data */
     td.clickable:hover:not(.editing):not(:nth-child(1)) {
-        background-color: rgba(207, 255, 255, 0.371);
-        cursor: pointer;
+        @apply cursor-pointer [background-color:rgba(207,255,255,0.371)];
     }
 
     td.editing,
     tr.editing,
     tr.editing td:nth-child(1),
     tr.editing td:nth-child(1):hover:not(.no-hover) {
+        @apply cursor-default;
         background-color: rgba(66, 159, 202, 0.384);
         outline: 1px solid rgb(142, 197, 226);
-        cursor: default;
     }
 
     td.editing {
         outline: 1px solid rgb(142, 197, 226);
 
         pre {
-            position: relative;
+            @apply relative;
 
             &.cursor-line {
                 animation: cursor-line 1s linear infinite;
             }
 
             textarea {
-                position: absolute;
-                padding: 0;
-                left: 0;
-                top: 0;
-                width: 100%;
-                height: 100%;
+                @apply absolute p-0 left-0 top-0 w-full h-full;
 
                 &.single-click {
-                    opacity: 0;
-                    background: transparent;
+                    @apply opacity-0 bg-transparent;
                 }
             }
         }
@@ -232,7 +197,7 @@ table.viewer {
 
 /* codicon */
 body > svg {
-    display: none;
+    @apply hidden;
 }
 
 dialog::backdrop {
@@ -256,4 +221,28 @@ dialog::backdrop {
     from { background: rgba(0, 225, 255, 0.1); }
     90% { background: rgba(0, 225, 255, 0.1); }
     to { }
+}
+
+// Example:
+// <div class="contextmenu" hidden>
+//     <button>Insert<kbd>Enter</kbd></button>
+//     <button>Delete<kbd>Delete</kbd></button>
+//     <hr />
+//     <button>Cut<kbd>Ctrl+X</kbd></button>
+//     <button>Copy<kbd>Ctrl+C</kbd></button>
+//     <button>Paste<kbd>Ctrl+V</kbd></button>
+// </div>
+.contextmenu {
+    @apply absolute z-30 left-0 top-0 flex flex-col px-0 py-[0.15rem] outline outline-1 bg-gray-50 outline-gray-300 shadow-lg font-sans;
+    &:not([open]) { @apply hidden; }
+    & > button {
+        @apply text-gray-800 bg-transparent border-none m-0 py-[0.15rem] px-4 text-left text-xs hover:bg-opacity-10 hover:bg-black;
+        &:disabled { @apply text-gray-400; }
+    }
+    & > hr { @apply border-t border-gray-200 mt-[0.15rem] pt-[0.15rem]; }
+    & kbd { @apply float-right text-gray-600; }
+    &::backdrop { @apply bg-transparent; }
+    :focus,:focus-within {
+        @apply outline-none bg-gray-200;
+    }
 }

@@ -95,3 +95,9 @@ export const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: bo
 
 /** Displays text in blue. */
 export const Highlight = (props: { children: preact.ComponentChildren, "data-testid"?: string }) => <span class="[color:var(--button-primary-background)]" data-testid={props["data-testid"]}>{props.children}</span>
+
+/** Change background color for a short time. */
+export const flash = (element: Element) => {
+    element.classList.remove("flash")
+    setTimeout(() => { element.classList.add("flash") }, 50)
+}

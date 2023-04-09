@@ -3,10 +3,11 @@ import * as remote from "./remote"
 import { useEditorStore } from "./editor"
 import produce from "immer"
 import { scrollbarWidth, ScrollbarY } from "./scrollbar"
-import { persistentRef, Tooltip } from "./components"
+import { flash, persistentRef, Tooltip } from "./components"
 import { BigintMath, createStore } from "./util"
 import deepEqual from "fast-deep-equal"
 import type { JSXInternal } from "preact/src/jsx"
+import { render } from "preact"
 
 /** Build the WHERE clause from the state of the find widget */
 const buildFindWidgetQuery = (tableInfo: remote.TableInfo) => {
@@ -76,6 +77,8 @@ export const useTableStore = createStore("useTableStore", {
     tableList: [] as remote.TableListItem[],
     /** the name of the active table */
     tableName: undefined as string | undefined,
+    /** the columns to be queried, sorted by tableInfo. */
+    visibleColumns: [] as string[],
     /** error messages of the viewer */
     invalidQuery: null as string | null,
     /** the list of columns in the table */
@@ -127,7 +130,7 @@ export const useTableStore = createStore("useTableStore", {
             }
 
             // Query the database
-            const records = (await remote.query(`SELECT${hasRowId ? " rowid AS rowid," : ""} * FROM ${subquery}${findWidgetQuery}${hasRowId ? " ORDER BY rowid" : ""} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.visibleAreaSize, state.paging.visibleAreaTop], "r", { withoutLogging: true })).records
+            const records = (await remote.query(`SELECT${hasRowId ? " rowid AS rowid," : ""} ${getVisibleColumnsSQL()} FROM ${subquery}${findWidgetQuery}${hasRowId ? " ORDER BY rowid" : ""} LIMIT ? OFFSET ?`, [...findWidgetParams, state.paging.visibleAreaSize, state.paging.visibleAreaTop], "r", { withoutLogging: true })).records
 
             // Update the store
             if (!reloadSchema) {
@@ -140,6 +143,7 @@ export const useTableStore = createStore("useTableStore", {
                     set({
                         invalidQuery: null,
                         tableInfo,
+                        visibleColumns: tableInfo.map(({ name }) => name),
                         records,
                         autoIncrement,
                         tableSchema,
@@ -151,6 +155,7 @@ export const useTableStore = createStore("useTableStore", {
                     set({
                         invalidQuery: null,
                         tableInfo,
+                        visibleColumns: tableInfo.map(({ name }) => name),
                         records,
                         autoIncrement: false,
                         tableSchema: null,
@@ -207,11 +212,24 @@ export const useTableStore = createStore("useTableStore", {
             await reloadTable(false, false)
         }
     }
+    /** Render visibleColumns to be embedded in SQL queries. */
+    const getVisibleColumnsSQL = () => {
+        const { tableInfo, visibleColumns } = get()
+        return tableInfo.length === visibleColumns.length ? "*" : visibleColumns.map(escapeSQLIdentifier).join(", ")
+    }
     return {
         setViewerQuery,
         listUniqueConstraints,
         reloadTable,
         setPaging,
+        getVisibleColumnsSQL,
+        setVisibleColumns: (columns: string[]) => {
+            if (columns.length === 0) { throw new Error() }
+            const { tableInfo } = get()
+            columns = [...new Set(columns)]  // remove duplicates
+            if (columns.some((column) => !tableInfo.find((v) => v.name === column))) { throw new Error() }
+            set({ visibleColumns: columns.sort((a, b) => tableInfo.findIndex((v) => v.name === a) - tableInfo.findIndex((v) => v.name === b)) })
+        },
         /** Displays `confirm("Commit changes?")` using a `<dialog>`. */
         confirm: async () => new Promise<"commit" | "discard changes" | "cancel">((resolve) => {
             set({
@@ -284,6 +302,8 @@ export const Table = () => {
     const records = useTableStore((s) => s.records)
     const input = useTableStore((s) => s.input)
     const setPaging = useTableStore((s) => s.setPaging)
+    const visibleColumns = useTableStore((s) => s.visibleColumns)
+    const setVisibleColumns = useTableStore((s) => s.setVisibleColumns)
 
     const alterTable = useEditorStore((s) => s.alterTable)
     const selectedRow = useEditorStore((s) => s.statement === "DELETE" ? s.row : null)
@@ -330,7 +350,7 @@ export const Table = () => {
                 <thead class="text-black bg-[var(--gutter-color)] [outline:rgb(181,181,181)_1px_solid]">
                     <tr>
                         <th class="font-normal select-none pt-[3px] pb-[3px] pl-[1em] pr-[1em]"></th>
-                        {tableInfo.map(({ name, notnull, pk, type, dflt_value }, i) => <th
+                        {tableInfo.filter((v) => visibleColumns.includes(v.name)).map(({ name, notnull, pk, type, dflt_value }, i) => <th
                             style={{ width: getColumnWidths()[i]! }}
                             class={"font-normal select-none " + (tableName !== undefined && tableType === "table" ? "clickable" : "")}
                             title={tableType === "table" ? "" : `A ${tableType} cannot be altered.`}
@@ -343,6 +363,7 @@ export const Table = () => {
                                 }
                             }}
                             onMouseDown={(ev) => {
+                                if (ev.button === 2) { return } // right click
                                 if (isDirty()) {
                                     beforeUnmount().catch(console.error)
                                     return  // Always return because the user needs to stop dragging when a dialog is displayed.
@@ -375,6 +396,29 @@ export const Table = () => {
                             }}
                             onMouseLeave={(ev) => {
                                 ev.currentTarget.classList.remove("ew-resize")
+                            }}
+                            onContextMenu={(ev) => {
+                                ev.preventDefault()
+                                const dialog = document.querySelector<HTMLDialogElement>("#contextmenu")!
+                                dialog.style.left = ev.pageX + "px"
+                                dialog.style.top = ev.pageY + "px"
+                                render(<>
+                                    {tableName !== undefined && tableType === "table" && <button onClick={async () => {
+                                        if (!await beforeUnmount()) { return }
+                                        await alterTable(tableName, name, "RENAME COLUMN")
+                                        flash(document.querySelector("#editor")!)
+                                    }}>Rename…</button>}
+                                    {tableName !== undefined && tableType === "table" && <button onClick={async () => {
+                                        if (!await beforeUnmount()) { return }
+                                        await alterTable(tableName, name, "DROP COLUMN")
+                                        flash(document.querySelector("#editor")!)
+                                    }}>Delete…</button>}
+                                    <hr />
+                                    <button disabled={visibleColumns.length === 1} onClick={() => {
+                                        setVisibleColumns(visibleColumns.filter((v) => v !== name))
+                                    }}>Hide</button>
+                                </>, dialog)
+                                dialog.showModal()
                             }}>
                             <code class="inline-block [word-break:break-word] [color:inherit] [font-family:inherit] [font-size:inherit]">
                                 {name}
@@ -457,6 +501,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
     }
     const tableName = useTableStore((s) => s.tableName)
     const tableInfo = useTableStore((s) => s.tableInfo)
+    const visibleColumns = useTableStore((s) => s.visibleColumns)
 
     const delete_ = useEditorStore((s) => s.delete_)
     const update = useEditorStore((s) => s.update)
@@ -470,33 +515,29 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
         {/* Row number */}
         <td
             class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none [border-right:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
-            onMouseDown={(ev) => {
-                ev.preventDefault();
-                (async () => {
-                    if (!await beforeUnmount()) { return }
-                    if (tableName === undefined) { return }
-                    await delete_(tableName, props.record, props.row)
-                })().catch(console.error)
+            onMouseDown={async (ev) => {
+                ev.preventDefault()
+                if (!await beforeUnmount()) { return }
+                if (tableName === undefined) { return }
+                await delete_(tableName, props.record, props.row)
             }}
             data-testid={`row number ${props.rowNumber}`}>{props.rowNumber}</td>
 
         {/* Cells */}
-        {tableInfo.map(({ name }, i) => {
+        {tableInfo.filter((v) => visibleColumns.includes(v.name)).map(({ name }, i) => {
             const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
             return <td
                 class={"pl-[10px] pr-[10px] overflow-hidden [border-right:1px_solid_var(--td-border-color)] [border-bottom:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 style={{ maxWidth: props.columnWidths[i] }}
-                onMouseDown={(ev) => {
+                onMouseDown={async (ev) => {
                     if (ev.target instanceof HTMLTextAreaElement) { return }  // in-place input
-                    ev.preventDefault();
-                    (async () => {
-                        const editorState = useEditorStore.getState()
-                        if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
-                        if (tableName === undefined) { return }
-                        if (!await beforeUnmount()) { return }
-                        update(tableName, name, props.row)
-                    })().catch(console.error)
+                    ev.preventDefault()
+                    const editorState = useEditorStore.getState()
+                    if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
+                    if (tableName === undefined) { return }
+                    if (!await beforeUnmount()) { return }
+                    update(tableName, name, props.row)
                 }}
                 data-testid={`cell ${props.rowNumber - 1n}, ${i}`}>
                 <pre class={"overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")}>
@@ -505,13 +546,14 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                 </pre>
             </td>
         })}
-    </tr>, [props.selected, props.selectedColumn, props.input?.draftValue, props.input?.textarea, tableName, tableInfo, props.record, props.rowNumber, cursorVisibility])  // excluded: props.columnWidth
+    </tr>, [props.selected, props.selectedColumn, props.input?.draftValue, props.input?.textarea, tableName, tableInfo, visibleColumns, props.record, props.rowNumber, cursorVisibility])  // excluded: props.columnWidth
 }
 
 /** Renders an empty row that is shown at the bottom of the table. */
 const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: readonly number[] }) => {
     const tableName = useTableStore((s) => s.tableName)
     const tableInfo = useTableStore((s) => s.tableInfo)
+    const visibleColumns = useTableStore((s) => s.visibleColumns)
 
     const insert = useEditorStore((s) => s.insert)
     const beforeUnmount = useEditorStore((s) => s.beforeUnmount)
@@ -530,7 +572,7 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
         <td
             class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-center text-black select-none [border-right:1px_solid_var(--td-border-color)] " + (tableName !== undefined && props.row === 0 ? "clickable" : "")}
             onMouseDown={(ev) => {
-                ev.preventDefault();
+                ev.preventDefault()
                 if (props.row !== 0) { return }
                 openInsertEditor().then(() => {
                     // Find a textarea
@@ -542,36 +584,32 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
                     textarea.select()
 
                     // Play an animation
-                    textarea.classList.remove("flash")
-                    setTimeout(() => { textarea.classList.add("flash") }, 50)
+                    flash(textarea)
                 }).catch(console.error)
             }}>{props.row === 0 && <svg class="inline w-[1em] h-[1em]"><use xlinkHref="#add" /></svg>}</td>
 
         {/* Cells */}
-        {tableInfo.map(({ }, i) => {
-            return <td
-                class={"pl-[10px] pr-[10px] overflow-hidden [border-right:1px_solid_var(--td-border-color)] [border-bottom:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
-                style={{ maxWidth: props.columnWidths[i] }}
-                onMouseDown={(ev) => {
-                    ev.preventDefault()
-                    openInsertEditor().then(() => {
-                        const textarea = document.querySelector<HTMLTextAreaElement>(`#insert-column${i + 1} textarea`)
-                        if (!textarea) { return }
+        {tableInfo.filter((v) => visibleColumns.includes(v.name)).map(({ }, i) => <td
+            class={"pl-[10px] pr-[10px] overflow-hidden [border-right:1px_solid_var(--td-border-color)] [border-bottom:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
+            style={{ maxWidth: props.columnWidths[i] }}
+            onMouseDown={(ev) => {
+                ev.preventDefault()
+                openInsertEditor().then(() => {
+                    const textarea = document.querySelector<HTMLTextAreaElement>(`#insert-column${i + 1} textarea`)
+                    if (!textarea) { return }
 
-                        // Select the textarea
-                        textarea.focus()
-                        textarea.select()
+                    // Select the textarea
+                    textarea.focus()
+                    textarea.select()
 
-                        // Play an animation
-                        textarea.classList.remove("flash")
-                        setTimeout(() => { textarea.classList.add("flash") }, 50)
-                    }).catch(console.error)
-                }}>
-                <pre class="overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] ">
-                    <span class="select-none">&nbsp;</span>
-                </pre>
-            </td>
-        })}
+                    // Play an animation
+                    flash(textarea)
+                }).catch(console.error)
+            }}>
+            <pre class="overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] ">
+                <span class="select-none">&nbsp;</span>
+            </pre>
+        </td>)}
     </tr>
 }
 
