@@ -37,6 +37,9 @@ module.exports = {
               "fg-secondary": colors.gray[100],
               "secondary-hover": colors.gray[400],
 
+              "error-fg": colors.white,
+              "error-bg": colors.slate[700],
+
               black: colors.black,
               white: colors.white,
               slate: colors.slate,
@@ -78,6 +81,9 @@ module.exports = {
               secondary: colors.gray[600],
               "fg-secondary": colors.gray[100],
               "secondary-hover": colors.gray[700],
+
+              "error-fg": colors.white,
+              "error-bg": colors.slate[600],
 
               black: colors.white,
               white: colors.black,

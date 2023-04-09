@@ -257,7 +257,7 @@ const App = () => {
         </>}
 
         {/* Error Message */}
-        {errorMessage && <p class="text-white bg-slate-700 [padding:10px]">
+        {errorMessage && <p class="text-error-fg bg-error-bg [padding:10px]">
             <pre class="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{errorMessage}</pre>
             <Button class="mt-[10px]" onClick={() => useTableStore.setState({ errorMessage: "" })}>Close</Button>
         </p>}
