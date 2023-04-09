@@ -119,14 +119,15 @@ const App = () => {
         await useEditorStore.getState().discardChanges()
     })
 
-    // Call preventDefault() on unhandled contextmenu events
+    // Call preventDefault() on unhandled contextmenu events while the context menu is open
     useEventListener("contextmenu", (ev) => {
+        if (!document.querySelector<HTMLDialogElement>("#contextmenu")!.open) { return }
         if (ev.defaultPrevented) { return }
         ev.preventDefault()
         if (document.querySelector<HTMLDialogElement>("#contextmenu")!.open) {
             document.querySelector<HTMLDialogElement>("#contextmenu")!.close()
         }
-    })
+    }, { current: document.body })
 
     const closeOnClickOutside = (ev: JSXInternal.TargetedMouseEvent<HTMLDialogElement>) => {
         const rect = ev.currentTarget.getBoundingClientRect()
