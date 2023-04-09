@@ -240,7 +240,7 @@ dialog::backdrop {
         &:disabled { @apply text-gray-400; }
     }
     & > hr { @apply border-t border-gray-200 mt-[0.15rem] pt-[0.15rem]; }
-    & kbd { @apply float-right text-gray-600; }
+    & kbd { @apply font-sans ml-4 float-right text-gray-600; }
     &::backdrop { @apply bg-transparent; }
     :focus,:focus-within {
         @apply outline-none bg-gray-200;
