@@ -5,6 +5,7 @@ import * as remote from "./remote"
 import Tippy from "@tippyjs/react"
 import 'tippy.js/dist/tippy.css'
 import type { ReactElement } from "react"
+import { render } from "preact"
 
 /** Typed version of `<select>` */
 export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string, group?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, class?: string, "data-testid"?: string }) => {
@@ -100,4 +101,13 @@ export const Highlight = (props: { children: preact.ComponentChildren, "data-tes
 export const flash = (element: Element) => {
     element.classList.remove("flash")
     setTimeout(() => { element.classList.add("flash") }, 50)
+}
+
+export const renderContext = (ev: MouseEvent, component: preact.ComponentChild) => {
+    ev.preventDefault()
+    const dialog = document.querySelector<HTMLDialogElement>("#contextmenu")!
+    dialog.style.left = ev.pageX + "px"
+    dialog.style.top = ev.pageY + "px"
+    render(component, dialog)
+    dialog.showModal()
 }

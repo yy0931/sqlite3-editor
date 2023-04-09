@@ -119,6 +119,15 @@ const App = () => {
         await useEditorStore.getState().discardChanges()
     })
 
+    // Call preventDefault() on unhandled contextmenu events
+    useEventListener("contextmenu", (ev) => {
+        if (ev.defaultPrevented) { return }
+        ev.preventDefault()
+        if (document.querySelector<HTMLDialogElement>("#contextmenu")!.open) {
+            document.querySelector<HTMLDialogElement>("#contextmenu")!.close()
+        }
+    })
+
     const closeOnClickOutside = (ev: JSXInternal.TargetedMouseEvent<HTMLDialogElement>) => {
         const rect = ev.currentTarget.getBoundingClientRect()
         if (rect.left <= ev.clientX && ev.clientX < rect.right &&
@@ -280,9 +289,10 @@ const App = () => {
             </ul>
         </dialog>
 
-        <dialog id="contextmenu" class="contextmenu" onClick={(ev) => {
-            ev.currentTarget.close()
-        }}></dialog>
+        <dialog
+            id="contextmenu"
+            class="contextmenu"
+            onClick={(ev) => { ev.currentTarget.close() }}></dialog>
     </>
 }
 

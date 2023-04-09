@@ -3,11 +3,10 @@ import * as remote from "./remote"
 import { useEditorStore } from "./editor"
 import produce from "immer"
 import { scrollbarWidth, ScrollbarY } from "./scrollbar"
-import { flash, persistentRef, Tooltip } from "./components"
+import { flash, persistentRef, renderContext, Tooltip } from "./components"
 import { BigintMath, createStore } from "./util"
 import deepEqual from "fast-deep-equal"
 import type { JSXInternal } from "preact/src/jsx"
-import { render } from "preact"
 
 /** Build the WHERE clause from the state of the find widget */
 const buildFindWidgetQuery = (tableInfo: remote.TableInfo) => {
@@ -398,11 +397,7 @@ export const Table = () => {
                                 ev.currentTarget.classList.remove("ew-resize")
                             }}
                             onContextMenu={(ev) => {
-                                ev.preventDefault()
-                                const dialog = document.querySelector<HTMLDialogElement>("#contextmenu")!
-                                dialog.style.left = ev.pageX + "px"
-                                dialog.style.top = ev.pageY + "px"
-                                render(<>
+                                renderContext(ev, <>
                                     {tableName !== undefined && tableType === "table" && <button onClick={async () => {
                                         if (!await beforeUnmount()) { return }
                                         await alterTable(tableName, name, "RENAME COLUMN")
@@ -417,8 +412,7 @@ export const Table = () => {
                                     <button disabled={visibleColumns.length === 1} onClick={() => {
                                         setVisibleColumns(visibleColumns.filter((v) => v !== name))
                                     }}>Hide</button>
-                                </>, dialog)
-                                dialog.showModal()
+                                </>)
                             }}>
                             <code class="inline-block [word-break:break-word] [color:inherit] [font-family:inherit] [font-size:inherit]">
                                 {name}
@@ -516,10 +510,20 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
         <td
             class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none [border-right:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
             onMouseDown={async (ev) => {
+                if (ev.button === 2) { return } // context menu
                 ev.preventDefault()
-                if (!await beforeUnmount()) { return }
                 if (tableName === undefined) { return }
+                if (!await beforeUnmount()) { return }
                 await delete_(tableName, props.record, props.row)
+            }}
+            onContextMenu={(ev) => {
+                renderContext(ev, <>
+                    <button onClick={async () => {
+                        if (tableName === undefined) { return }
+                        if (!await beforeUnmount()) { return }
+                        await delete_(tableName, props.record, props.row)
+                    }}>Delete…</button>
+                </>)
             }}
             data-testid={`row number ${props.rowNumber}`}>{props.rowNumber}</td>
 
