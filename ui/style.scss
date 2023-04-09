@@ -223,12 +223,13 @@ body > svg {
 }
 
 dialog::backdrop {
-    background: rgba(0, 0, 0, 0.5);  // use the same color with the dark theme
+    background: rgba(0, 0, 0, 0.5);  // use the same color with the dark mode.
 }
 
 .tippy-box {
     font-size: 10px !important;
     border-radius: 0 !important;
+    border: 1px solid gray;  // use the same color with the dark mode.
 }
 
 .tippy-content {
