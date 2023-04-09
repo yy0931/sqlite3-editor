@@ -222,12 +222,13 @@ export const useTableStore = createStore("useTableStore", {
         reloadTable,
         setPaging,
         getVisibleColumnsSQL,
-        setVisibleColumns: (columns: string[]) => {
+        setVisibleColumns: async (columns: string[]) => {
             if (columns.length === 0) { throw new Error() }
             const { tableInfo } = get()
             columns = [...new Set(columns)]  // remove duplicates
             if (columns.some((column) => !tableInfo.find((v) => v.name === column))) { throw new Error() }
             set({ visibleColumns: columns.sort((a, b) => tableInfo.findIndex((v) => v.name === a) - tableInfo.findIndex((v) => v.name === b)) })
+            await reloadTable(false, false)
         },
         /** Displays `confirm("Commit changes?")` using a `<dialog>`. */
         confirm: async () => new Promise<"commit" | "discard changes" | "cancel">((resolve) => {
@@ -409,8 +410,8 @@ export const Table = () => {
                                         flash(document.querySelector("#editor")!)
                                     }}>Delete…</button>}
                                     <hr />
-                                    <button disabled={visibleColumns.length === 1} onClick={() => {
-                                        setVisibleColumns(visibleColumns.filter((v) => v !== name))
+                                    <button disabled={visibleColumns.length === 1} onClick={async () => {
+                                        await setVisibleColumns(visibleColumns.filter((v) => v !== name))
                                     }}>Hide</button>
                                 </>)
                             }}>

@@ -305,16 +305,16 @@ const SelectedColumnEditor = () => {
         <Highlight>SELECT </Highlight>
         {tableInfo.map(({ name }, i) => <>{i !== 0 && ", "}<Checkbox
             checked={visibleColumns.includes(name)}
-            onChange={(checked) => {
+            onChange={async (checked) => {
                 error.setFalse()
                 if (checked) {
-                    setVisibleColumns([...visibleColumns, name])
+                    await setVisibleColumns([...visibleColumns, name])
                 } else {
                     if (visibleColumns.length === 1) {
                         error.setTrue()
                         return
                     }
-                    setVisibleColumns(visibleColumns.filter((v) => v !== name))
+                    await setVisibleColumns(visibleColumns.filter((v) => v !== name))
                 }
             }}
             text={name}
