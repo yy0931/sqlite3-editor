@@ -43,8 +43,8 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
     </>
 }
 
-export const Button = (props: { class?: string, disabled?: boolean, children?: preact.ComponentChildren, style?: JSXInternal.CSSProperties, title?: string, onClick?: () => void, "data-testid"?: string }) =>
-    <button disabled={props.disabled} style={props.style} class={"border-0 outline-0 pl-2 pr-2 cursor-pointer [font-family:inherit] bg-[var(--button-primary-background)] text-[var(--button-primary-foreground)] hover:[background-color:var(--button-primary-hover-background)] disabled:cursor-not-allowed disabled:text-[#737373] disabled:bg-[#c1bbbb] focus:outline focus:outline-2 focus:outline-blue-300 " + (props.class ?? "")} onClick={props.onClick} title={props.title} data-testid={props["data-testid"]}>{props.children}</button>
+export const Button = (props: { class?: string, disabled?: boolean, children?: preact.ComponentChildren, style?: JSXInternal.CSSProperties, title?: string, secondary?: boolean, onClick?: () => void, "data-testid"?: string }) =>
+    <button disabled={props.disabled} style={props.style} class={"border-0 outline-0 pl-2 pr-2 cursor-pointer [font-family:inherit] disabled:cursor-not-allowed disabled:text-gray-500 disabled:bg-gray-300 focus:outline focus:outline-2 focus:outline-blue-300 " + (props.secondary ? "text-fg-secondary bg-secondary hover:bg-secondary-hover " : "bg-primary hover:bg-primary-hover text-fg-primary ") + (props.class ?? "")} onClick={props.onClick} title={props.title} data-testid={props["data-testid"]}>{props.children}</button>
 
 /** {@link useRef} but persists the value to the server. */
 export const persistentRef = <T extends unknown>(key: string, defaultValue: T) => {
@@ -90,12 +90,12 @@ export const SVGCheckbox = (props: { icon: string, tabIndex?: number, checked?: 
 }
 
 export const Checkbox = (props: { style?: JSXInternal.CSSProperties, checked: boolean, onChange: (value: boolean) => void, text: string, tabIndex?: number, class?: string }) =>
-    <label class={"select-none mr-2 cursor-pointer [border-bottom:1px_solid_gray] " + (props.checked ? "text-black " : "[color:rgba(0,0,0,0.4)] ") + (props.class ?? "")} tabIndex={props.tabIndex ?? 0} style={props.style} onClick={() => props.onChange(!props.checked)} onKeyDown={(ev) => { if (["Enter", "Space"].includes(ev.code)) { props.onChange(!props.checked) } }}>
+    <label class={"select-none mr-2 cursor-pointer border-b-[1px] border-gray-500 text-black " + (props.checked ? "" : "text-opacity-40 ") + (props.class ?? "")} tabIndex={props.tabIndex ?? 0} style={props.style} onClick={() => props.onChange(!props.checked)} onKeyDown={(ev) => { if (["Enter", "Space"].includes(ev.code)) { props.onChange(!props.checked) } }}>
         {props.text}
     </label>
 
 /** Displays text in blue. */
-export const Highlight = (props: { children: preact.ComponentChildren, "data-testid"?: string }) => <span class="[color:var(--button-primary-background)]" data-testid={props["data-testid"]}>{props.children}</span>
+export const Highlight = (props: { children: preact.ComponentChildren, "data-testid"?: string }) => <span class="text-primary-highlight" data-testid={props["data-testid"]}>{props.children}</span>
 
 /** Change background color for a short time. */
 export const flash = (element: Element) => {

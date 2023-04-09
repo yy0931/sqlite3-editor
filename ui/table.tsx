@@ -474,17 +474,17 @@ const FindWidget = () => {
         <input id="findWidget" ref={ref} class="mr-1" placeholder="Find" value={value} onChange={(ev) => setFindWidgetState({ value: ev.currentTarget.value })} />
 
         {/* Match Case button */}
-        <Tooltip content="Match Case" ><span class={"[font-size:130%] align-middle select-none p-[2px] [border-radius:1px] inline-block cursor-pointer " + (caseSensitive ? "bg-[rgba(66,159,202,0.384)] text-black" : "text-gray-600 hover:bg-gray-300")} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
+        <Tooltip content="Match Case" ><span class={"[font-size:130%] align-middle select-none p-[2px] [border-radius:1px] inline-block cursor-pointer " + (caseSensitive ? "bg-blue-400 bg-opacity-40 text-black" : "text-gray-600 hover:bg-gray-300")} onClick={() => setFindWidgetState({ caseSensitive: !caseSensitive })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#case-sensitive" /></svg>
         </span></Tooltip>
 
         {/* Match Whole Word button */}
-        <Tooltip content="Match Whole Word"><span class={"[font-size:130%] align-middle select-none p-[2px] [border-radius:1px] inline-block cursor-pointer " + (wholeWord ? "bg-[rgba(66,159,202,0.384)] text-black" : "text-gray-600 hover:bg-gray-300")} onClick={() => setFindWidgetState({ wholeWord: !wholeWord })}>
+        <Tooltip content="Match Whole Word"><span class={"[font-size:130%] align-middle select-none p-[2px] [border-radius:1px] inline-block cursor-pointer " + (wholeWord ? "bg-blue-400 bg-opacity-40 text-black" : "text-gray-600 hover:bg-gray-300")} onClick={() => setFindWidgetState({ wholeWord: !wholeWord })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#whole-word" /></svg>
         </span></Tooltip>
 
         {/* Use Regular Expression button */}
-        <Tooltip content="Use Regular Expression"><span class={"[font-size:130%] align-middle select-none p-[2px] [border-radius:1px] inline-block cursor-pointer " + (regex ? "bg-[rgba(66,159,202,0.384)] text-black" : "text-gray-600 hover:bg-gray-300")} onClick={() => setFindWidgetState({ regex: !regex })}>
+        <Tooltip content="Use Regular Expression"><span class={"[font-size:130%] align-middle select-none p-[2px] [border-radius:1px] inline-block cursor-pointer " + (regex ? "bg-blue-400 bg-opacity-40 text-black" : "text-gray-600 hover:bg-gray-300")} onClick={() => setFindWidgetState({ regex: !regex })}>
             <svg class="w-[1em] h-[1em]"><use xlinkHref="#regex" /></svg>
         </span></Tooltip>
     </div>
@@ -509,7 +509,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
     return useMemo(() => <tr class={props.selected ? "editing" : ""}>
         {/* Row number */}
         <td
-            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none [border-right:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
+            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-right text-black select-none border-r-[1px] border-r-[var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
             onMouseDown={async (ev) => {
                 if (ev.button === 2) { return } // context menu
                 ev.preventDefault()
@@ -533,7 +533,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
             const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
             return <td
-                class={"pl-[10px] pr-[10px] overflow-hidden [border-right:1px_solid_var(--td-border-color)] [border-bottom:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
+                class={"pl-[10px] pr-[10px] overflow-hidden border-r-[1px] border-[var(--td-border-color)] border-b-[1px] border-b-[var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 style={{ maxWidth: props.columnWidths[i] }}
                 onMouseDown={async (ev) => {
                     if (ev.target instanceof HTMLTextAreaElement) { return }  // in-place input
@@ -575,7 +575,7 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
     return <tr>
         {/* Row number */}
         <td
-            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-center text-black select-none [border-right:1px_solid_var(--td-border-color)] " + (tableName !== undefined && props.row === 0 ? "clickable" : "")}
+            class={"pl-[10px] pr-[10px] bg-[var(--gutter-color)] overflow-hidden sticky left-0 whitespace-nowrap text-center text-black select-none border-r-[1px] border-r-[var(--td-border-color)] " + (tableName !== undefined && props.row === 0 ? "clickable" : "")}
             onMouseDown={(ev) => {
                 ev.preventDefault()
                 if (props.row !== 0) { return }
@@ -595,7 +595,7 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
 
         {/* Cells */}
         {tableInfo.filter((v) => visibleColumns.includes(v.name)).map(({ }, i) => <td
-            class={"pl-[10px] pr-[10px] overflow-hidden [border-right:1px_solid_var(--td-border-color)] [border-bottom:1px_solid_var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
+            class={"pl-[10px] pr-[10px] overflow-hidden border-r-[1px] border-r-[var(--td-border-color)] border-b-[1px] border-b-[var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
             style={{ maxWidth: props.columnWidths[i] }}
             onMouseDown={(ev) => {
                 ev.preventDefault()
@@ -653,15 +653,15 @@ export const unsafeEscapeValue = (value: remote.SQLite3Value) => {
 
 export const renderValue = (value: remote.SQLite3Value): JSXInternal.Element => {
     if (value instanceof Uint8Array) {  // BLOB
-        return <span class="[color:var(--data-null)]">{`x'${blob2hex(value, 8)}'`}</span>
+        return <span class="text-[var(--data-null)]">{`x'${blob2hex(value, 8)}'`}</span>
     } else if (value === null) {  // NULL
-        return <span class="[color:var(--data-null)]">NULL</span>
+        return <span class="text-[var(--data-null)]">NULL</span>
     } else if (typeof value === "string") {  // TEXT
-        return <span class="[color:var(--data-string)]">{value.replaceAll("\\", "\\\\").replaceAll("\t", "\\t").replaceAll("\r", "\\r").replaceAll("\n", "\\n") || /* nbsp */"\u00a0"}</span>
+        return <span class="text-[var(--data-string)]">{value.replaceAll("\\", "\\\\").replaceAll("\t", "\\t").replaceAll("\r", "\\r").replaceAll("\n", "\\n") || /* nbsp */"\u00a0"}</span>
     } else if (typeof value === "number") {  // REAL
-        return <span class="[color:var(--data-number)]">{/^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value}</span>
+        return <span class="text-[var(--data-number)]">{/^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value}</span>
     } else {  // INTEGER
-        return <span class="[color:var(--data-number)]">{"" + value}</span>
+        return <span class="text-[var(--data-number)]">{"" + value}</span>
     }
 }
 

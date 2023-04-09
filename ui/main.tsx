@@ -50,7 +50,7 @@ const LoadingIndicator = () => {
         loop()
         return () => { canceled = true }
     }, [])
-    return <div class="progressbar inline-block select-none pointer-events-none absolute top-0 z-[100] h-[5px] bg-[var(--button-primary-background)] opacity-0 [transition:opacity_0.5s_cubic-bezier(1.000,0.060,0.955,-0.120)]" ref={ref} style={{ width: width + "px" }}></div>
+    return <div class="progressbar inline-block select-none pointer-events-none absolute top-0 z-[100] h-[5px] bg-primary opacity-0 [transition:opacity_0.5s_cubic-bezier(1.000,0.060,0.955,-0.120)]" ref={ref} style={{ width: width + "px" }}></div>
 }
 
 /** The root element. */
@@ -148,7 +148,7 @@ const App = () => {
                 {/* SELECT * FROM ... */}
                 {!useCustomViewerQuery && <>
                     <Highlight>SELECT </Highlight>
-                    <span class="px-2 cursor-pointer hover:bg-gray-300 [border-bottom:1px_solid_gray]" onClick={() => { columnSelectDialogRef.current?.showModal() }}>{visibleColumnsSQL}</span>
+                    <span class="px-2 cursor-pointer hover:bg-gray-300 border-b-[1px] border-b-gray-500" onClick={() => { columnSelectDialogRef.current?.showModal() }}>{visibleColumnsSQL}</span>
                     <Highlight> FROM </Highlight>
                     {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(tableList.map(({ name: tableName, type }) => [tableName, { group: type }] as const).sort((a, b) => a[0].localeCompare(b[0])))} class="primary" data-testid="table-name" />}
                 </>}
@@ -257,37 +257,27 @@ const App = () => {
         </>}
 
         {/* Error Message */}
-        {errorMessage && <p class="text-white bg-[rgb(14,72,117)] [padding:10px]">
+        {errorMessage && <p class="text-white bg-slate-700 [padding:10px]">
             <pre class="whitespace-pre-wrap [font-size:inherit] overflow-auto h-28">{errorMessage}</pre>
-            <Button class="primary mt-[10px]" onClick={() => useTableStore.setState({ errorMessage: "" })}>Close</Button>
+            <Button class="mt-[10px]" onClick={() => useTableStore.setState({ errorMessage: "" })}>Close</Button>
         </p>}
 
         {/* Editor */}
         <Editor />
 
         {/* Confirmation Dialog */}
-        <dialog class="py-4 px-8 bg-[#f0f0f0] shadow-lg mx-auto mt-[10vh]" ref={confirmDialogRef}>
+        <dialog class="py-4 px-8 bg-gray-100 shadow-lg mx-auto mt-[10vh]" ref={confirmDialogRef}>
             <h2 class="pb-2 pl-0 text-center [font-size:120%]">Commit changes to the database?</h2>
             <div class="float-right">
                 <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("commit") } }} class="confirm-dialog-commit mr-1" data-testid="dialog > commit">Commit</Button>
-                <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("discard changes") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e] mr-1" data-testid="dialog > discard-changes">Discard changes</Button>
-                <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("cancel") } }} class="bg-[var(--dropdown-background)] hover:[background-color:#8e8e8e]" data-testid="dialog > cancel">Cancel</Button>
+                <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("discard changes") } }} secondary={true} class="mr-1" data-testid="dialog > discard-changes">Discard changes</Button>
+                <Button onClick={() => { if (isConfirmationDialogVisible) { isConfirmationDialogVisible("cancel") } }} secondary={true} data-testid="dialog > cancel">Cancel</Button>
             </div>
         </dialog>
 
         {/* SELECT dialog */}
-        <dialog class="py-4 px-8 bg-[#f0f0f0] shadow-lg mx-auto mt-[10vh]" ref={columnSelectDialogRef} onClick={closeOnClickOutside}>
+        <dialog class="py-4 px-8 bg-gray-100 shadow-lg mx-auto mt-[10vh]" ref={columnSelectDialogRef} onClick={closeOnClickOutside}>
             <SelectedColumnEditor />
-        </dialog>
-
-        {/* ORDER BY dialog */}
-        <dialog class="py-4 px-8 bg-[#f0f0f0] shadow-lg mx-auto mt-[10vh]" onClick={closeOnClickOutside}>
-            <input value="rowid" />
-            <ul>
-                <li>rowid <Button>ASC</Button> <Button>DSC</Button></li>
-                <li>column 1 <Button>ASC</Button> <Button>DSC</Button></li>
-                <li>column 2 <Button>ASC</Button> <Button>DSC</Button></li>
-            </ul>
         </dialog>
 
         <dialog

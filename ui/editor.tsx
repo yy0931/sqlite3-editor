@@ -686,7 +686,7 @@ export const Editor = () => {
         case "DROP INDEX": {
             header = <>
                 <Highlight data-testid="DROP INDEX">DROP INDEX </Highlight>
-                <span class="[color:var(--button-primary-background)]">DROP INDEX</span> {escapeSQLIdentifier(state.indexName)}
+                {escapeSQLIdentifier(state.indexName)}
             </>
             const query = state.buildQuery()
             editor = <>
@@ -837,7 +837,7 @@ const Commit = (props: { disabled?: boolean, onClick: () => void, style?: JSXInt
 }
 
 const Cancel = (props: { disabled?: boolean, style?: JSXInternal.CSSProperties, class?: string }) => {
-    return <Button disabled={props.disabled} style={props.style} class={"mb-2 ml-2 bg-[var(--dropdown-background)] [color:var(--dropdown-foreground)] hover:[background-color:#8e8e8e] " + (props.class ?? "")} onClick={() => { useEditorStore.getState().cancel().catch(console.error) }}>
+    return <Button disabled={props.disabled} style={props.style} secondary={true} class={"mb-2 ml-2 " + (props.class ?? "")} onClick={() => { useEditorStore.getState().cancel().catch(console.error) }}>
         Cancel
     </Button>
 }
