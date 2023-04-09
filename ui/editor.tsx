@@ -137,7 +137,8 @@ const mountInput = () => {
                 useEditorStore.setState({ textareaValue: textarea.value, isTextareaDirty: true })
             }
         })
-        textarea.addEventListener("mousedown", () => {
+        textarea.addEventListener("mousedown", (ev) => {
+            if (ev.button === 2) { return }  // right click
             textarea.classList.remove("single-click")
         })
 
