@@ -3,12 +3,14 @@ import sqlite3 from "better-sqlite3"
 import { Packr, Unpackr } from "msgpackr"
 import fs from "fs"
 import cors from "cors"
+import path from "path"
 
 const packr = new Packr({ useRecords: false, preserveNumericTypes: true })
 const unpackr = new Unpackr({ largeBigIntToFloat: false, int64AsNumber: false, mapsAsObjects: true, useRecords: true, preserveNumericTypes: true })
 
-const dbPath = process.env.DB_PATH || "../samples/employees_db-full-1.0.6.db"
+const dbPath = process.env.DB_PATH || "./dev.db"
 if (!fs.existsSync(dbPath)) {
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true })
     fs.writeFileSync(dbPath, "")
 }
 const readonlyConnection = sqlite3(dbPath, { readonly: true })
