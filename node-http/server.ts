@@ -35,7 +35,7 @@ const state: Record<string, unknown> = {}
 express()
     .use(express.raw())
     .use(cors({ origin: ["http://localhost:5173", "http://127.0.0.1:5173"] }))
-    .use("/", express.static("../../ui/dist"))
+    .use("/", express.static("../ui/dist"))
     .post("/query", (req, res) => {
         try {
             const query = unpackr.unpack(req.body as Buffer) as { query: string, params: (null | bigint | number | string | Buffer)[], mode: "r" | "w+" }
