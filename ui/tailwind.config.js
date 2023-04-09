@@ -75,9 +75,9 @@ module.exports = {
               "fg-primary": colors.white,
               "primary-highlight": colors.sky[500],
 
-              secondary: colors.gray[500],
+              secondary: colors.gray[600],
               "fg-secondary": colors.gray[100],
-              "secondary-hover": colors.gray[600],
+              "secondary-hover": colors.gray[700],
 
               black: colors.white,
               white: colors.black,

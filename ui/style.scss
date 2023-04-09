@@ -44,7 +44,7 @@
     --data-default-placeholder: #{color.scale(rgba(4, 63, 138, 0.6), $lightness: 60%)};
 }
 
-.vscode-dark, .vscode-high-contrast {
+.dark, .vscode-dark, .vscode-high-contrast {
     @include dark-theme;
     @import "prism-dark";
 }
@@ -78,7 +78,7 @@ li+li {
 }
 
 select {
-    @apply border-none outline-none cursor-pointer py-[0.15em] bg-gray-500 text-gray-100;
+    @apply border-none outline-none cursor-pointer py-[0.15em] bg-secondary text-fg-secondary hover:bg-secondary-hover;
     font-size: inherit;
     font-family: inherit;
 
