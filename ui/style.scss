@@ -269,3 +269,7 @@ dialog::backdrop {
         @apply outline-none bg-gray-200;
     }
 }
+
+dialog {
+    @apply text-black;
+}
