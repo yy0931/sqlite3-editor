@@ -82,6 +82,7 @@ export const useTableStore = createStore("useTableStore", {
     invalidQuery: null as string | null,
     /** the list of columns in the table */
     tableInfo: [] as remote.TableInfo,
+    foreignKeyList: [] as remote.ForeignKeyList,
     indexList: [] as remote.IndexList,
     indexInfo: [] as remote.IndexInfo[],
     indexSchema: [] as (string | null)[],
@@ -142,6 +143,7 @@ export const useTableStore = createStore("useTableStore", {
                     set({
                         invalidQuery: null,
                         tableInfo,
+                        foreignKeyList: await remote.getForeignKeyList(state.tableName!, { withoutLogging: true }),
                         visibleColumns: tableInfo.map(({ name }) => name),
                         records,
                         autoIncrement,
@@ -154,6 +156,7 @@ export const useTableStore = createStore("useTableStore", {
                     set({
                         invalidQuery: null,
                         tableInfo,
+                        foreignKeyList: [],
                         visibleColumns: tableInfo.map(({ name }) => name),
                         records,
                         autoIncrement: false,
@@ -340,6 +343,7 @@ export const Table = () => {
 
     const isFindWidgetVisible = useTableStore((s) => s.isFindWidgetVisible)
     const tableType = useTableStore((s) => s.tableList.find(({ name }) => name === s.tableName)?.type)
+    const foreignKeyList = useTableStore((s) => s.foreignKeyList)
 
     if (invalidQuery !== null) {
         return <span class="text-red-700">{invalidQuery}</span>
@@ -420,7 +424,14 @@ export const Table = () => {
                             }}>
                             <code class="inline-block [word-break:break-word] [color:inherit] [font-family:inherit] [font-size:inherit]">
                                 {name}
-                                <span class="italic opacity-70">{`${type ? (" " + type) : ""}${pk ? (autoIncrement ? " PRIMARY KEY AUTOINCREMENT" : " PRIMARY KEY") : ""}${notnull ? " NOT NULL" : ""}${dflt_value !== null ? ` DEFAULT ${dflt_value}` : ""}`}</span>
+                                <span class="italic opacity-70">
+                                    {!!type && <span> {type}</span>}
+                                    {!!notnull && <span> NOT NULL</span>}
+                                    {dflt_value !== null && <span> DEFAULT {dflt_value}</span>}
+                                    {!!pk && <span> {autoIncrement ? <>PRIMARY KEY AUTOINCREMENT</> : <>PRIMARY KEY</>}</span>}
+                                    {foreignKeyList.filter(({ to }) => to === name)
+                                        .map((foreignKey) => <span> REFERENCES {escapeSQLIdentifier(foreignKey.table)}({escapeSQLIdentifier(foreignKey.from)})</span>)}
+                                </span>
                             </code>
                         </th>)}
                     </tr>

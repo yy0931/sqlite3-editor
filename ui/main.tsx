@@ -194,7 +194,7 @@ const App = () => {
                     }} data-testid="create-table-button"></SVGOnlyCheckbox>
 
                     {/* Create Index */}
-                    {!useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#symbol-interface" title="Create Index" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
+                    {!useCustomViewerQuery && tableName && tableType === "table" && <SVGOnlyCheckbox icon="#book" title="Create Index" checked={editorStatement === "CREATE INDEX"} onClick={(checked) => {
                         if (!checked) { useEditorStore.getState().cancel().catch(console.error); return }
                         useEditorStore.getState().createIndex(tableName)
                     }} data-testid="create-index-button"></SVGOnlyCheckbox>}

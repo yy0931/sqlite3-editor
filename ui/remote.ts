@@ -5,6 +5,7 @@ export type TableInfo = { cid: bigint, dflt_value: bigint | string | null, name:
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
 export type SQLite3Value = string | number | bigint | Uint8Array | null
 export type TableListItem = { name: string, type: "table" | "view" | "shadow" | "virtual", wr: bigint, strict: bigint }
+export type ForeignKeyList = { id: bigint, seq: bigint, table: string, from: string, to: string, on_update: string, on_delete: string, match: string }[]
 
 export type Message = { data: { /* preact debugger also uses message events */ type: "sqlite3-editor-server" } & ({ requestId: undefined } | { requestId: number } & ({ err: string } | { body: Uint8Array })) }
 
@@ -135,6 +136,10 @@ export const getIndexList = async (tableName: string, opts: PostOptions = {}) =>
 /** Queries `PRAGMA table_info(tableName)`. */
 export const getTableInfo = async (tableName: string, opts: PostOptions = {}) =>
     (await query(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r", opts)).records as TableInfo
+
+
+export const getForeignKeyList = async (tableName: string, opts: PostOptions = {}) =>
+    (await query(`PRAGMA foreign_key_list(${escapeSQLIdentifier(tableName)})`, [], "r", opts)).records as ForeignKeyList
 
 export let isSQLiteOlderThan3_37 = false
 
