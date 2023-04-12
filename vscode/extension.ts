@@ -127,7 +127,14 @@ const findPython = async () => {
 }
 
 export const activate = (context: vscode.ExtensionContext) => {
+    let terminal: vscode.Terminal | undefined
     context.subscriptions.push(
+        {
+            dispose: () => {
+                terminal?.dispose()
+                terminal = undefined
+            }
+        },
         vscode.window.registerCustomEditorProvider("sqlite3-editor.editor", {
             async openCustomDocument(uri, openContext, token) {
                 const pythonPath = (vscode.workspace.getConfiguration("sqlite3-editor").get<string>("pythonPath") || await findPython())
@@ -149,6 +156,7 @@ export const activate = (context: vscode.ExtensionContext) => {
                         },
                         conn,
                         watcher,
+                        pythonPath,
                     }
                 } else {  // unsupportedScheme such as the diff view.
                     return {
@@ -206,6 +214,15 @@ export const activate = (context: vscode.ExtensionContext) => {
                                 .then(() => { res.send(packr.pack(null)) })
                                 .catch((err) => { res.status(400).send(err.message) })
                             break
+                        } case "/openTerminal": {
+                            const { text } = packr.unpack(body) as { text: string }
+                            terminal ??= vscode.window.createTerminal("SQLite3 Editor")
+                            terminal.sendText(text
+                                .replaceAll("{{pythonPath}}", escapeShell(document.pythonPath))
+                                .replaceAll("{{databasePath}}", escapeShell(document.uri.fsPath)), false)
+                            terminal.show()
+                            res.send(packr.pack(null))
+                            break
                         } default:
                             document.conn.request(body, (body) => res.send(body), (err) => { res.status(400).send((err as Error).message) })
                             break
@@ -222,6 +239,7 @@ export const activate = (context: vscode.ExtensionContext) => {
                 unsupportedScheme: false
                 conn: LocalPythonClient
                 watcher: fs.FSWatcher
+                pythonPath: string
             }
             | {
                 uri: vscode.Uri
@@ -245,3 +263,5 @@ const escapeHTML = (t: string) => t
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;")
+
+const escapeShell = (s: string) => `'${s.replaceAll("'", "'\\''")}'`

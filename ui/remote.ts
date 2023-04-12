@@ -107,6 +107,10 @@ export const import_ = (filepath: string, opts: PostOptions = {}) =>
 export const export_ = (filepath: string, data: Uint8Array, opts: PostOptions = {}) =>
     post(`/export`, { filepath, data }, opts) as Promise<void>
 
+export const openTerminal = async (text: string, opts: PostOptions = {}) => {
+    await post("/openTerminal", { text }, opts)
+}
+
 /** https://stackoverflow.com/a/1604121/10710682 */
 export const existsTable = async (tableName: string, opts: PostOptions = {}) =>
     (await query(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, [tableName], "r", opts)).records.length > 0

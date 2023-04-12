@@ -81,4 +81,9 @@ express()
     .post("/downloadState", (req, res) => {
         res.send(packr.pack(state))
     })
+    .post("/openTerminal", (req, res) => {
+        const { text } = unpackr.unpack(req.body as Buffer) as { text: string }
+        console.log(text) // TODO
+        res.send(packr.pack(null))
+    })
     .listen(8080, "127.0.0.1")

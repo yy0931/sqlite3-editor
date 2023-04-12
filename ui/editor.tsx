@@ -249,9 +249,9 @@ export const useEditorStore = createStore("useEditorStore", {
     }
 
     /** Switches the editor to the custom query editor. */
-    const custom = (tableName: string | undefined) => {
+    const custom = (tableName: string | undefined, query: string = "") => {
         unmountInput?.()
-        set({ statement: "Custom Query", query: "", tableName })
+        set({ statement: "Custom Query", query, tableName })
     }
 
     /** Switches the editor to the UPDATE editor. */

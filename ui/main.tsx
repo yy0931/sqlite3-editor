@@ -1,12 +1,12 @@
-import produce, { enableMapSet } from "immer"
+import { enableMapSet } from "immer"
 enableMapSet()
 
 import { render } from "preact"
 import { Editor, useEditorStore } from "./editor"
 import { useEffect, useRef } from "preact/hooks"
 import * as remote from "./remote"
-import { Button, Checkbox, Highlight, persistentUseState, Select, SVGOnlyCheckbox } from "./components"
-import { Table, useTableStore } from "./table"
+import { Button, Checkbox, flash, Highlight, persistentUseState, renderContext, Select, SVGOnlyCheckbox } from "./components"
+import { escapeSQLIdentifier, Table, useTableStore } from "./table"
 import "./scrollbar"
 import { SettingsView } from "./schema_view"
 import { onKeydown } from "./keybindings"
@@ -158,6 +158,12 @@ const App = () => {
                     <input placeholder="SELECT * FROM table-name" class="w-96" value={customViewerQuery} onBlur={(ev) => { setViewerQuery({ customViewerQuery: ev.currentTarget.value }).catch(console.error) }}></input>
                 </>}
 
+                {/* The checkbox to toggle the custom query mode */}
+                <label class="ml-4 select-none cursor-pointer"><input type="checkbox" checked={useCustomViewerQuery} onChange={() => { setViewerQuery({ useCustomViewerQuery: !useCustomViewerQuery }).catch(console.error) }}></input> Custom</label>
+
+                {/* The checkbox to toggle auto reloading */}
+                <label class="select-none cursor-pointer ml-2" title="Reload the table when the database is updated by another process."><input type="checkbox" checked={autoReload} onChange={() => { useTableStore.setState({ autoReload: !autoReload }) }}></input> Auto reload</label>
+
                 {/* Buttons placed right after the table name */}
                 <div class="my-2">
                     {/* Schema */}
@@ -199,16 +205,38 @@ const App = () => {
                         useEditorStore.getState().custom(tableName)
                     }} data-testid="custom-query-button"></SVGOnlyCheckbox>
 
+                    {/* Tools */}
+                    <SVGOnlyCheckbox icon="#tools" title="Other Tools" onClick={(_, ev) => {
+                        renderContext(ev, <>
+                            <button onClick={async () => {
+                                await useTableStore.getState().setViewerQuery({
+                                    useCustomViewerQuery: true,
+                                    customViewerQuery: "SELECT * FROM pragma_journal_mode",
+                                    tableName: useTableStore.getState().tableName,
+                                })
+                            }}>Check Journal Mode</button>
+                            <button onClick={async () => {
+                                if (!await useEditorStore.getState().beforeUnmount()) { return }
+                                useEditorStore.getState().custom(undefined, "PRAGMA journal_mode=WAL")
+                                flash(document.querySelector("#editor")!)
+                            }}>Enable WAL Mode…</button>
+                            <hr />
+                            <button onClick={() => remote.openTerminal(`{{pythonPath}} -m pip install -qU sqlite-utils && echo '[{"x": 1, "y": 2}, {"x": 3, "y": 4}]' | {{pythonPath}} -m sqlite_utils insert {{databasePath}} table-name -`)}>Import Table from JSON…</button>
+                            <button onClick={() => remote.openTerminal(`{{pythonPath}} -m pip install -qU sqlite-utils && {{pythonPath}} -m sqlite_utils insert {{databasePath}} table-name input.csv --csv`)}>Import Table from CSV…</button>
+                            <button onClick={() => remote.openTerminal(`sqlite3 {{databasePath}} < input.sql`)}>Import Tables from SQL…</button>
+                            <hr />
+                            <button onClick={() => remote.openTerminal(`{{pythonPath}} -m pip install -qU sqlite-utils && {{pythonPath}} -m sqlite_utils query {{databasePath}} ${escapeShell(`SELECT * FROM ${escapeSQLIdentifier(tableName || "table-name")}`)} > out.json`)}>Export Table to JSON…</button>
+                            <button onClick={() => remote.openTerminal(`{{pythonPath}} -m pip install -qU sqlite-utils && {{pythonPath}} -m sqlite_utils query {{databasePath}} ${escapeShell(`SELECT * FROM ${escapeSQLIdentifier(tableName || "table-name")}`)} --csv > out.csv`)}>Export Table to CSV…</button>
+                            <button onClick={() => remote.openTerminal(`sqlite3 {{databasePath}} .dump > out.sql`)}>Export Tables to SQL…</button>
+                            <hr />
+                            <button onClick={() => remote.openTerminal(`{{pythonPath}} -m pip install -qU sqlite-utils && {{pythonPath}} -m sqlite_utils duplicate {{databasePath}} ${escapeShell(tableName || "table-name")} ${escapeShell((tableName || "table-name") + "-copy")}`)}>Copy Table…</button>
+                        </>)
+                    }}></SVGOnlyCheckbox>
+
                     {/* Find */}
                     {isTableRendered && !isSettingsViewOpen && <SVGOnlyCheckbox icon="#search" title="Find (Ctrl+f)" checked={isFindWidgetVisible} onClick={(checked) => {
                         useTableStore.getState().setFindWidgetVisibility(checked).catch(console.error)
                     }} data-testid="find-button"></SVGOnlyCheckbox>}
-
-                    {/* The checkbox to toggle the custom query mode */}
-                    <label class="ml-2 select-none cursor-pointer"><input type="checkbox" checked={useCustomViewerQuery} onChange={() => { setViewerQuery({ useCustomViewerQuery: !useCustomViewerQuery }).catch(console.error) }}></input> Custom</label>
-
-                    {/* The checkbox to toggle auto reloading */}
-                    <label class="select-none cursor-pointer ml-2" title="Reload the table when the database is updated by another process."><input type="checkbox" checked={autoReload} onChange={() => { useTableStore.setState({ autoReload: !autoReload }) }}></input> Auto reload</label>
                 </div>
             </div>
         </h2>
@@ -313,6 +341,9 @@ const SelectedColumnEditor = () => {
         {error.value && <p class="text-red-700 mt-1">Please select at least one column.</p>}
     </>
 }
+
+const escapeShell = (s: string) => `'${s.replaceAll("'", "'\\''")}'`;
+
 (async () => {
     await remote.downloadState()
     const tableList = await remote.getTableList()
