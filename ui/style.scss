@@ -3,7 +3,6 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@import "prism";
 
 :root {
     /* https://github.com/microsoft/vscode-webview-ui-toolkit/blob/864372518fbb538c281ea5a503e08d3e4b8d0c2e/src/design-tokens.ts */
@@ -44,7 +43,13 @@
     --data-default-placeholder: #{color.scale(rgba(4, 63, 138, 0.6), $lightness: 60%)};
 }
 
-.dark, .vscode-dark, .vscode-high-contrast {
+@media not (prefers-color-scheme: dark) {
+    body:not(.dark):not(.vscode-dark):not(.vscode-high-contrast) {
+        @import "prism";
+    }
+}
+
+body.dark, body.vscode-dark, body.vscode-high-contrast {
     @include dark-theme;
     @import "prism-dark";
 }
