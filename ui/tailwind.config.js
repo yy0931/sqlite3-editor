@@ -69,8 +69,7 @@ module.exports = {
         },
         {
           name: "dark",
-          selectors: [".dark", ".vscode-dark", ".vscode-high-contrast"],
-          mediaQuery: '@media (prefers-color-scheme: dark)',
+          selectors: [".dark", ".vscode-dark", ".vscode-high-contrast:not(.vscode-high-contrast-light)"],
           theme: {
             colors: {
               primary: colors.sky[600],

@@ -24,7 +24,15 @@
     --data-default-placeholder: rgba(4, 63, 138, 0.6);
 }
 
-@mixin dark-theme {
+// Matches `class="light"` and `class="vscode-high-contrast vscode-high-contrast-light"`.
+body:not(.dark):not(.vscode-dark):not(.vscode-high-contrast), body.vscode-high-contrast-light {
+    @import "prism";
+}
+
+// Matches `class="dark"`, `class="vscode-dark"`, and `class="vscode-high-contrast"`.
+body.dark, body.vscode-dark, body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+    @import "prism-dark";
+
     --td-border-color: #{color.invert(rgb(230, 230, 230), 90%)};
     --td-border-color-hover: #{color.invert(rgb(199, 199, 199), 90%)};
     --td-border-color-active: #{color.invert(rgb(143, 143, 143), 90%)};
@@ -41,24 +49,6 @@
     --data-null-placeholder: #{color.scale(rgba(4, 63, 138, 0.6), $lightness: 60%)};
     --data-default: #{color.scale(rgb(4, 63, 138), $lightness: 60%)};
     --data-default-placeholder: #{color.scale(rgba(4, 63, 138, 0.6), $lightness: 60%)};
-}
-
-@media not (prefers-color-scheme: dark) {
-    body:not(.dark):not(.vscode-dark):not(.vscode-high-contrast) {
-        @import "prism";
-    }
-}
-
-body.dark, body.vscode-dark, body.vscode-high-contrast {
-    @include dark-theme;
-    @import "prism-dark";
-}
-
-@media (prefers-color-scheme: dark) {
-    @import "prism-dark";
-    :root {
-        @include dark-theme;
-    }
 }
 
 * {
