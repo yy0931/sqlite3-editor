@@ -72,9 +72,11 @@ class LocalPythonClient {
 
     close() {
         this.#closed ||= "success"
-        fs.rmSync(this.#requestBody, { force: true })
-        fs.rmSync(this.#responseBody, { force: true })
-        this.#p.kill()
+        this.#p.stdin.write("close\n")
+        this.#p.once("close", () => {
+            fs.rmSync(this.#requestBody, { force: true })
+            fs.rmSync(this.#responseBody, { force: true })
+        })
     }
 }
 

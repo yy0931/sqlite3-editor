@@ -31,6 +31,14 @@ class Server:
         self.response_body_filepath = response_body_filepath
         self.cwd = cwd
 
+    def close(self):
+        self.readonly_connection.close()
+
+        # Create a noop checkpoint to delete WAL files. https://www.sqlite.org/wal.html#avoiding_excessively_large_wal_files
+        with self.readwrite_connection as con:
+            con.execute("SELECT * from sqlite_master LIMIT 1").fetchall()
+        self.readwrite_connection.close()
+
     def handle(self):
         try:
             with open(self.request_body_filepath, "rb") as f:
@@ -43,7 +51,8 @@ class Server:
                     with self.readwrite_connection as con:
                         con.execute(request_body["query"], request_body["params"])
                 else:
-                    cursor = self.readonly_connection.execute(request_body["query"], request_body["params"])
+                    with self.readonly_connection as con:
+                        cursor = con.execute(request_body["query"], request_body["params"])
                     if cursor.description is not None:  # is None when inserting, updating, etc.
                         columns = [desc[0] for desc in cursor.description]
                         response_body = {"columns": columns, "records": [{k: v for k, v in zip(columns, record)} for record in cursor.fetchall()]}
@@ -69,7 +78,10 @@ if __name__ == "__main__":
     server = Server(args.database_filepath, args.request_body_filepath, args.response_body_filepath, args.cwd)
     try:
         while True:
-            if input().strip() == "handle":
+            command = input().strip()
+            if command == "handle":
                 print(server.handle(), flush=True)
-    except EOFError:
-        pass
+            elif command == "close":
+                break
+    finally:
+        server.close()
