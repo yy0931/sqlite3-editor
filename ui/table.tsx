@@ -416,6 +416,11 @@ export const Table = () => {
                                         await alterTable(tableName, name, "DROP COLUMN")
                                         flash(document.querySelector("#editor")!)
                                     }}>Delete…</button>}
+                                    {tableName !== undefined && tableType === "table" && <button onClick={async () => {
+                                        if (!await beforeUnmount()) { return }
+                                        await alterTable(tableName, name, "ADD COLUMN")
+                                        flash(document.querySelector("#editor")!)
+                                    }}>Add Column…</button>}
                                     <hr />
                                     <button disabled={visibleColumns.length === 1} onClick={async () => {
                                         await setVisibleColumns(visibleColumns.filter((v) => v !== name))
