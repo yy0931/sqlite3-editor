@@ -80,5 +80,8 @@ if __name__ == "__main__":
     parser.add_argument("--cwd", type=str, required=True)
     args = parser.parse_args()
     server = Server(args.database_filepath, args.request_body_filepath, args.response_body_filepath, args.cwd)
-    while True:
-        print(server.handle(input()), flush=True)
+    try:
+        while True:
+            print(server.handle(input()), flush=True)
+    except EOFError:
+        pass
