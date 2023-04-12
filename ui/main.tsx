@@ -211,7 +211,7 @@ const App = () => {
                             <button onClick={async () => {
                                 await useTableStore.getState().setViewerQuery({
                                     useCustomViewerQuery: true,
-                                    customViewerQuery: "SELECT * FROM pragma_journal_mode",
+                                    customViewerQuery: "SELECT * FROM pragma_journal_mode",  // PRAGMA functions require SQLite3 >=3.16.0 (2017-01-02)
                                     tableName: useTableStore.getState().tableName,
                                 })
                             }}>Check Journal Mode</button>
