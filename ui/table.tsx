@@ -3,7 +3,7 @@ import * as remote from "./remote"
 import { useEditorStore } from "./editor"
 import produce from "immer"
 import { scrollbarWidth, ScrollbarY } from "./scrollbar"
-import { flash, persistentRef, renderContext, Tooltip } from "./components"
+import { flash, persistentRef, renderContextmenu, Tooltip } from "./components"
 import { BigintMath, createStore, querySelectorWithRetry } from "./util"
 import deepEqual from "fast-deep-equal"
 import type { JSXInternal } from "preact/src/jsx"
@@ -405,7 +405,7 @@ export const Table = () => {
                                 ev.currentTarget.classList.remove("ew-resize")
                             }}
                             onContextMenu={(ev) => {
-                                renderContext(ev, <>
+                                renderContextmenu(ev, <>
                                     {tableName !== undefined && tableType === "table" && <button onClick={async () => {
                                         if (!await beforeUnmount()) { return }
                                         await alterTable(tableName, name, "RENAME COLUMN")
@@ -537,7 +537,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                 await delete_(tableName, props.record, props.row)
             }}
             onContextMenu={(ev) => {
-                renderContext(ev, <>
+                renderContextmenu(ev, <>
                     <button onClick={async () => {
                         if (tableName === undefined) { return }
                         if (!await beforeUnmount()) { return }
@@ -568,7 +568,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                 onContextMenu={(ev) => {
                     if (input?.textarea && !input.textarea.classList.contains("single-click")) { return }  // if the in-place input is visible
                     ev.preventDefault()
-                    renderContext(ev, <>
+                    renderContextmenu(ev, <>
                         <button onClick={onMouseDown}>Update</button>
                         <hr />
                         <button onClick={() => {

@@ -5,7 +5,7 @@ import { render } from "preact"
 import { Editor, useEditorStore } from "./editor"
 import { useEffect, useRef } from "preact/hooks"
 import * as remote from "./remote"
-import { Button, Checkbox, flash, Highlight, persistentUseState, renderContext, Select, SVGOnlyCheckbox } from "./components"
+import { Button, Checkbox, flash, Highlight, persistentUseState, renderContextmenu, Select, SVGOnlyCheckbox } from "./components"
 import { escapeSQLIdentifier, Table, useTableStore } from "./table"
 import "./scrollbar"
 import { SettingsView } from "./schema_view"
@@ -208,7 +208,7 @@ const App = () => {
 
                     {/* Tools */}
                     <SVGOnlyCheckbox icon="#tools" title="Other Tools" onClick={(_, ev) => {
-                        renderContext(ev, <>
+                        renderContextmenu(ev, <>
                             <button onClick={async () => {
                                 await useTableStore.getState().setViewerQuery({
                                     useCustomViewerQuery: true,

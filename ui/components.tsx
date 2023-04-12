@@ -103,7 +103,7 @@ export const flash = (element: Element) => {
     setTimeout(() => { element.classList.add("flash") }, 50)
 }
 
-export const renderContext = (ev: MouseEvent, component: preact.ComponentChild) => {
+export const renderContextmenu = (ev: MouseEvent, component: preact.ComponentChild) => {
     ev.preventDefault()
     const dialog = document.querySelector<HTMLDialogElement>("#contextmenu")!
     dialog.style.left = ev.pageX + "px"
