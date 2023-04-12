@@ -3,3 +3,4 @@ node_modules/
 *.vsix
 extension.js
 __pycache__
+_test_files

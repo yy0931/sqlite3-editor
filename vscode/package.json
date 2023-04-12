@@ -14,7 +14,8 @@
   },
   "scripts": {
     "build": "pwsh ./build-dev.ps1 || ./build-dev.sh",
-    "vscode:prepublish": "npm run build"
+    "vscode:prepublish": "npm run build",
+    "test": "python3 -m pytest"
   },
   "engines": {
     "vscode": "1.71.0"
