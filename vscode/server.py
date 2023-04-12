@@ -3,7 +3,6 @@ import os
 import re
 import sqlite3
 import sys
-import traceback
 import urllib.parse
 
 from umsgpack import pack, unpack
@@ -32,7 +31,7 @@ class Server:
         self.response_body_filepath = response_body_filepath
         self.cwd = cwd
 
-    def handle(self, path):
+    def handle(self, path: str):
         path = path.strip()
         try:
             with open(self.request_body_filepath, "rb") as f:
