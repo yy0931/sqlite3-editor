@@ -151,7 +151,24 @@ const App = () => {
                     <Highlight>SELECT </Highlight>
                     <span class="px-2 cursor-pointer hover:bg-gray-300 border-b-[1px] border-b-gray-500" onClick={() => { columnSelectDialogRef.current?.showModal() }}>{visibleColumnsSQL}</span>
                     <Highlight> FROM </Highlight>
-                    {tableName === undefined ? <>No tables</> : <Select value={tableName} onChange={(value) => { setViewerQuery({ tableName: value }).catch(console.error) }} options={Object.fromEntries(tableList.map(({ name: tableName, type }) => [tableName, { group: type }] as const).sort((a, b) => a[0].localeCompare(b[0])))} class="primary" data-testid="table-name" />}
+                    {tableName === undefined ? <>No tables</> : <Select
+                        value={tableName}
+                        onChange={(value) => { setViewerQuery({ tableName: value }).catch(console.error) }}
+                        options={Object.fromEntries(tableList.map(({ name: tableName, type }) => [tableName, { group: type }] as const).sort((a, b) => a[0].localeCompare(b[0])))}
+                        class="primary"
+                        onContextMenu={(ev) => {
+                            renderContextmenu(ev, <>
+                                <button onClick={async () => { setIsSettingsViewOpen(!isSettingsViewOpen) }}>Show Table Schema and Indexes</button>
+                                {tableType === "table" && <button onClick={async () => { useEditorStore.getState().dropTable(tableName); flash(document.querySelector("#editor")!) }}>Drop Table</button>}
+                                {tableType === "view" && <button onClick={async () => { useEditorStore.getState().dropView(tableName); flash(document.querySelector("#editor")!) }}>Drop View</button>}
+                                {tableType === "table" && <button onClick={async () => { await useEditorStore.getState().alterTable(tableName, undefined); flash(document.querySelector("#editor")!) }}>Alter Table</button>}
+                                <button onClick={async () => { useEditorStore.getState().createTable(tableName); flash(document.querySelector("#editor")!) }}>Create Table</button>
+                                {tableType === "table" && <button onClick={async () => { useEditorStore.getState().createIndex(tableName); flash(document.querySelector("#editor")!) }}>Create Index</button>}
+                                <hr />
+                                <button onClick={async () => { await navigator.clipboard.writeText(tableName); flash(document.querySelector("#editor")!) }}>Copy Table Name</button>
+                            </>)
+                        }}
+                        data-testid="table-name" />}
                 </>}
 
                 {/* Custom Query */}

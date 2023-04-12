@@ -425,6 +425,8 @@ export const Table = () => {
                                     <button disabled={visibleColumns.length === 1} onClick={async () => {
                                         await setVisibleColumns(visibleColumns.filter((v) => v !== name))
                                     }}>Hide</button>
+                                    <hr />
+                                    <button disabled={visibleColumns.length === 1} onClick={() => navigator.clipboard.writeText(name)}>Copy Column Name</button>
                                 </>)
                             }}>
                             <code class="inline-block [word-break:break-word] [color:inherit] [font-family:inherit] [font-size:inherit]">
@@ -543,6 +545,9 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                         if (!await beforeUnmount()) { return }
                         await delete_(tableName, props.record, props.row)
                     }}>Delete…</button>
+                    <hr />
+                    <button onClick={() => navigator.clipboard.writeText(props.rowNumber + "")}>Copy Row Number</button>
+                    <button onClick={() => navigator.clipboard.writeText(props.record.rowid + "")}>Copy Rowid</button>
                 </>)
             }}
             data-testid={`row number ${props.rowNumber}`}>{props.rowNumber}</td>
@@ -567,7 +572,6 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                 onMouseDown={onMouseDown}
                 onContextMenu={(ev) => {
                     if (input?.textarea && !input.textarea.classList.contains("single-click")) { return }  // if the in-place input is visible
-                    ev.preventDefault()
                     renderContextmenu(ev, <>
                         <button onClick={onMouseDown}>Update</button>
                         <hr />

@@ -8,7 +8,7 @@ import type { ReactElement } from "react"
 import { render } from "preact"
 
 /** Typed version of `<select>` */
-export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string, group?: string }>, value: T, onChange: (value: T) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, class?: string, "data-testid"?: string }) => {
+export const Select = <T extends string>(props: { options: Record<T, { text?: string, disabled?: boolean, disabledReason?: string, group?: string }>, value: T, onChange: (value: T) => void, onContextMenu?: (ev: JSXInternal.TargetedMouseEvent<HTMLSelectElement>) => void, style?: JSXInternal.CSSProperties, tabIndex?: number, class?: string, "data-testid"?: string }) => {
     const ref1 = useRef<HTMLSelectElement>(null)
     const ref2 = useRef<HTMLSelectElement>(null)
     useLayoutEffect(() => {
@@ -24,15 +24,24 @@ export const Select = <T extends string>(props: { options: Record<T, { text?: st
     }
 
     return <>
-        <select autocomplete="off" value={props.value} style={props.style} class={"pl-[15px] pr-[15px] " + (props.class ?? "")} ref={ref1} onChange={(ev) => props.onChange(ev.currentTarget.value as T)} tabIndex={props.tabIndex} data-testid={props["data-testid"]}>{
-            ([...groups.entries()] as [string, T[]][]).map(([group, values]) => {
-                const options = values.map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].disabled ? props.options[value].disabledReason : undefined}>{props.options[value].text ?? value}</option>)
-                if (group === undefined) {
-                    return options
-                }
-                return <optgroup label={group}>{options}</optgroup>
-            })
-        }</select>
+        <select
+            autocomplete="off"
+            value={props.value}
+            style={props.style}
+            class={"pl-[15px] pr-[15px] " + (props.class ?? "")}
+            ref={ref1}
+            onChange={(ev) => props.onChange(ev.currentTarget.value as T)}
+            tabIndex={props.tabIndex}
+            onContextMenu={props.onContextMenu}
+            data-testid={props["data-testid"]}>{
+                ([...groups.entries()] as [string, T[]][]).map(([group, values]) => {
+                    const options = values.map((value) => <option value={value} disabled={props.options[value].disabled} title={props.options[value].disabled ? props.options[value].disabledReason : undefined}>{props.options[value].text ?? value}</option>)
+                    if (group === undefined) {
+                        return options
+                    }
+                    return <optgroup label={group}>{options}</optgroup>
+                })
+            }</select>
 
         {/* Hidden replication for auto resizing */}
         <span class="select-none inline-block pointer-events-none w-0 h-0 overflow-hidden">
