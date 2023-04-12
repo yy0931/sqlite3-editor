@@ -130,6 +130,7 @@ const App = () => {
     }, { current: document.body })
 
     const closeOnClickOutside = (ev: JSXInternal.TargetedMouseEvent<HTMLDialogElement>) => {
+        if (/* undefined or 0 */!ev.clientX || !ev.clientY) { return }
         const rect = ev.currentTarget.getBoundingClientRect()
         if (rect.left <= ev.clientX && ev.clientX < rect.right &&
             rect.top <= ev.clientY && ev.clientY < rect.bottom) { return }
