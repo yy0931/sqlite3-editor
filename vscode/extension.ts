@@ -79,7 +79,7 @@ class LocalPythonClient {
 }
 
 const supportedPythonVersion = [3, 6] as const
-const supportedSQLiteVersion = [3, 37]
+const supportedSQLiteVersion = [3, 8]
 
 const checkPythonVersion = (filepath: string) => {
     const pythonVersionCheck = spawnSync(filepath, ["-c", `import sys; print(sys.version_info >= (${supportedPythonVersion[0]}, ${supportedPythonVersion[1]}))`]).stdout.toString()
@@ -130,7 +130,7 @@ export const activate = (context: vscode.ExtensionContext) => {
             async openCustomDocument(uri, openContext, token) {
                 const pythonPath = (vscode.workspace.getConfiguration("sqlite3-editor").get<string>("pythonPath") || await findPython())
                 if (!pythonPath) {
-                    const msg = `Could not find a Python ${supportedPythonVersion[0]}.${supportedPythonVersion[1]} + binary compiled with SQLite ${supportedSQLiteVersion[0]}.${supportedSQLiteVersion[1]} +.Install one from https://www.python.org/ or your OS's package manager (Microsoft Store, brew, apt, etc.).`
+                    const msg = `Could not find a Python >=${supportedPythonVersion[0]}.${supportedPythonVersion[1]} binary compiled with SQLite >=${supportedSQLiteVersion[0]}.${supportedSQLiteVersion[1]} .Install one from https://www.python.org/ or your OS's package manager (Microsoft Store, brew, apt, etc.).`
                     vscode.window.showErrorMessage(msg)
                     throw new Error(msg)
                 }

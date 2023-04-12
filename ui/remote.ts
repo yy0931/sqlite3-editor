@@ -4,7 +4,7 @@ import { escapeSQLIdentifier, useTableStore } from "./table"
 export type TableInfo = { cid: bigint, dflt_value: bigint | string | null, name: string, notnull: bigint, type: string, pk: bigint }[]
 export type UniqueConstraints = { primary: boolean, columns: string[] }[]
 export type SQLite3Value = string | number | bigint | Uint8Array | null
-export type TableListItem = { schema: string, name: string, type: "table" | "view" | "shadow" | "virtual", ncol: bigint, wr: bigint, strict: bigint }
+export type TableListItem = { name: string, type: "table" | "view" | "shadow" | "virtual", wr: bigint, strict: bigint }
 
 export type Message = { data: { /* preact debugger also uses message events */ type: "sqlite3-editor-server" } & ({ requestId: undefined } | { requestId: number } & ({ err: string } | { body: Uint8Array })) }
 
@@ -89,7 +89,10 @@ export const getState = <T>(key: string): T | undefined => {
 
 type QueryResult<T extends string> = Promise<{
     columns: string[]
-    records: T extends `SELECT ${string}` | `PRAGMA pragma_list` ? Record<string, SQLite3Value>[] : (Record<string, SQLite3Value>[] | undefined)
+    records:
+    T extends `SELECT ${string}` ? Record<string, SQLite3Value>[] :
+    T extends `PRAGMA pragma_list` ? { name: string[] } :
+    (Record<string, SQLite3Value>[] | undefined)
 }>
 
 /** Queries the database, and commits if `mode` is "w+". */
@@ -115,7 +118,7 @@ export const hasTableAutoincrementColumn = async (tableName: string, opts: PostO
 
 export type IndexInfo = { seqno: bigint, cid: bigint, name: string }[]
 
-/** Queries `PRAGMA index_info(indexName)`. (>= 3.30.0) */
+/** Queries `PRAGMA index_info(indexName)`. */
 export const getIndexInfo = async (indexName: string, opts: PostOptions = {}) =>
     (await query(`PRAGMA index_info(${escapeSQLIdentifier(indexName)})`, [], "r", opts)).records as IndexInfo
 
@@ -129,16 +132,33 @@ export const getIndexList = async (tableName: string, opts: PostOptions = {}) =>
 export const getTableInfo = async (tableName: string, opts: PostOptions = {}) =>
     (await query(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r", opts)).records as TableInfo
 
-/** Lists tables in the database by querying `PRAGMA table_list`, excluding internal tables. (>= 3.37.0) */
+export let isSQLiteOlderThan3_37 = false
+
+/** Lists tables in the database, excluding internal tables. */
 export const getTableList = async (opts: PostOptions = {}) => {
-    return ((await query("PRAGMA table_list", [], "r", opts)).records as TableListItem[])
+    const tableList = await query("PRAGMA table_list", [], "r", opts)  // Requires SQLite >= 3.37.0
+    if (!tableList) {  // if using SQLite < 3.37.0
+        isSQLiteOlderThan3_37 = true
+        const tableList: TableListItem[] = []
+        for (const { name, type, sql } of (await query(`SELECT name, type, sql FROM sqlite_master WHERE NOT (name LIKE "sqlite\\_%" ESCAPE "\\") AND type IN ("table", "view", "shadow", "virtual")`, [], "r", opts)).records as { name: string, type: "table" | "view" | "shadow" | "virtual", sql: string }[]) {
+            tableList.push({
+                name,
+                type,
+                wr: /WITHOUT\s*ROWID[^()]*$/.test(sql) ? 1n : 0n,
+                strict: 0n, // The STRICT option is introduced in SQLite 3.37.
+            })
+        }
+        return tableList
+    }
+    return (tableList.records as TableListItem[])
         .filter(({ name }) => !name.startsWith("sqlite_"))  // https://www.sqlite.org/fileformat2.html#intschema
 }
 
 /** Retrieves the table schema. */
 export const getTableSchema = async (tableName: string, opts: PostOptions = {}) =>
-    (await query(`SELECT sql FROM sqlite_schema WHERE name = ?`, [tableName], "r", opts)).records[0]?.sql as string | undefined
+    // sqlite_master is renamed to sqlite_master in 3.33.0, but sqlite_master is kept as an alias https://sqlite.org/forum/forumpost/889b616b87a7020a
+    (await query(`SELECT sql FROM sqlite_master WHERE name = ?`, [tableName], "r", opts)).records[0]?.sql as string | undefined
 
 /** Retrieves the index schema. */
 export const getIndexSchema = async (indexName: string, opts: PostOptions = {}) =>
-    (await query(`SELECT sql FROM sqlite_schema WHERE type = ? AND name = ?`, ["index", indexName], "r", opts)).records[0]?.sql as string | null | undefined
+    (await query(`SELECT sql FROM sqlite_master WHERE type = ? AND name = ?`, ["index", indexName], "r", opts)).records[0]?.sql as string | null | undefined

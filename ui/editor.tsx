@@ -192,7 +192,7 @@ export const useEditorStore = createStore("useEditorStore", {
     /** Switches the editor to the CREATE TABLE editor. */
     const createTable = (tableName: string | undefined) => {
         unmountInput?.()
-        set({ statement: "CREATE TABLE", strict: true, newTableName: "", tableConstraints: "", withoutRowId: false, columnDefs: [], tableName })
+        set({ statement: "CREATE TABLE", strict: !remote.isSQLiteOlderThan3_37, newTableName: "", tableConstraints: "", withoutRowId: false, columnDefs: [], tableName })
     }
 
     /** Switches the editor to the DELETE editor. */

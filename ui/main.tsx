@@ -331,6 +331,10 @@ const SelectedColumnEditor = () => {
         }
     }
     await useEditorStore.getState().switchTable(tableName)
+    const s = useEditorStore.getState()
+    if (s.statement === "CREATE TABLE" && remote.isSQLiteOlderThan3_37) {
+        useEditorStore.setState({ strict: false })
+    }
     render(<App />, document.body)
 })().catch((err) => {
     console.error(err)
