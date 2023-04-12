@@ -56,7 +56,7 @@ body.dark, body.vscode-dark, body.vscode-high-contrast:not(.vscode-high-contrast
 }
 
 body {
-    @apply bg-gray-100 text-black h-[100vh] [font-size:12px] overflow-x-hidden;
+    @apply bg-gray-100 text-black h-[100vh] [font-size:12px] overflow-x-hidden select-none;
     padding: 0 !important; // Override the VSCode's default
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
 }
