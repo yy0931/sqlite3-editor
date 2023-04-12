@@ -13,7 +13,7 @@ class LocalPythonClient {
     readonly #p
     readonly #requestBody = temporaryFile({ extension: "msgpack" })
     readonly #responseBody = temporaryFile({ extension: "msgpack" })
-    #closed = false
+    #closed: false | "success" | "error" = false
 
     #resolve!: (data: Buffer) => void
     #reject!: (message: Error) => void
@@ -32,7 +32,7 @@ class LocalPythonClient {
         let errors = ""
         this.#p.stderr.on("data", (err: Buffer) => {
             const errStr = err.toString()
-            if (errStr.includes("Traceback (")) {
+            if (errStr.includes("Traceback (") || this.#closed === "error") {
                 // Show the error if it is a runtime error.
                 vscode.window.showErrorMessage(errStr)
             } else {
@@ -49,7 +49,8 @@ class LocalPythonClient {
             }
         })
         this.#p.on("exit", (code) => {
-            if (!this.#closed) { return }
+            if (this.#closed) { return }
+            this.#closed = "error"
             vscode.window.showErrorMessage(`Process exited: ${code}\n${errors}`)
         })
     }
@@ -69,7 +70,7 @@ class LocalPythonClient {
     }
 
     close() {
-        this.#closed = true
+        this.#closed ||= "success"
         fs.rmSync(this.#requestBody, { force: true })
         fs.rmSync(this.#responseBody, { force: true })
         this.#p.kill()
