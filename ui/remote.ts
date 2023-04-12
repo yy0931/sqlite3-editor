@@ -108,6 +108,7 @@ export const import_ = (filepath: string, opts: PostOptions = {}) =>
 export const export_ = (filepath: string, data: Uint8Array, opts: PostOptions = {}) =>
     post(`/export`, { filepath, data }, opts) as Promise<void>
 
+/** Opens an integrated terminal and types the text. */
 export const openTerminal = async (text: string, opts: PostOptions = {}) => {
     await post("/openTerminal", { text }, opts)
 }
