@@ -203,10 +203,13 @@ export const useTableStore = createStore("useTableStore", {
         if (deepEqual(get().paging, paging)) { return }
         if (!await useEditorStore.getState().beforeUnmount()) { return }
 
-        await remote.setState("visibleAreaSize", Number(paging.visibleAreaSize))
         if (!preserveEditorState) { await useEditorStore.getState().discardChanges() }
         paging.visibleAreaTop = BigintMath.max(0n, BigintMath.min(paging.numRecords - paging.visibleAreaSize + 1n, paging.visibleAreaTop))
+
+        // Update paging before querying the database. Otherwise the scrollbar will vibrate.
         set({ paging })
+
+        await remote.setState("visibleAreaSize", Number(paging.visibleAreaSize))
         if (!withoutTableReloading) {
             await reloadTable(false, false)
         }
