@@ -551,17 +551,26 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
         {tableInfo.filter((v) => visibleColumns.includes(v.name)).map(({ name }, i) => {
             const value = props.record[name] as remote.SQLite3Value
             const input = props.selectedColumn === name ? props.input : undefined
+            const onMouseDown = async (ev: MouseEvent) => {
+                if (ev.target instanceof HTMLTextAreaElement) { return }  // in-place input
+                ev.preventDefault()
+                if (ev.button === 2) { return }
+                const editorState = useEditorStore.getState()
+                if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
+                if (tableName === undefined) { return }
+                if (!await beforeUnmount()) { return }
+                update(tableName, name, props.row)
+            }
             return <td
                 class={"pl-[10px] pr-[10px] overflow-hidden border-r-[1px] border-[var(--td-border-color)] border-b-[1px] border-b-[var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "") + " " + (input ? "editing" : "")}
                 style={{ maxWidth: props.columnWidths[i] }}
-                onMouseDown={async (ev) => {
-                    if (ev.target instanceof HTMLTextAreaElement) { return }  // in-place input
+                onMouseDown={onMouseDown}
+                onContextMenu={(ev) => {
+                    if (input?.textarea && !input.textarea.classList.contains("single-click")) { return }  // if the in-place input is visible
                     ev.preventDefault()
-                    const editorState = useEditorStore.getState()
-                    if (editorState.statement === "UPDATE" && editorState.row === props.row && editorState.column === name) { return }
-                    if (tableName === undefined) { return }
-                    if (!await beforeUnmount()) { return }
-                    update(tableName, name, props.row)
+                    renderContext(ev, <>
+                        <button onClick={onMouseDown}>Update</button>
+                    </>)
                 }}
                 data-testid={`cell ${props.rowNumber - 1n}, ${i}`}>
                 <pre class={"overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")}>
