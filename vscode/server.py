@@ -31,37 +31,24 @@ class Server:
         self.response_body_filepath = response_body_filepath
         self.cwd = cwd
 
-    def handle(self, path: str):
-        path = path.strip()
+    def handle(self):
         try:
             with open(self.request_body_filepath, "rb") as f:
                 request_body = unpack(f)
 
             response_body = None
-
-            if path == "/query":
-                # { query: string, params: (number | bigint | string | Uint8Array | Buffer)[], mode: "w+" | "r" }
-                try:
-                    if request_body["mode"] == "w+":
-                        with self.readwrite_connection as con:
-                            con.execute(request_body["query"], request_body["params"])
-                    else:
-                        cursor = self.readonly_connection.execute(request_body["query"], request_body["params"])
-                        if cursor.description is not None:  # is None when inserting, updating, etc.
-                            columns = [desc[0] for desc in cursor.description]
-                            response_body = {"columns": columns, "records": [{k: v for k, v in zip(columns, record)} for record in cursor.fetchall()]}
-                except Exception as err:
-                    raise Exception(f"{err}\nQuery: {request_body['query']}\nParams: {request_body['params']}")
-            elif path == "/import":
-                # { filepath: string }
-                with open(os.path.join(self.cwd, request_body["filepath"]), "rb") as f:
-                    response_body = bytearray(f.read())
-            elif path == "/export":
-                # { filepath: string, data: Uint8Array | Buffer }
-                with open(os.path.join(self.cwd, request_body["filepath"]), "wb") as f:
-                    f.write(request_body["data"])
-            else:
-                raise Exception("Invalid path: " + path)
+            # { query: string, params: (number | bigint | string | Uint8Array | Buffer)[], mode: "w+" | "r" }
+            try:
+                if request_body["mode"] == "w+":
+                    with self.readwrite_connection as con:
+                        con.execute(request_body["query"], request_body["params"])
+                else:
+                    cursor = self.readonly_connection.execute(request_body["query"], request_body["params"])
+                    if cursor.description is not None:  # is None when inserting, updating, etc.
+                        columns = [desc[0] for desc in cursor.description]
+                        response_body = {"columns": columns, "records": [{k: v for k, v in zip(columns, record)} for record in cursor.fetchall()]}
+            except Exception as err:
+                raise Exception(f"{err}\nQuery: {request_body['query']}\nParams: {request_body['params']}")
         except Exception as err:
             with open(self.response_body_filepath, "w") as f:
                 f.write(str(err))
@@ -82,6 +69,7 @@ if __name__ == "__main__":
     server = Server(args.database_filepath, args.request_body_filepath, args.response_body_filepath, args.cwd)
     try:
         while True:
-            print(server.handle(input()), flush=True)
+            if input().strip() == "handle":
+                print(server.handle(), flush=True)
     except EOFError:
         pass

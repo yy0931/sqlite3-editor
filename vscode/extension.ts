@@ -57,12 +57,12 @@ class LocalPythonClient {
     }
 
     #queue = new Array<() => void>()
-    request(url: string, body: Buffer | Uint8Array, resolve: (data: Buffer) => void, reject: (err: Error) => void) {
+    request(body: Buffer | Uint8Array, resolve: (data: Buffer) => void, reject: (err: Error) => void) {
         const job = () => {
             fs.writeFileSync(this.#requestBody, body)
             this.#resolve = (data) => { resolve(data); this.#queue.shift(); this.#queue[0]?.() }
             this.#reject = (err) => { reject(err); this.#queue.shift(); this.#queue[0]?.() }
-            this.#p.stdin.write(url + "\n")
+            this.#p.stdin.write("handle\n")
         }
         this.#queue.push(job)
         if (this.#queue.length === 1) {
@@ -192,8 +192,20 @@ export const activate = (context: vscode.ExtensionContext) => {
                         } case "/downloadState": {
                             res.send(packr.pack(Object.fromEntries(context.workspaceState.keys().map((key) => [key, context.workspaceState.get(key)]))))
                             break
+                        } case "/import": {
+                            const { filepath } = packr.unpack(body) as { filepath: string }
+                            fs.promises.readFile(path.resolve(path.dirname(document.uri.fsPath), filepath))
+                                .then((buf) => { res.send(packr.pack(buf)) })
+                                .catch((err) => { res.status(400).send(err.message) })
+                            break
+                        } case "/export": {
+                            const { filepath, data } = packr.unpack(body) as { filepath: string, data: Uint8Array | Buffer }
+                            fs.promises.writeFile(path.resolve(path.dirname(document.uri.fsPath), filepath), data)
+                                .then(() => { res.send(packr.pack(null)) })
+                                .catch((err) => { res.status(400).send(err.message) })
+                            break
                         } default:
-                            document.conn.request(url, body, (body) => res.send(body), (err) => { res.status(400).send((err as Error).message) })
+                            document.conn.request(body, (body) => res.send(body), (err) => { res.status(400).send((err as Error).message) })
                             break
                     }
                 }))
