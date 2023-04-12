@@ -13,7 +13,7 @@
     "url": "https://github.com/yy0931/sqlite3-editor/issues"
   },
   "scripts": {
-    "build": "./build.sh",
+    "build": "pwsh ./build-dev.ps1 || ./build-dev.sh",
     "vscode:prepublish": "npm run build"
   },
   "engines": {
