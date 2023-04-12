@@ -235,7 +235,9 @@ export const activate = (context: vscode.ExtensionContext) => {
                             break
                         } case "/openTerminal": {
                             const { text } = packr.unpack(body) as { text: string }
-                            terminal ??= vscode.window.createTerminal("SQLite3 Editor")
+                            if (!terminal || terminal.exitStatus !== undefined) {
+                                terminal = vscode.window.createTerminal("SQLite3 Editor")
+                            }
                             terminal.sendText(text
                                 .replaceAll("{{pythonPath}}", escapeShell(document.pythonPath))
                                 .replaceAll("{{databasePath}}", escapeShell(document.uri.fsPath)), false)
