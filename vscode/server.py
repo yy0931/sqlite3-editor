@@ -64,7 +64,6 @@ class Server:
             else:
                 raise Exception("Invalid path: " + path)
         except Exception as err:
-            traceback.print_exc(file=sys.stderr)
             with open(self.response_body_filepath, "w") as f:
                 f.write(str(err))
             return 400
