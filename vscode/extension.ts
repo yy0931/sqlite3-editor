@@ -254,7 +254,7 @@ export const activate = (context: vscode.ExtensionContext) => {
                             }
                             const pipList = JSON.parse(spawnSyncOr(document.pythonPath, ["-m", "pip", "list", "--format=json"], "[]")) as { name: string, version: string }[]
                             terminal.sendText(text
-                                .replaceAll("{{install sqlite-utils &&}}", pipList.some(({ name, version }) => name === "sqlite-utils" && +version.split(".")[0]! >= 3) ? "" : "{{pythonPath}} -m pip install -qU sqlite-utils && ")
+                                .replaceAll("{{install sqlite-utils &&}}", pipList.some(({ name, version }) => name === "sqlite-utils" && +version.split(".")[0]! >= 3) ? "" : "{{pythonPath}} -m pip install -qU --user sqlite-utils && ")
                                 .replaceAll("{{pythonPath}}", escapeShell(document.pythonPath))
                                 .replaceAll("{{databasePath}}", escapeShell(document.uri.fsPath)), false)
                             terminal.show()
