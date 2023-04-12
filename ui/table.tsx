@@ -570,6 +570,18 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                     ev.preventDefault()
                     renderContext(ev, <>
                         <button onClick={onMouseDown}>Update</button>
+                        <hr />
+                        <button onClick={() => {
+                            if (value instanceof Uint8Array) {  // BLOB
+                                navigator.clipboard.writeText(blob2hex(value)).catch(console.error)
+                            } else if (value === null) {  // NULL
+                                navigator.clipboard.writeText("NULL").catch(console.error)
+                            } else {
+                                navigator.clipboard.writeText("" + value).catch(console.error)
+                            }
+                        }}>Copy Text</button>
+                        <button onClick={() => navigator.clipboard.writeText(JSON.stringify(value))}>Copy JSON</button>
+                        <button onClick={() => navigator.clipboard.writeText(unsafeEscapeValue(value))}>Copy SQL</button>
                     </>)
                 }}
                 data-testid={`cell ${props.rowNumber - 1n}, ${i}`}>
