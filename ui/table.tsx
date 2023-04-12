@@ -705,7 +705,7 @@ export const renderValue = (value: remote.SQLite3Value): JSXInternal.Element => 
     } else if (typeof value === "string") {  // TEXT
         return <span class="text-[var(--data-string)]">{value.replaceAll("\\", "\\\\").replaceAll("\t", "\\t").replaceAll("\r", "\\r").replaceAll("\n", "\\n") || /* nbsp */"\u00a0"}</span>
     } else if (typeof value === "number") {  // REAL
-        return <span class="text-[var(--data-number)]">{/^[+\-]?\d+$/.test("" + value) ? "" + value + ".0" : "" + value}</span>
+        return <span class="text-[var(--data-number)]">{/^[+\-]?\d+$/.test("" + value) ? `${value}.0` : `${value}`}</span>
     } else {  // INTEGER
         return <span class="text-[var(--data-number)]">{"" + value}</span>
     }
