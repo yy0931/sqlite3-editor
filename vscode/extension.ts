@@ -79,13 +79,27 @@ class LocalPythonClient {
     }
 }
 
+/**
+ * Calls spawnSync() returns the child process's stdout as a string.
+ * If the child process returns a non-zero exit code, or if an error occurs, the `or` value is returned.
+ */
+const spawnSyncOr = (command: string, args: readonly string[], or: string) => {
+    try {
+        const p = spawnSync(command, args)
+        if (p.status !== 0) { return or }
+        return p.stdout.toString()
+    } catch (err) {
+        return or
+    }
+}
+
 const supportedPythonVersion = [3, 6] as const
 const supportedSQLiteVersion = [3, 8]
 
 const checkPythonVersion = (filepath: string) => {
-    const pythonVersionCheck = spawnSync(filepath, ["-c", `import sys; print(sys.version_info >= (${supportedPythonVersion[0]}, ${supportedPythonVersion[1]}))`]).stdout.toString()
+    const pythonVersionCheck = spawnSyncOr(filepath, ["-c", `import sys; print(sys.version_info >= (${supportedPythonVersion[0]}, ${supportedPythonVersion[1]}))`], "")
     if (!pythonVersionCheck.includes("True")) { return false }
-    const sqliteVersionCheck = spawnSync(filepath, ["-c", `import sqlite3; print(tuple(map(int, sqlite3.sqlite_version.split("."))) >= (${supportedSQLiteVersion[0]}, ${supportedSQLiteVersion[1]}))`]).stdout.toString()
+    const sqliteVersionCheck = spawnSyncOr(filepath, ["-c", `import sqlite3; print(tuple(map(int, sqlite3.sqlite_version.split("."))) >= (${supportedSQLiteVersion[0]}, ${supportedSQLiteVersion[1]}))`], "")
     if (!sqliteVersionCheck.includes("True")) { return false }
     return true
 }
@@ -100,7 +114,7 @@ const findPython = async () => {
     ]) {
         // fs.existsSync(filepath) throws permission errors so we need to try executing the binary.
         const filepath = `${os.homedir()}\\AppData\\Local\\Microsoft\\WindowsApps\\${name}.exe`
-        if (!spawnSync(filepath, ["--version"]).stdout?.toString().includes("Python")) { continue }
+        if (!spawnSyncOr(filepath, ["--version"], "").includes("Python")) { continue }
         if (!checkPythonVersion(filepath)) { continue }
         return filepath
     }
@@ -238,7 +252,7 @@ export const activate = (context: vscode.ExtensionContext) => {
                             if (!terminal || terminal.exitStatus !== undefined) {
                                 terminal = vscode.window.createTerminal("SQLite3 Editor")
                             }
-                            const pipList = JSON.parse(spawnSync(document.pythonPath, ["-m", "pip", "list", "--format=json"]).stdout.toString()) as { name: string, version: string }[]
+                            const pipList = JSON.parse(spawnSyncOr(document.pythonPath, ["-m", "pip", "list", "--format=json"], "[]")) as { name: string, version: string }[]
                             terminal.sendText(text
                                 .replaceAll("{{install sqlite-utils &&}}", pipList.some(({ name, version }) => name === "sqlite-utils" && +version.split(".")[0]! >= 3) ? "" : "{{pythonPath}} -m pip install -qU sqlite-utils && ")
                                 .replaceAll("{{pythonPath}}", escapeShell(document.pythonPath))
