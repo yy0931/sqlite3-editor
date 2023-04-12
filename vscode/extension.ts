@@ -238,7 +238,9 @@ export const activate = (context: vscode.ExtensionContext) => {
                             if (!terminal || terminal.exitStatus !== undefined) {
                                 terminal = vscode.window.createTerminal("SQLite3 Editor")
                             }
+                            const pipList = JSON.parse(spawnSync(document.pythonPath, ["-m", "pip", "list", "--format=json"]).stdout.toString()) as { name: string, version: string }[]
                             terminal.sendText(text
+                                .replaceAll("{{install sqlite-utils &&}}", pipList.some(({ name, version }) => name === "sqlite-utils" && +version.split(".")[0]! >= 3) ? "" : "{{pythonPath}} -m pip install -qU sqlite-utils && ")
                                 .replaceAll("{{pythonPath}}", escapeShell(document.pythonPath))
                                 .replaceAll("{{databasePath}}", escapeShell(document.uri.fsPath)), false)
                             terminal.show()
