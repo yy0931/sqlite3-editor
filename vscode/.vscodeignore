@@ -15,3 +15,4 @@ screenshot.png
 server_test.py
 server-min-supported-version.sh
 _test_files
+.pytest_cache
