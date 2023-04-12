@@ -20,7 +20,7 @@ class Server:
         self.readonly_connection = sqlite3.connect("file:" + urllib.parse.quote(database_filepath) + "?mode=ro", uri=True)
         self.readwrite_connection = sqlite3.connect(database_filepath)
 
-        if sys.version_info >= (3, 8, 3):  # `deterministic` is added in 3.8.3 https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.create_function
+        if sys.version_info >= (3, 8, 3):  # `deterministic` is added in Python 3.8.3  https://docs.python.org/3/library/sqlite3.html#sqlite3.Connection.create_function
             self.readonly_connection.create_function("find_widget_regexp", 4, find_widget_regexp, deterministic=True)
             self.readwrite_connection.create_function("find_widget_regexp", 4, find_widget_regexp, deterministic=True)
         else:
@@ -30,14 +30,6 @@ class Server:
         self.request_body_filepath = request_body_filepath
         self.response_body_filepath = response_body_filepath
         self.cwd = cwd
-
-    def close(self):
-        self.readonly_connection.close()
-
-        # Create a noop checkpoint to delete WAL files. https://www.sqlite.org/wal.html#avoiding_excessively_large_wal_files
-        with self.readwrite_connection as con:
-            con.execute("SELECT * from sqlite_master LIMIT 1").fetchall()
-        self.readwrite_connection.close()
 
     def handle(self):
         try:
@@ -66,6 +58,14 @@ class Server:
             with open(self.response_body_filepath, "wb") as f:
                 pack(response_body, f)
             return 200
+
+    def close(self):
+        self.readonly_connection.close()
+
+        # Create a noop checkpoint to delete WAL files. https://www.sqlite.org/wal.html#avoiding_excessively_large_wal_files
+        with self.readwrite_connection as con:
+            con.execute("SELECT * from sqlite_master LIMIT 1").fetchall()
+        self.readwrite_connection.close()
 
 
 if __name__ == "__main__":
