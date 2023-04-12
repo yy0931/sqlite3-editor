@@ -2,6 +2,8 @@
 .vscode
 build.sh
 build-dev.sh
+build.ps1
+build-dev.ps1
 .gitignore
 node_modules
 extension.ts
