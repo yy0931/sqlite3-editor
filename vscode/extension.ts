@@ -19,13 +19,12 @@ class LocalPythonClient {
     #resolve!: (data: Buffer) => void
     #reject!: (message: Error) => void
 
-    constructor(pythonPath: string, serverScriptPath: string, databasePath: string, cwd: string) {
+    constructor(pythonPath: string, serverScriptPath: string, databasePath: string) {
         this.#p = spawn(pythonPath, [
             serverScriptPath,
             "--database-filepath", databasePath,
             "--request-body-filepath", this.#requestBody,
             "--response-body-filepath", this.#responseBody,
-            "--cwd", cwd,
         ])
         this.#p.on("error", (err) => {
             vscode.window.showErrorMessage(err.message)
@@ -144,8 +143,11 @@ export const activate = (context: vscode.ExtensionContext) => {
                     throw new Error(msg)
                 }
                 if (uri.scheme === "file") {
-                    const conn = new LocalPythonClient(pythonPath, context.asAbsolutePath("server.py"), uri.fsPath, path.dirname(uri.fsPath))
+                    const conn = new LocalPythonClient(pythonPath, context.asAbsolutePath("server.py"), uri.fsPath)
                     const watcher = fs.watch(uri.fsPath)
+                    const timer = setInterval(() => {
+                        uri.fsPath + "-wal" // database.db-wal
+                    }, 1000)
                     return {
                         uri,
                         unsupportedScheme: false,
@@ -153,6 +155,7 @@ export const activate = (context: vscode.ExtensionContext) => {
                             conn.close()
                             watcher.removeAllListeners()
                             watcher.close()
+                            clearInterval(timer)
                         },
                         conn,
                         watcher,

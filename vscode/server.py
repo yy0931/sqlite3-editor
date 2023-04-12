@@ -1,9 +1,9 @@
 import argparse
-import os
 import re
 import sqlite3
 import sys
 import urllib.parse
+from typing import Any
 
 from umsgpack import pack, unpack
 
@@ -14,9 +14,8 @@ def find_widget_regexp(text: str, pattern: str, whole_word: int, case_sensitive:
     except re.error:  # Invalid regular expressions
         return 0
 
-
 class Server:
-    def __init__(self, database_filepath: str, request_body_filepath: str, response_body_filepath: str, cwd: str):
+    def __init__(self, database_filepath: str):
         self.readonly_connection = sqlite3.connect("file:" + urllib.parse.quote(database_filepath) + "?mode=ro", uri=True)
         self.readwrite_connection = sqlite3.connect(database_filepath)
 
@@ -27,44 +26,47 @@ class Server:
             self.readonly_connection.create_function("find_widget_regexp", 4, find_widget_regexp)
             self.readwrite_connection.create_function("find_widget_regexp", 4, find_widget_regexp)
 
-        self.request_body_filepath = request_body_filepath
-        self.response_body_filepath = response_body_filepath
-        self.cwd = cwd
+    def handle(self, request_body_filepath: str, response_body_filepath: str):
+        def return_(status: int, value: Any):
+            if status == 200:
+                with open(response_body_filepath, "wb") as f:
+                    pack(value, f)
+            else:
+                with open(response_body_filepath, "w") as f:
+                    f.write(value)
+            return status
 
-    def handle(self):
         try:
-            with open(self.request_body_filepath, "rb") as f:
+            # request_body: { query: string, params: (null | number | bigint | string | Uint8Array | Buffer)[], mode: "w+" | "r" }
+            with open(request_body_filepath, "rb") as f:
                 request_body = unpack(f)
 
-            response_body = None
-            # { query: string, params: (number | bigint | string | Uint8Array | Buffer)[], mode: "w+" | "r" }
             try:
                 if request_body["mode"] == "w+":
+                    # read-write
                     with self.readwrite_connection as con:
                         con.execute(request_body["query"], request_body["params"])
+                        return return_(200, None)
                 else:
+                    # read-only
                     with self.readonly_connection as con:
                         cursor = con.execute(request_body["query"], request_body["params"])
-                    if cursor.description is not None:  # is None when inserting, updating, etc.
+                    if cursor.description is not None:
                         columns = [desc[0] for desc in cursor.description]
-                        response_body = {"columns": columns, "records": [{k: v for k, v in zip(columns, record)} for record in cursor.fetchall()]}
+                        return return_(200, {"columns": columns, "records": [{k: v for k, v in zip(columns, record)} for record in cursor.fetchall()]})
+                    else:
+                        return return_(200, None)
             except Exception as err:
-                raise Exception(f"{err}\nQuery: {request_body['query']}\nParams: {request_body['params']}")
+                return return_(400, f"{err}\nQuery: {request_body['query']}\nParams: {request_body['params']}")
         except Exception as err:
-            with open(self.response_body_filepath, "w") as f:
-                f.write(str(err))
-            return 400
-        else:
-            with open(self.response_body_filepath, "wb") as f:
-                pack(response_body, f)
-            return 200
+            return return_(400, str(err))
 
     def close(self):
         self.readonly_connection.close()
 
         # Create a noop checkpoint to delete WAL files. https://www.sqlite.org/wal.html#avoiding_excessively_large_wal_files
         with self.readwrite_connection as con:
-            con.execute("SELECT * from sqlite_master LIMIT 1").fetchall()
+            con.execute("SELECT * FROM sqlite_master LIMIT 1").fetchall()
         self.readwrite_connection.close()
 
 
@@ -73,14 +75,13 @@ if __name__ == "__main__":
     parser.add_argument("--database-filepath", type=str, required=True)
     parser.add_argument("--request-body-filepath", type=str, required=True)
     parser.add_argument("--response-body-filepath", type=str, required=True)
-    parser.add_argument("--cwd", type=str, required=True)
     args = parser.parse_args()
-    server = Server(args.database_filepath, args.request_body_filepath, args.response_body_filepath, args.cwd)
+    server = Server(args.database_filepath)
     try:
         while True:
             command = input().strip()
             if command == "handle":
-                print(server.handle(), flush=True)
+                print(server.handle(args.request_body_filepath, args.response_body_filepath), flush=True)
             elif command == "close":
                 break
     finally:

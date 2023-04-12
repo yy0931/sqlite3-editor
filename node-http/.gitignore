@@ -3,3 +3,4 @@ _test.db
 dev.db
 dev.db-shm
 dev.db-wal
+server.js
