@@ -261,7 +261,7 @@ dialog::backdrop {
     & kbd { @apply font-sans ml-4 float-right text-gray-600; }
     &::backdrop { @apply bg-transparent; }
     :focus,:focus-within {
-        @apply outline-none bg-gray-200;
+        @apply outline-none bg-gray-100;
     }
 }
 
