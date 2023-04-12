@@ -117,4 +117,16 @@ class Server {
         })
         .listen(8080, "127.0.0.1")
 
+    // https://gist.github.com/hyrious/30a878f6e6a057f09db87638567cb11a
+    let closed = false
+    const close = () => {
+        if (closed) { return }
+        closed = true
+        server.close()
+    }
+    process.stdin.resume()
+    process.on("beforeExit", close)
+    process.on("exit", close)
+    process.on("SIGTERM", () => { close(); process.exit(1) })
+    process.on("SIGINT", () => { close(); process.exit(1) })
 }
