@@ -115,7 +115,7 @@ export const hasTableAutoincrementColumn = async (tableName: string, opts: PostO
 
 export type IndexInfo = { seqno: bigint, cid: bigint, name: string }[]
 
-/** Queries `PRAGMA index_info(indexName)`. */
+/** Queries `PRAGMA index_info(indexName)`. (>= 3.30.0) */
 export const getIndexInfo = async (indexName: string, opts: PostOptions = {}) =>
     (await query(`PRAGMA index_info(${escapeSQLIdentifier(indexName)})`, [], "r", opts)).records as IndexInfo
 
@@ -129,7 +129,7 @@ export const getIndexList = async (tableName: string, opts: PostOptions = {}) =>
 export const getTableInfo = async (tableName: string, opts: PostOptions = {}) =>
     (await query(`PRAGMA table_info(${escapeSQLIdentifier(tableName)})`, [], "r", opts)).records as TableInfo
 
-/** Lists tables in the database by querying `PRAGMA table_list`, excluding internal tables. */
+/** Lists tables in the database by querying `PRAGMA table_list`, excluding internal tables. (>= 3.37.0) */
 export const getTableList = async (opts: PostOptions = {}) => {
     return ((await query("PRAGMA table_list", [], "r", opts)).records as TableListItem[])
         .filter(({ name }) => !name.startsWith("sqlite_"))  // https://www.sqlite.org/fileformat2.html#intschema
