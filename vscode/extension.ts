@@ -144,10 +144,26 @@ export const activate = (context: vscode.ExtensionContext) => {
                 }
                 if (uri.scheme === "file") {
                     const conn = new LocalPythonClient(pythonPath, context.asAbsolutePath("server.py"), uri.fsPath)
+                    // Watch the database file
                     const watcher = fs.watch(uri.fsPath)
+
+                    // Watch the -wal file. We use setInterval instead of fs.watch because fs.watch doesn't accept non-existent files.
+                    let mtime = 0
                     const timer = setInterval(() => {
-                        uri.fsPath + "-wal" // database.db-wal
+                        const walFile = `${uri.fsPath}-wal`
+                        try {
+                            const newMtime = fs.statSync(walFile).mtimeMs
+                            if (mtime !== newMtime) {
+                                watcher.emit("change", walFile)
+                            }
+                            mtime = newMtime
+                        } catch (err) {
+                            if (!(err instanceof Error && "code" in err && err.code === "ENOENT")) {
+                                console.error(err) // Show the error if it isn't an ENOENT
+                            }
+                        }
                     }, 1000)
+
                     return {
                         uri,
                         unsupportedScheme: false,
@@ -178,7 +194,7 @@ export const activate = (context: vscode.ExtensionContext) => {
                                 options = " --staged"
                             }
                         } catch (err) { console.error(err) }
-                        webviewPanel.webview.html = `The sqlite3-editor extension doesn't support the git-diff view. Use the following command instead.<br /><code>${escapeHTML(`git -c 'diff.default.textconv=echo .dump | sqlite3' diff${options} '${document.uri.fsPath}'`)}</code>`
+                        webviewPanel.webview.html = `The sqlite3 - editor extension doesn't support the git-diff view. Use the following command instead.<br /><code>${escapeHTML(`git -c 'diff.default.textconv = echo.dump | sqlite3' diff${options} '${document.uri.fsPath}'`)}</code>`
                     } else {
                         webviewPanel.webview.html = `Unsupported file scheme: ${escapeHTML(document.uri.scheme)}`
                     }
