@@ -4,7 +4,7 @@ import { useEditorStore } from "./editor"
 import produce from "immer"
 import { scrollbarWidth, ScrollbarY } from "./scrollbar"
 import { flash, persistentRef, renderContext, Tooltip } from "./components"
-import { BigintMath, createStore } from "./util"
+import { BigintMath, createStore, querySelectorWithRetry } from "./util"
 import deepEqual from "fast-deep-equal"
 import type { JSXInternal } from "preact/src/jsx"
 
@@ -579,9 +579,12 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
             onMouseDown={(ev) => {
                 ev.preventDefault()
                 if (props.row !== 0) { return }
-                openInsertEditor().then(() => {
+                (async () => {
+                    await openInsertEditor()
+
                     // Find a textarea
-                    const textarea = document.querySelector<HTMLTextAreaElement>("#editor textarea")
+                    // NOTE: On chrome querySelector() always returns an element, but on VSCode's webview rendering is slow and querySelector() always returns null for the first try.
+                    const textarea = await querySelectorWithRetry<HTMLTextAreaElement>("#editor textarea")
                     if (!textarea) { return }
 
                     // Select the textarea
@@ -590,7 +593,7 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
 
                     // Play an animation
                     flash(textarea)
-                }).catch(console.error)
+                })().catch(console.error)
             }}>{props.row === 0 && <svg class="inline w-[1em] h-[1em]"><use xlinkHref="#add" /></svg>}</td>
 
         {/* Cells */}
@@ -598,9 +601,12 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
             class={"pl-[10px] pr-[10px] overflow-hidden border-r-[1px] border-r-[var(--td-border-color)] border-b-[1px] border-b-[var(--td-border-color)] " + (tableName !== undefined ? "clickable" : "")}
             style={{ maxWidth: props.columnWidths[i] }}
             onMouseDown={(ev) => {
-                ev.preventDefault()
-                openInsertEditor().then(() => {
-                    const textarea = document.querySelector<HTMLTextAreaElement>(`#insert-column${i + 1} textarea`)
+                ev.preventDefault();
+                (async () => {
+                    await openInsertEditor()
+
+                    // NOTE: querySelector() always returns an element in the browser, but in VSCode's webview, rendering is slow and querySelector() always returns null if you don't wait.
+                    const textarea = await querySelectorWithRetry<HTMLTextAreaElement>(`#insert-column${i + 1} textarea`)
                     if (!textarea) { return }
 
                     // Select the textarea
@@ -609,7 +615,7 @@ const EmptyTableRow = (props: { row: number, rowNumber: bigint, columnWidths: re
 
                     // Play an animation
                     flash(textarea)
-                }).catch(console.error)
+                })().catch(console.error)
             }}>
             <pre class="overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] ">
                 <span class="select-none">&nbsp;</span>
