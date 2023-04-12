@@ -5,6 +5,7 @@ import fs from "fs"
 import path from "path"
 import which from "which"
 import { Packr, Unpackr } from "msgpackr"
+import os from "os"
 
 const packr = new Packr({ useRecords: false, preserveNumericTypes: true })
 const unpackr = new Unpackr({ largeBigIntToFloat: false, int64AsNumber: false, mapsAsObjects: true, useRecords: true, preserveNumericTypes: true })
@@ -78,15 +79,42 @@ class LocalPythonClient {
 }
 
 const supportedPythonVersion = [3, 6] as const
+const supportedSQLiteVersion = [3, 37]
+
+const checkPythonVersion = (filepath: string) => {
+    const pythonVersionCheck = spawnSync(filepath, ["-c", `import sys; print(sys.version_info >= (${supportedPythonVersion[0]}, ${supportedPythonVersion[1]}))`]).stdout.toString()
+    if (!pythonVersionCheck.includes("True")) { return false }
+    const sqliteVersionCheck = spawnSync(filepath, ["-c", `import sqlite3; print(tuple(map(int, sqlite3.sqlite_version.split("."))) >= (${supportedSQLiteVersion[0]}, ${supportedSQLiteVersion[1]}))`]).stdout.toString()
+    if (!sqliteVersionCheck.includes("True")) { return false }
+    return true
+}
+
 const findPython = async () => {
     const [major, minor] = supportedPythonVersion
-    for (const name of [...[...Array(10).keys()].map((x) => `python${major}.${x + minor}`).reverse(), `python${major}`, "python", "py"]) {
+
+    // Microsoft store
+    for (const name of [
+        ...[...Array(10).keys()].map((x) => `python${major}.${x + minor}`).reverse(),
+        `python${major}`,
+    ]) {
+        // fs.existsSync(filepath) throws permission errors so we need to try executing the binary.
+        const filepath = `${os.homedir()}\\AppData\\Local\\Microsoft\\WindowsApps\\${name}.exe`
+        if (!spawnSync(filepath, ["--version"]).stdout?.toString().includes("Python")) { continue }
+        if (!checkPythonVersion(filepath)) { continue }
+        return filepath
+    }
+
+    // Other installations
+    for (const name of [
+        ...[...Array(10).keys()].map((x) => `python${major}.${x + minor}`).reverse(),
+        `python${major}`,
+        "python",
+        "py",
+    ]) {
         try {
-            const filepath = await which(name)
-            const out = spawnSync(filepath, ["-c", `import sys; print(sys.version_info >= (${major}, ${minor}))`]).stdout.toString()
-            if (out.includes("True")) {
-                return filepath
-            }
+            const filepath = await which(name)  // which() doesn't find applications in the WindowsApps directory.
+            if (!checkPythonVersion(filepath)) { continue }
+            return filepath
         } catch (err) {
             if ((err as any).code !== "ENOENT") {
                 console.error(err)
@@ -102,7 +130,7 @@ export const activate = (context: vscode.ExtensionContext) => {
             async openCustomDocument(uri, openContext, token) {
                 const pythonPath = (vscode.workspace.getConfiguration("sqlite3-editor").get<string>("pythonPath") || await findPython())
                 if (!pythonPath) {
-                    const msg = `Could not find a Python ${supportedPythonVersion[0]}.${supportedPythonVersion[1]}+ binary. Install one from https://www.python.org/ or your OS's package manager (brew, apt, etc.).`
+                    const msg = `Could not find a Python ${supportedPythonVersion[0]}.${supportedPythonVersion[1]} + binary compiled with SQLite ${supportedSQLiteVersion[0]}.${supportedSQLiteVersion[1]} +.Install one from https://www.python.org/ or your OS's package manager (Microsoft Store, brew, apt, etc.).`
                     vscode.window.showErrorMessage(msg)
                     throw new Error(msg)
                 }

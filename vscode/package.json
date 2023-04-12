@@ -71,12 +71,13 @@
   "devDependencies": {
     "@types/node": "^18.7.18",
     "@types/vscode": "^1.71.0",
-    "@types/which": "^2.0.1",
+    "@vscode/vsce": "^2.16.0",
     "esbuild": "^0.15.7"
   },
   "dependencies": {
+    "@types/which": "^2.0.1",
     "msgpackr": "github:yy0931/msgpackr",
     "tempy": "^3.0.0",
-    "which": "^2.0.2"
+    "which": "^3.0.0"
   }
 }
