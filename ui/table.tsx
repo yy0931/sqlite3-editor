@@ -1,4 +1,4 @@
-import { useRef, useMemo, useCallback, useState, useEffect } from "preact/hooks"
+import { useRef, useMemo, useCallback, useState, useEffect, useLayoutEffect } from "preact/hooks"
 import * as remote from "./remote"
 import { useEditorStore } from "./editor"
 import produce from "immer"
@@ -7,6 +7,7 @@ import { flash, persistentRef, renderContextmenu, Tooltip } from "./components"
 import { BigintMath, createStore, querySelectorWithRetry } from "./util"
 import deepEqual from "fast-deep-equal"
 import type { JSXInternal } from "preact/src/jsx"
+import { fileTypeFromBuffer } from "file-type/core"
 
 /** Build the WHERE clause from the state of the find widget */
 const buildFindWidgetQuery = (tableInfo: remote.TableInfo) => {
@@ -590,7 +591,7 @@ const TableRow = (props: { selected: boolean, readonly selectedColumn: string | 
                 }}
                 data-testid={`cell ${props.rowNumber - 1n}, ${i}`}>
                 <pre class={"overflow-hidden text-ellipsis whitespace-nowrap max-w-[50em] [font-size:inherit] " + (input?.textarea && cursorVisibility ? "cursor-line" : "")}>
-                    <span class="select-none">{input?.draftValue ?? renderValue(value)}</span>
+                    <span class="select-none">{input?.draftValue ?? <CellValue value={value} />}</span>
                     {input?.textarea && <MountInput element={input.textarea} onFocusOrMount={onFocusOrMount} onBlurOrUnmount={onBlurOrUnmount} />}
                 </pre>
             </td>
@@ -701,8 +702,40 @@ export const unsafeEscapeValue = (value: remote.SQLite3Value) => {
     }
 }
 
-export const renderValue = (value: remote.SQLite3Value): JSXInternal.Element => {
-    if (value instanceof Uint8Array) {  // BLOB
+/** Renders a DOM Node. */
+const DOMNode = (props: { node: Node }) => {
+    const ref = useRef<HTMLSpanElement>(null)
+    useLayoutEffect(() => {
+        if (!ref.current) { return }
+        ref.current.append(props.node)
+        return () => { ref.current?.removeChild(props.node) }
+    }, [props.node])
+    return <span ref={ref}></span>
+}
+
+export const CellValue = ({ value }: { value: remote.SQLite3Value }) => {
+    const [content, setContent] = useState<{ value: remote.SQLite3Value, node?: preact.ComponentChildren }>({ value })
+    useEffect(() => {
+        if (!(value instanceof Uint8Array)) { return }
+        let unmounted = false
+        fileTypeFromBuffer(value).then((result) => {
+            if (!result || unmounted) { return }
+            const type = result.mime
+            if (type.startsWith("image/")) {
+                setContent({ value, node: <img class="h-max-[200px]" src={URL.createObjectURL(new Blob([value], { type }))}></img> })
+            } else if (type.startsWith("audio/")) {
+                setContent({ value, node: <audio class="h-[19px] w-[80%]" controls src={URL.createObjectURL(new Blob([value], { type }))}></audio> })
+            } else if (type.startsWith("video/")) {
+                setContent({ value, node: <video class="h-max-[200px]" controls src={URL.createObjectURL(new Blob([value], { type }))}></video> })
+            } else {
+                setContent({ value, node: <span class="text-[var(--data-null)]">{type}: {`x'${blob2hex(value, 8)}'`}</span> })
+            }
+        }).catch(console.error)
+        return () => { unmounted = true }
+    }, [value])
+    if (content.value === value && content.node) {
+        return <>{content.node}</>
+    } else if (value instanceof Uint8Array) {  // BLOB
         return <span class="text-[var(--data-null)]">{`x'${blob2hex(value, 8)}'`}</span>
     } else if (value === null) {  // NULL
         return <span class="text-[var(--data-null)]">NULL</span>

@@ -3,7 +3,7 @@ import produce from "immer"
 import type { JSXInternal } from "preact/src/jsx"
 import * as remote from "./remote"
 import { Button, Checkbox, Highlight, Select } from "./components"
-import { blob2hex, escapeSQLIdentifier, renderValue, type2color, unsafeEscapeValue, useTableStore } from "./table"
+import { blob2hex, escapeSQLIdentifier, CellValue, type2color, unsafeEscapeValue, useTableStore } from "./table"
 import { BigintMath, createStore } from "./util"
 
 type State =
@@ -144,7 +144,7 @@ const mountInput = () => {
 
         useTableStore.setState({
             input: {
-                draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
+                draftValue: <CellValue value={parseTextareaValue(state.textareaValue, state.blobValue, state.type)} />,
                 textarea,
             }
         })
@@ -155,7 +155,7 @@ const mountInput = () => {
         }
         useTableStore.setState({
             input: {
-                draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)),
+                draftValue: <CellValue value={parseTextareaValue(state.textareaValue, state.blobValue, state.type)} />,
                 textarea: null,
             }
         })
@@ -499,7 +499,7 @@ export const Editor = () => {
         if (input.textarea !== null) {
             input.textarea.value = state.textareaValue
         }
-        useTableStore.setState({ input: { ...input, draftValue: renderValue(parseTextareaValue(state.textareaValue, state.blobValue, state.type)) } })
+        useTableStore.setState({ input: { ...input, draftValue: <CellValue value={parseTextareaValue(state.textareaValue, state.blobValue, state.type)} /> } })
     }, state.statement === "UPDATE" ? [state.textareaValue, state.blobValue, state.type] : [undefined, undefined, undefined])
 
     let header: JSXInternal.Element
