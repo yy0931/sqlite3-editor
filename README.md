@@ -6,3 +6,5 @@ To install the extension, search "sqlite3 editor" in VSCode or download a .vsix 
 
 ## Why Choose This Database Client?
 ![flowchart](./flowchart.svg)
+
+This database client is optimized for VSCode and SQLite, and provides integration for VSCode's file explorer, text editor, and remote development features.
