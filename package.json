@@ -14,7 +14,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "MIT",
+  "license": "GPLV3",
   "workspaces": [
     "ui",
     "node-http"
