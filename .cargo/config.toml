@@ -1,0 +1,16 @@
+# https://github.com/rust-lang/cargo/issues/1634#issuecomment-1224091272
+[env]
+RUST_BACKTRACE = "1"
+
+[target.x86_64-unknown-linux-musl]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-unknown-linux-musl]
+rustflags = [
+    "-C", "target-feature=+crt-static",
+
+    # https://github.com/rust-lang/rust/issues/89626#issuecomment-1686073426
+    "-C", "link-arg=-lc",
+]
+
+# Don't statically link glibc as it's LGPL
