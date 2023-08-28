@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  build-win32:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            vsce_target: win32-x64
+          - target: i686-pc-windows-msvc
+            vsce_target: win32-ia32
+          - target: aarch64-pc-windows-msvc
+            vsce_target: win32-arm64
+    steps:
+      - uses: actions/checkout@v1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.target }}
+      - run: |
+          $ErrorActionPreference = "Stop"
+
+          rustup target add ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/db-driver-rs.exe db-driver-${{ matrix.vsce_target }}.exe
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: 'db-driver-*'
+          name: 'release'
+          tag_name: 'v1.0.0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            vsce_target: linux-x64-musl
+          - target: aarch64-unknown-linux-musl
+            vsce_target: linux-arm64-musl
+          - target: armv7-unknown-linux-gnueabihf
+            vsce_target: linux-arm-gnu
+    steps:
+      - uses: actions/checkout@v1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.target }}
+      - run: cargo install cross --git https://github.com/cross-rs/cross
+      - run: |
+          set -xEeuo pipefail
+
+          # https://github.com/cross-rs/cross/wiki/FAQ#exec-format-error
+          docker run --privileged --rm tonistiigi/binfmt --install all
+
+          rustup override set nightly
+          rustup update
+          cross build --release --target ${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/db-driver-rs db-driver-${{ matrix.vsce_target }}
+        shell: bash
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: 'db-driver-*'
+          name: 'release'
+          tag_name: 'v1.0.0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-darwin:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            vsce_target: darwin-x64
+          - target: aarch64-apple-darwin
+            vsce_target: darwin-arm64
+    steps:
+      - uses: actions/checkout@v1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+          targets: ${{ matrix.target }}
+      - run: |
+          set -xEeuo pipefail
+
+          cargo build --release --target ${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/db-driver-rs db-driver-${{ matrix.vsce_target }}
+        shell: bash
+      - uses: softprops/action-gh-release@v1
+        with:
+          files: 'db-driver-*'
+          name: 'release'
+          tag_name: 'v1.0.0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

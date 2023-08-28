@@ -1,0 +1,12 @@
+[target.x86_64-unknown-linux-musl]
+image.name = "alpine:edge"
+image.toolchain = ["x86_64-unknown-linux-musl"]
+pre-build = ["apk add --no-cache gcc musl-dev build-base pkgconf openssl-dev perl"]
+
+[target.aarch64-unknown-linux-musl]
+image.name = "alpine:edge"
+image.toolchain = ["aarch64-unknown-linux-musl"]
+pre-build = ["apk add --no-cache gcc musl-dev build-base pkgconf openssl-dev perl"]
+
+[target.armv7-unknown-linux-gnueabihf]
+pre-build = ["apt update && apt install -y build-essential pkgconf libssl-dev perl"]
