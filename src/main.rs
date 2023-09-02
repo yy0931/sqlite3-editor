@@ -1,28 +1,38 @@
 use std::{
     borrow::Cow,
     fs::File,
-    io::{Read, Seek, Write},
+    io::{Read, Seek, SeekFrom, Write},
     path::PathBuf,
 };
 
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
+mod column_origin;
 mod export;
 mod import;
-
-use crate::types::{Request, TruncateAll};
+use crate::request_type::Request;
 
 mod check_syntax;
+#[cfg(test)]
+mod check_syntax_test;
 mod code_lens;
 #[cfg(test)]
 mod code_lens_test;
 #[cfg(test)]
+mod column_origin_test;
+#[cfg(test)]
 mod export_test;
 #[cfg(test)]
 mod import_test;
+mod literal;
+#[cfg(test)]
+mod literal_test;
 mod parse_cte;
 #[cfg(test)]
 mod parse_cte_test;
+mod request_type;
+#[cfg(test)]
+mod request_type_test;
 mod semantic_highlight;
 #[cfg(test)]
 mod semantic_highlight_test;
@@ -30,10 +40,19 @@ mod split_statements;
 #[cfg(test)]
 mod split_statements_test;
 mod sqlite3_driver;
+#[cfg(test)]
+mod sqlite3_driver_test;
 mod tokenize;
 #[cfg(test)]
 mod tokenize_test;
-mod types;
+#[cfg(test)]
+mod type_test;
+
+#[cfg(all(feature = "sqlite", feature = "sqlcipher"))]
+compile_error!("Cannot enable both 'sqlite' and 'sqlcipher' features.");
+
+#[cfg(not(any(feature = "sqlite", feature = "sqlcipher")))]
+compile_error!("Must use `--features sqlite` or `--features sqlcipher` command line option.");
 
 #[derive(Parser)]
 struct Args {
@@ -53,6 +72,7 @@ pub enum FileFormat {
 
 #[derive(Subcommand)]
 enum Commands {
+    Version {},
     Import {
         /// Path to the database file
         #[arg(long, required = true)]
@@ -104,7 +124,13 @@ enum Commands {
         #[arg(long)]
         sql_cipher_key: Option<String>,
     },
-    HealthCheck {},
+    /// Outputs the source of data for the output columns of the query.
+    ColumnOrigin {
+        #[arg(long, required = true)]
+        database: String,
+        #[arg(long, required = true)]
+        query: String,
+    },
 }
 
 /// Structure representing a database query
@@ -135,6 +161,27 @@ fn main() {
     // Parse the command line arguments
     let args = Args::parse();
     match args.command {
+        Commands::Version {} => {
+            // health check
+            let con = rusqlite::Connection::open_in_memory().unwrap();
+            con.execute("CREATE TABLE t(v)", ()).unwrap();
+            con.execute("INSERT INTO t VALUES (?)", &["ok"]).unwrap();
+            assert_eq!(
+                con.query_row("SELECT v FROM t", [], |row| row.get::<_, String>(0))
+                    .unwrap(),
+                "ok"
+            );
+            println!("version {}", env!("CARGO_PKG_VERSION"));
+            println!(
+                "{} {}",
+                if sqlite3_driver::is_sqlcipher(&con) {
+                    "sqlcipher"
+                } else {
+                    "sqlite"
+                },
+                rusqlite::version()
+            );
+        }
         Commands::Server {
             database_filepath,
             request_body_filepath,
@@ -194,29 +241,32 @@ fn main() {
                     // Handle the request using the MsgpackServer
                     "handle" => {
                         // Deserialize the request
-                        let Ok(req) = rmp_serde::from_read::<_, Request>(&mut r) else {
-                            w.write(format!("Failed to parse the request body: {}", inspect_request(r)).as_bytes())
+                        let req = match rmp_serde::from_read::<_, Request>(&mut r) {
+                            Ok(req) => req,
+                            Err(err) => {
+                                let mut content = inspect_request(&mut r);
+                                if content.len() > 5000 {
+                                    content = Cow::Owned(content[0..5000].to_owned() + "... (omitted)")
+                                }
+                                w.write(
+                                    format!(
+                                        "Failed to parse the request body: {err} (content = {}, len = {})",
+                                        content,
+                                        r.metadata().unwrap().len()
+                                    )
+                                    .as_bytes(),
+                                )
                                 .expect("Failed to write an error message.");
-                            finish(&mut w, 400);
-                            continue;
+                                finish(&mut w, 400);
+                                continue;
+                            }
                         };
 
                         match server.handle(&mut w, &req.query, &req.params, req.mode) {
                             Err(err) => {
                                 w.truncate_all();
-                                w.write(
-                                    format!(
-                                        "{err}\n{}\nParams: {:?}",
-                                        if req.query.starts_with("EDITOR_PRAGMA ") {
-                                            format!("Method: {}", &req.query["EDITOR_PRAGMA ".len()..])
-                                        } else {
-                                            format!("Query: {}", req.query)
-                                        },
-                                        req.params
-                                    )
-                                    .as_bytes(),
-                                )
-                                .expect("Failed to write an error message.");
+                                w.write(format!("{err}").as_bytes())
+                                    .expect("Failed to write an error message.");
                                 finish(&mut w, 400);
                             }
                             Ok(_) => {
@@ -295,12 +345,35 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::HealthCheck {} => {
-            let mem = rusqlite::Connection::open_in_memory().unwrap();
-            assert_eq!(
-                mem.query_row("SELECT 'ok'", [], |row| row.get::<_, String>(0)).unwrap(),
-                "ok"
-            );
-        }
+        Commands::ColumnOrigin { database, query } => match column_origin::column_origin(&database, &query) {
+            Ok(v) => {
+                println!(
+                    "{}",
+                    serde_json::to_string(&v).expect("Failed to encode the result into a JSON.")
+                );
+            }
+            Err(err) => {
+                eprintln!("{err}");
+                std::process::exit(1);
+            }
+        },
+    }
+}
+
+pub trait TruncateAll {
+    fn truncate_all(&mut self) -> ();
+}
+
+impl TruncateAll for std::fs::File {
+    fn truncate_all(&mut self) -> () {
+        self.set_len(0).expect("Failed to truncate the file.");
+        self.seek(SeekFrom::Start(0)).expect("Failed to seek the file.");
+    }
+}
+
+impl TruncateAll for std::io::Cursor<Vec<u8>> {
+    fn truncate_all(&mut self) -> () {
+        self.get_mut().truncate(0);
+        self.seek(SeekFrom::Start(0)).expect("Failed to seek the cursor.");
     }
 }

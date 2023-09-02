@@ -76,3 +76,16 @@ fn test_other() {
         ]
     );
 }
+
+#[test]
+fn test_begin_end() {
+    assert_eq!(
+        code_lens("BEGIN; SELECT 1; SELECT 2; END;"),
+        [CodeLens {
+            kind: CodeLensKind::Other,
+            start: ZeroIndexedLocation::new(0, 0),
+            end: ZeroIndexedLocation::new(0, 31),
+            stmt_executed: "BEGIN; SELECT 1; SELECT 2; END;".to_owned(),
+        }]
+    );
+}

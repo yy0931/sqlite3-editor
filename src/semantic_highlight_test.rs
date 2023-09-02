@@ -48,3 +48,18 @@ fn test_quoted_identifier() {
         [SemanticTokenKind::Variable]
     )
 }
+
+#[test]
+fn test_pragma() {
+    assert_eq!(
+        semantic_highlight("PRAGMA analysis_limit")
+            .into_iter()
+            .map(|t| t.kind)
+            .collect::<Vec<_>>(),
+        [
+            SemanticTokenKind::Keyword,  // "PRAGMA"
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Variable, // "analysis_limit"
+        ]
+    );
+}

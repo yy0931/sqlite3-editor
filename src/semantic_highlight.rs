@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use sqlparser::{
     dialect::SQLiteDialect,
@@ -27,6 +30,18 @@ pub struct SemanticHighlight {
     pub end: ZeroIndexedLocation,
 }
 
+lazy_static! {
+    static ref KEYWORDS_UNSUPPORTED_BY_SQLPARSER: HashSet<&'static str> = HashSet::from([
+        "VACUUM",
+        "ATTACH",
+        "DETACH",
+        "PRAGMA",
+        "DEFERRED",
+        "IMMEDIATE",
+        "EXCLUSIVE"
+    ]);
+}
+
 /// Tokenizes the given SQL input string and returns the tokens with highlighting information.
 pub fn semantic_highlight(sql: &str) -> Vec<SemanticHighlight> {
     let mut tokens = vec![];
@@ -39,86 +54,101 @@ pub fn semantic_highlight(sql: &str) -> Vec<SemanticHighlight> {
         }
         tokens.push(SemanticHighlight {
             kind: match token {
-                Token::EOF => SemanticTokenKind::Other,
-                Token::Word(Word {
-                    quote_style: None,
-                    value,
-                    keyword: Keyword::NoKeyword,
-                }) if value == "VACUUM" || value == "ATTACH" || value == "DETACH" => SemanticTokenKind::Keyword,
-                Token::Word(Word {
-                    keyword: Keyword::NoKeyword,
-                    ..
-                }) => SemanticTokenKind::Variable,
-                Token::Word(_) => SemanticTokenKind::Keyword,
-                Token::Number(_string, _bool) => SemanticTokenKind::Number,
-                Token::Char(_char) => SemanticTokenKind::Other,
-                Token::SingleQuotedString(_string) => SemanticTokenKind::String,
-                Token::DoubleQuotedString(_string) => SemanticTokenKind::Variable,
-                Token::DollarQuotedString(_dollarquotedstring) => SemanticTokenKind::String,
-                Token::SingleQuotedByteStringLiteral(_string) => SemanticTokenKind::String,
-                Token::DoubleQuotedByteStringLiteral(_string) => SemanticTokenKind::String,
-                Token::RawStringLiteral(_string) => SemanticTokenKind::String,
-                Token::NationalStringLiteral(_string) => SemanticTokenKind::String,
-                Token::EscapedStringLiteral(_string) => SemanticTokenKind::String,
-                Token::HexStringLiteral(_string) => SemanticTokenKind::String,
-                Token::Comma => SemanticTokenKind::Other,
-                Token::Whitespace(Whitespace::SingleLineComment { .. }) => SemanticTokenKind::Comment,
-                Token::Whitespace(Whitespace::MultiLineComment { .. }) => SemanticTokenKind::Comment,
-                Token::Whitespace(_) => SemanticTokenKind::Other,
-                Token::DoubleEq => SemanticTokenKind::Operator,
-                Token::Eq => SemanticTokenKind::Operator,
-                Token::Neq => SemanticTokenKind::Operator,
-                Token::Lt => SemanticTokenKind::Operator,
-                Token::Gt => SemanticTokenKind::Operator,
-                Token::LtEq => SemanticTokenKind::Operator,
-                Token::GtEq => SemanticTokenKind::Operator,
-                Token::Spaceship => SemanticTokenKind::Operator,
-                Token::Plus => SemanticTokenKind::Operator,
-                Token::Minus => SemanticTokenKind::Operator,
-                Token::Mul => SemanticTokenKind::Operator,
-                Token::Div => SemanticTokenKind::Operator,
-                Token::DuckIntDiv => SemanticTokenKind::Operator,
-                Token::Mod => SemanticTokenKind::Operator,
-                Token::StringConcat => SemanticTokenKind::Operator,
-                Token::LParen => SemanticTokenKind::Other,
-                Token::RParen => SemanticTokenKind::Other,
-                Token::Period => SemanticTokenKind::Other,
-                Token::Colon => SemanticTokenKind::Other,
-                Token::DoubleColon => SemanticTokenKind::Operator,
-                Token::SemiColon => SemanticTokenKind::Other,
-                Token::Backslash => SemanticTokenKind::Operator,
-                Token::LBracket => SemanticTokenKind::Other,
-                Token::RBracket => SemanticTokenKind::Other,
-                Token::Ampersand => SemanticTokenKind::Operator,
-                Token::Pipe => SemanticTokenKind::Operator,
-                Token::Caret => SemanticTokenKind::Operator,
-                Token::LBrace => SemanticTokenKind::Other,
-                Token::RBrace => SemanticTokenKind::Other,
-                Token::RArrow => SemanticTokenKind::Operator,
-                Token::Sharp => SemanticTokenKind::Operator,
-                Token::Tilde => SemanticTokenKind::Operator,
-                Token::TildeAsterisk => SemanticTokenKind::Operator,
-                Token::ExclamationMarkTilde => SemanticTokenKind::Operator,
-                Token::ExclamationMarkTildeAsterisk => SemanticTokenKind::Operator,
-                Token::ShiftLeft => SemanticTokenKind::Operator,
-                Token::ShiftRight => SemanticTokenKind::Operator,
-                Token::ExclamationMark => SemanticTokenKind::Operator,
-                Token::DoubleExclamationMark => SemanticTokenKind::Operator,
-                Token::AtSign => SemanticTokenKind::Operator,
-                Token::PGSquareRoot => SemanticTokenKind::Operator,
-                Token::PGCubeRoot => SemanticTokenKind::Operator,
-                Token::Placeholder(_string) => SemanticTokenKind::Operator,
-                Token::Arrow => SemanticTokenKind::Operator,
-                Token::LongArrow => SemanticTokenKind::Operator,
-                Token::HashArrow => SemanticTokenKind::Operator,
-                Token::HashLongArrow => SemanticTokenKind::Operator,
-                Token::AtArrow => SemanticTokenKind::Operator,
-                Token::ArrowAt => SemanticTokenKind::Operator,
-                Token::HashMinus => SemanticTokenKind::Operator,
-                Token::AtQuestion => SemanticTokenKind::Operator,
-                Token::AtAt => SemanticTokenKind::Operator,
-                Token::DuckAssignment => SemanticTokenKind::Operator,
-                Token::Overlap => SemanticTokenKind::Operator,
+                // word
+                Token::Word(w) => match w {
+                    Word {
+                        quote_style: None,
+                        value,
+                        keyword: Keyword::NoKeyword,
+                    } if KEYWORDS_UNSUPPORTED_BY_SQLPARSER.contains(value.as_str()) => SemanticTokenKind::Keyword,
+                    Word {
+                        keyword: Keyword::NoKeyword,
+                        ..
+                    } => SemanticTokenKind::Variable,
+                    _ => SemanticTokenKind::Keyword,
+                },
+
+                // number
+                Token::Number(_, _) => SemanticTokenKind::Number,
+
+                // string
+                Token::SingleQuotedString(_)
+                | Token::DollarQuotedString(_)
+                | Token::SingleQuotedByteStringLiteral(_)
+                | Token::DoubleQuotedByteStringLiteral(_)
+                | Token::RawStringLiteral(_)
+                | Token::NationalStringLiteral(_)
+                | Token::EscapedStringLiteral(_)
+                | Token::HexStringLiteral(_) => SemanticTokenKind::String,
+
+                // variable
+                Token::DoubleQuotedString(_) => SemanticTokenKind::Variable,
+
+                // comment
+                Token::Whitespace(Whitespace::SingleLineComment { .. })
+                | Token::Whitespace(Whitespace::MultiLineComment { .. }) => SemanticTokenKind::Comment,
+
+                // operator
+                Token::DoubleEq
+                | Token::Eq
+                | Token::Neq
+                | Token::Lt
+                | Token::Gt
+                | Token::LtEq
+                | Token::GtEq
+                | Token::Spaceship
+                | Token::Plus
+                | Token::Minus
+                | Token::Mul
+                | Token::Div
+                | Token::DuckIntDiv
+                | Token::Mod
+                | Token::StringConcat
+                | Token::DoubleColon
+                | Token::Backslash
+                | Token::Ampersand
+                | Token::Pipe
+                | Token::Caret
+                | Token::RArrow
+                | Token::Sharp
+                | Token::Tilde
+                | Token::TildeAsterisk
+                | Token::ExclamationMarkTilde
+                | Token::ExclamationMarkTildeAsterisk
+                | Token::ShiftLeft
+                | Token::ShiftRight
+                | Token::ExclamationMark
+                | Token::DoubleExclamationMark
+                | Token::AtSign
+                | Token::PGSquareRoot
+                | Token::PGCubeRoot
+                | Token::Placeholder(_)
+                | Token::Arrow
+                | Token::LongArrow
+                | Token::HashArrow
+                | Token::HashLongArrow
+                | Token::AtArrow
+                | Token::ArrowAt
+                | Token::HashMinus
+                | Token::AtQuestion
+                | Token::AtAt
+                | Token::DuckAssignment
+                | Token::Overlap => SemanticTokenKind::Operator,
+
+                // other
+                Token::EOF
+                | Token::Char(_)
+                | Token::Comma
+                | Token::Whitespace(_)
+                | Token::LParen
+                | Token::RParen
+                | Token::Period
+                | Token::Colon
+                | Token::SemiColon
+                | Token::LBracket
+                | Token::RBracket
+                | Token::LBrace
+                | Token::RBrace => SemanticTokenKind::Other,
             },
             start,
             end,

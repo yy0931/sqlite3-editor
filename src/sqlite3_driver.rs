@@ -1,3 +1,4 @@
+use crate::{literal::Literal, request_type::QueryMode};
 use lazy_static::lazy_static;
 use rusqlite::{functions::FunctionFlags, types::ValueRef};
 use serde::{Deserialize, Serialize};
@@ -8,13 +9,41 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-pub(crate) type Result<T> = std::result::Result<T, String>;
+#[derive(Clone, Debug, PartialEq)]
+pub struct QueryError {
+    pub message: String,
+    pub query: String,
+    pub params: Vec<Literal>,
+}
 
-use crate::types::{Literal, QueryMode};
+impl QueryError {
+    pub fn new<T, E: std::fmt::Display>(err: E, query: &str, params: &[Literal]) -> std::result::Result<T, Self> {
+        Err(Self {
+            message: format!("{}", err),
+            query: query.to_owned(),
+            params: params.iter().cloned().collect(),
+        })
+    }
+}
+
+impl std::fmt::Display for QueryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\n{}\nParams: {}",
+            self.message,
+            if self.query.starts_with("EDITOR_PRAGMA ") {
+                format!("Method: {}", &self.query["EDITOR_PRAGMA ".len()..])
+            } else {
+                format!("Query: {}", self.query)
+            },
+            serde_json::to_string(&self.params).unwrap_or("<failed to serialize>".to_owned())
+        )
+    }
+}
 
 pub(crate) struct SQLite3Driver {
     con: ManuallyDrop<rusqlite::Connection>,
-    version: String,
 }
 
 lazy_static! {
@@ -28,7 +57,7 @@ lazy_static! {
 
 /// Text matching implementation for the find widget.
 /// Returns Ok(0) on error.
-fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> Result<i64> {
+fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> std::result::Result<i64, String> {
     // Receive arguments
     let text = match ctx.get_raw(0) {
         ValueRef::Null => "NULL".to_owned(),
@@ -82,96 +111,96 @@ impl std::fmt::Display for LoadableSQLiteExtensionNotAvailable {
 
 impl std::error::Error for LoadableSQLiteExtensionNotAvailable {}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct TableSchemaColumnForeignKey {
-    id: i64,
-    seq: i64,
-    table: String,
-    from: String,
-    to: Option<String>,
-    on_update: String,
-    on_delete: String,
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct TableSchemaColumnForeignKey {
+    pub id: i64,
+    pub seq: i64,
+    pub table: String,
+    pub from: String,
+    pub to: Option<String>,
+    pub on_update: String,
+    pub on_delete: String,
     #[serde(rename = "match")]
-    match_: String,
+    pub match_: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
-enum DfltValue {
+pub enum DfltValue {
     Int(i64),
     Real(f64),
     String(String),
     Blob(Vec<u8>),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TableSchemaColumn {
-    cid: i64,
-    dflt_value: Option<DfltValue>,
-    name: String,
-    notnull: bool,
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct TableSchemaColumn {
+    pub cid: i64,
+    pub dflt_value: Option<DfltValue>,
+    pub name: String,
+    pub notnull: bool,
     #[serde(rename = "type")]
-    type_: String,
-    pk: bool,
+    pub type_: String,
+    pub pk: bool,
     #[serde(rename = "autoIncrement")]
-    auto_increment: bool,
+    pub auto_increment: bool,
     #[serde(rename = "foreignKeys")]
-    foreign_keys: Vec<TableSchemaColumnForeignKey>,
+    pub foreign_keys: Vec<TableSchemaColumnForeignKey>,
     /** 1: columns in virtual tables, 2: dynamic generated columns, 3: stored generated columns */
-    hidden: i64,
+    pub hidden: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct IndexColumn {
-    seqno: i64,
-    cid: i64,
-    name: Option<String>,
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IndexColumn {
+    pub seqno: i64,
+    pub cid: i64,
+    pub name: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TableSchemaIndex {
-    seq: i64,
-    name: String,
-    unique: i64,
-    origin: String,
-    partial: i64,
-    columns: Option<Vec<IndexColumn>>, // None while fetching
-    schema: Option<String>,
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TableSchemaIndex {
+    pub seq: i64,
+    pub name: String,
+    pub unique: i64,
+    pub origin: String,
+    pub partial: i64,
+    pub columns: Option<Vec<IndexColumn>>, // None while fetching
+    pub schema: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TableSchemaTriggers {
-    name: String,
-    sql: String,
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TableSchemaTriggers {
+    pub name: String,
+    pub sql: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub(crate) struct TableSchema {
-    name: String,
+    pub name: String,
     #[serde(rename = "type")]
-    type_: String,
-    schema: String,
+    pub type_: String,
+    pub schema: String,
     #[serde(rename = "hasRowIdColumn")]
-    has_rowid_column: bool,
-    strict: bool,
-    columns: Vec<TableSchemaColumn>,
-    indexes: Vec<TableSchemaIndex>,
-    triggers: Vec<TableSchemaTriggers>,
+    pub has_rowid_column: bool,
+    pub strict: bool,
+    pub columns: Vec<TableSchemaColumn>,
+    pub indexes: Vec<TableSchemaIndex>,
+    pub triggers: Vec<TableSchemaTriggers>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) struct Table {
-    name: String,
+    pub name: String,
     #[serde(rename = "type")]
-    type_: String,
+    pub type_: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct ForeignKey {
-    name: String,
-    table: String,
-    from: String,
-    to: String,
+    pub name: String,
+    pub table: String,
+    pub from: String,
+    pub to: String,
 }
 
 fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite>(
@@ -198,13 +227,6 @@ fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite>(
     Ok(())
 }
 
-fn new_query_error<T, E: std::fmt::Display>(err: E, query: &str, params: &[Literal]) -> Result<T> {
-    Err(format!(
-        "{err}\nQuery: {query}\nParams: {}",
-        serde_json::to_string(params).unwrap_or("<failed to serialize>".to_owned())
-    ))
-}
-
 impl SQLite3Driver {
     /// Connects to the database, set busy_timeout to 500, register the find_widget_regexp function, enable loading extensions, and fetch the version number of SQLite.
     /// * `read_only` - If true, connects to the database with immutable=1 and the readonly flag. Use this argument to read a database that is under an EXCLUSIVE lock.
@@ -213,7 +235,7 @@ impl SQLite3Driver {
         database_filepath: &str,
         read_only: bool,
         sql_cipher_key: &Option<impl AsRef<str>>,
-    ) -> Result<Self> {
+    ) -> std::result::Result<Self, String> {
         let con = if !read_only {
             // Connect to the database
             rusqlite::Connection::open(database_filepath)
@@ -237,8 +259,7 @@ impl SQLite3Driver {
 
         // Set the SQLite Cipher key if given
         if let Some(key) = sql_cipher_key {
-            con.pragma_update(None, "key", key.as_ref())
-                .expect("Setting `PRAGMA key` failed.");
+            set_sqlcipher_key(&con, key.as_ref())?;
         }
 
         // Set busy_timeout to 500
@@ -261,23 +282,18 @@ impl SQLite3Driver {
         }
 
         // Get the SQLite version as a string
-        let version = con
-            .query_row("SELECT sqlite_version()", (), |row| row.get::<_, String>(0))
-            .or_else(|err| Err(format!("Failed to query `SELECT sqlite_version()`: {err}")))?;
-
         Ok(Self {
             con: ManuallyDrop::new(con),
-            version,
         })
     }
 
     /// Executes a SQL statement and returns the result as a msgpack.
-    fn execute(&self, query: &str, params: &[Literal]) -> Result<Vec<u8>> {
+    pub(crate) fn execute(&self, query: &str, params: &[Literal]) -> std::result::Result<Vec<u8>, QueryError> {
         // Prepare the statement
         let mut stmt = self
             .con
             .prepare(query)
-            .or_else(|err| new_query_error(err, query, params))?;
+            .or_else(|err| QueryError::new(err, query, params))?;
 
         // Fetch data and pack into msgpack
         let mut col_buf: Vec<Vec<u8>> = vec![];
@@ -299,7 +315,7 @@ impl SQLite3Driver {
                 Ok(())
             })
             .collect::<rusqlite::Result<Vec<_>>>()
-            .or_else(|err| new_query_error(err, query, params))?;
+            .or_else(|err| QueryError::new(err, query, params))?;
         let mut buf = vec![];
         let column_names = stmt.column_names();
         rmp::encode::write_map_len(&mut buf, column_names.len() as u32).expect("Failed to write msgpack");
@@ -312,17 +328,17 @@ impl SQLite3Driver {
     }
 
     /// Executes a SQL statement and returns the result.
-    fn select_all<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T>(
+    pub(crate) fn select_all<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T>(
         &self,
         query: &str,
         params: &[Literal],
         map: F,
-    ) -> Result<Vec<T>> {
+    ) -> std::result::Result<Vec<T>, QueryError> {
         // Prepare the statement
         let mut stmt = self
             .con
             .prepare(query)
-            .or_else(|err| new_query_error(err, query, params))?;
+            .or_else(|err| QueryError::new(err, query, params))?;
 
         // Fetch data and pack into Vec<T>
         let mut col_buf: Vec<Vec<u8>> = vec![];
@@ -332,37 +348,41 @@ impl SQLite3Driver {
         }
         for (i, param) in params.iter().enumerate() {
             stmt.raw_bind_parameter(i + 1, param)
-                .or_else(|err| new_query_error(err, query, params))?;
+                .or_else(|err| QueryError::new(err, query, params))?;
         }
         let records = stmt
             .raw_query()
             .mapped::<F, T>(map)
             .collect::<rusqlite::Result<Vec<T>>>()
-            .or_else(|err| new_query_error(err, query, params))?;
+            .or_else(|err| QueryError::new(err, query, params))?;
 
         Ok(records)
     }
 
     /// Executes a SQL statement and returns the first row.
-    fn select_one<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T: ToOwned<Owned = T>>(
+    pub(crate) fn select_one<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T: ToOwned<Owned = T>>(
         &self,
         query: &str,
         params: &[Literal],
         map: F,
-    ) -> Result<T> {
+    ) -> std::result::Result<T, QueryError> {
         let select_all = self.select_all(query, params, map)?;
         let get = select_all.get(0);
         let Some(one) = get else {
-            return new_query_error("No records are returned.", query, params);
+            return QueryError::new("No records are returned.", query, params);
         };
         Ok(one.to_owned())
     }
 
     pub(crate) fn database_label(&self) -> String {
-        format!("sqlite {}", self.version)
+        format!(
+            "{} {}",
+            if is_sqlcipher(&self.con) { "sqlcipher" } else { "sqlite" },
+            rusqlite::version()
+        )
     }
 
-    pub(crate) fn list_tables(&self) -> Result<Vec<Table>> {
+    pub(crate) fn list_tables(&self) -> std::result::Result<Vec<Table>, QueryError> {
         self.select_all(
             r#"SELECT name, type FROM pragma_table_list WHERE NOT (name LIKE "sqlite\_%" ESCAPE "\")"#,
             &[],
@@ -375,12 +395,12 @@ impl SQLite3Driver {
         )
     }
 
-    pub(crate) fn list_foreign_keys(&self) -> Result<Vec<ForeignKey>> {
+    pub(crate) fn list_foreign_keys(&self) -> std::result::Result<Vec<ForeignKey>, QueryError> {
         self.select_all(r#"SELECT name, f."table", f."from", f."to" FROM pragma_table_list JOIN pragma_foreign_key_list(name) f WHERE NOT (name LIKE "sqlite\\_%" ESCAPE "\\");"#, &[], |row| Ok(ForeignKey { name: row.get("name")?, from: row.get("from")?, table: row.get("table")?, to: row.get("to")? }))
     }
 
     /// Collect table definitions from sqlite_schema, pragma_table_list, pragma_foreign_key_list, pragma_table_xinfo, pragma_index_list, and pragm_index_info.
-    pub(crate) fn table_schema(&self, table_name: &str) -> Result<TableSchema> {
+    pub(crate) fn table_schema(&self, table_name: &str) -> std::result::Result<TableSchema, QueryError> {
         // Select pragma_table_list
         let (table_type, wr, strict) = self.select_one(
             "SELECT type, wr, strict FROM pragma_table_list WHERE name = ?",
@@ -541,7 +561,7 @@ impl SQLite3Driver {
         })
     }
 
-    pub(crate) fn load_extensions(&self, extensions: &[&str]) -> Result<()> {
+    pub(crate) fn load_extensions(&self, extensions: &[&str]) -> std::result::Result<(), String> {
         for ext in extensions {
             unsafe {
                 self.con
@@ -558,7 +578,7 @@ impl SQLite3Driver {
         query: &str,
         params: &[Literal],
         mode: QueryMode,
-    ) -> std::result::Result<(), String> {
+    ) -> std::result::Result<(), QueryError> {
         let start_time = std::time::Instant::now();
 
         #[derive(Serialize, Debug, Clone)]
@@ -588,7 +608,7 @@ impl SQLite3Driver {
             "EDITOR_PRAGMA list_foreign_keys" => write_editor_pragma(w, self.list_foreign_keys()?, start_time),
             "EDITOR_PRAGMA table_schema" => {
                 let Some(Literal::String(table_name)) = params.get(0) else {
-                    return Err("invalid argument for `EDITOR_PRAGMA table_schema`".to_owned());
+                    return QueryError::new("invalid argument for `EDITOR_PRAGMA table_schema`", query, params);
                 };
                 write_editor_pragma(w, self.table_schema(table_name)?, start_time)
             }
@@ -599,12 +619,21 @@ impl SQLite3Driver {
                         extensions.push(param.as_str());
                     }
                 }
-                write_editor_pragma(w, self.load_extensions(&extensions)?, start_time)
+                write_editor_pragma(
+                    w,
+                    self.load_extensions(&extensions)
+                        .or_else(|err| QueryError::new(err, query, params))?,
+                    start_time,
+                )
             }
 
             _ => {
                 if mode == QueryMode::ReadOnly && NON_READONLY_SQL_PATTERN.is_match(query) {
-                    return Err(format!("Cannot execute {query:?} while in read-only mode."));
+                    return QueryError::new(
+                        format!("Cannot execute {query:?} while in read-only mode."),
+                        query,
+                        params,
+                    );
                 }
 
                 rmp::encode::write_map_len(&mut w, 2).expect("Failed to write msgpack");
@@ -616,7 +645,7 @@ impl SQLite3Driver {
                         assert!(params.is_empty());
                         self.con
                             .execute_batch(query)
-                            .or_else(|err| new_query_error(err, query, params))?;
+                            .or_else(|err| QueryError::new(err, query, params))?;
                         write_value_ref_into_msgpack(&mut w, ValueRef::Null).expect("Failed to write msgpack");
                     }
                     QueryMode::ReadOnly | QueryMode::ReadWrite => {
@@ -653,39 +682,22 @@ pub(crate) fn escape_sql_identifier(ident: &str) -> String {
     format!("\"{}\"", ident.replace("\"", "\"\""))
 }
 
-#[cfg(test)]
-mod test {
-    use super::SQLite3Driver;
+pub(crate) fn is_sqlcipher(con: &rusqlite::Connection) -> bool {
+    con.pragma_query_value(None, "cipher_version", |row| match row.get_ref(0) {
+        Ok(ValueRef::Text(_)) => Ok(true),
+        _ => Ok(false),
+    }) == Ok(true)
+}
 
-    fn convert_msgpack_to_json(input: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
-        let mut buf = vec![];
-        serde_transcode::transcode(
-            &mut rmp_serde::Deserializer::from_read_ref(input),
-            &mut serde_json::Serializer::new(&mut buf),
-        )
-        .unwrap();
-        Ok(String::from_utf8(buf)?.to_string())
-    }
-
-    #[test]
-    fn test_values() {
-        let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
-        assert_eq!(
-            convert_msgpack_to_json(
-                &db.execute(
-                    r#"WITH temp_table (column1, column2) AS (
-  VALUES 
-  (1, 2),
-  (3, 4)
-)
-SELECT * FROM temp_table;
-"#,
-                    &[],
-                )
-                .unwrap(),
-            )
-            .unwrap(),
-            "{\"column1\":[1,3],\"column2\":[2,4]}"
-        );
+pub(crate) fn set_sqlcipher_key(con: &rusqlite::Connection, key: &str) -> std::result::Result<(), String> {
+    if is_sqlcipher(&con) {
+        con.pragma_update(None, "key", key)
+            .expect("Setting `PRAGMA key` failed.");
+        Ok(())
+    } else {
+        match std::env::current_exe() {
+            Ok(p) => Err(format!("{} is not compiled with sqlcipher.", p.to_string_lossy())),
+            _ => Err("This executable is not compiled with sqlcipher.".to_owned()),
+        }
     }
 }

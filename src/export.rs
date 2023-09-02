@@ -1,4 +1,4 @@
-use crate::FileFormat;
+use crate::{sqlite3_driver::set_sqlcipher_key, FileFormat};
 use anyhow::bail;
 use rusqlite::types::ValueRef;
 use std::io::Write;
@@ -17,8 +17,7 @@ pub fn export(
 
     // Set the SQLite Cipher key if given
     if let Some(key) = sql_cipher_key {
-        con.pragma_update(None, "key", key)
-            .expect("Setting `PRAGMA key` failed.");
+        set_sqlcipher_key(&con, key).or_else(|err| bail!(err))?;
     }
 
     // Query

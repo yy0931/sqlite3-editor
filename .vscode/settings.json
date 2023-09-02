@@ -1,0 +1,7 @@
+{
+    "rust-analyzer.cargo.features": ["sqlite"],
+    "explorer.fileNesting.patterns": {
+        "Cargo.toml": "Cargo.lock",
+        "*.rs": "${capture}_test.rs"
+    }
+}

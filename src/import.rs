@@ -2,7 +2,10 @@ use anyhow::bail;
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::{sqlite3_driver::escape_sql_identifier, FileFormat};
+use crate::{
+    sqlite3_driver::{escape_sql_identifier, set_sqlcipher_key},
+    FileFormat,
+};
 
 pub fn import(
     database_filepath: &str,
@@ -18,8 +21,7 @@ pub fn import(
 
     // Set the SQLite Cipher key if given
     if let Some(key) = sql_cipher_key {
-        con.pragma_update(None, "key", key)
-            .expect("Setting `PRAGMA key` failed.");
+        set_sqlcipher_key(&con, key.as_ref()).or_else(|err| bail!(err))?;
     }
 
     let input: Box<dyn Read> = if let Some(input_file) = input_file {

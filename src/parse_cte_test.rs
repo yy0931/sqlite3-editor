@@ -125,3 +125,9 @@ fn test_values() {
         CTEString::new(vec![CTEEntryString::new("x", "VALUES(1)"),], "VALUES(2);"),
     );
 }
+
+#[test]
+fn test_non_cte() {
+    assert_eq!(parse_cte(&split_sqlite_statements(";").unwrap()[0]), None);
+    assert_eq!(parse_cte(&split_sqlite_statements("SELECT 1").unwrap()[0]), None);
+}

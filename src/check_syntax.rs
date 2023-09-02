@@ -35,7 +35,7 @@ pub struct Diagnostic {
 
 /// Checks the syntax of a single SQL statement using a SQLite connection.
 fn check_syntax_stmt(stmt_str: &str, conn: &mut rusqlite::Connection, offset_start: usize) -> Option<Diagnostic> {
-    if stmt_str.trim() == "" {
+    if stmt_str.trim() == "" || stmt_str.trim() == ";" {
         return None;
     }
 

@@ -82,7 +82,8 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
                             | Keyword::CREATE
                             | Keyword::ALTER
                             | Keyword::PROGRAM
-                            | Keyword::ANALYZE,
+                            | Keyword::ANALYZE
+                            | Keyword::BEGIN,
                         ..
                     } => {
                         kind = Some(CodeLensKind::Other);

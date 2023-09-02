@@ -26,13 +26,14 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           rustup target add ${{ matrix.target }}
-          cargo build --release --target ${{ matrix.target }}
+          cargo build --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/db-driver-rs.exe db-driver-${{ matrix.vsce_target }}.exe
       - uses: softprops/action-gh-release@v1
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.0'
+          tag_name: 'v1.0.91'
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -62,14 +63,15 @@ jobs:
 
           rustup override set nightly
           rustup update
-          cross build --release --target ${{ matrix.target }}
+          cross build --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/db-driver-rs db-driver-${{ matrix.vsce_target }}
         shell: bash
       - uses: softprops/action-gh-release@v1
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.0'
+          tag_name: 'v1.0.91'
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -91,13 +93,14 @@ jobs:
       - run: |
           set -xEeuo pipefail
 
-          cargo build --release --target ${{ matrix.target }}
+          cargo build --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/db-driver-rs db-driver-${{ matrix.vsce_target }}
         shell: bash
       - uses: softprops/action-gh-release@v1
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.0'
+          tag_name: 'v1.0.91'
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
