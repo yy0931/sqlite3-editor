@@ -32,7 +32,7 @@ jobs:
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.91'
+          tag_name: 'v1.0.91.1'
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -42,8 +42,12 @@ jobs:
     strategy:
       matrix:
         include:
+          - target: x86_64-unknown-linux-gnu
+            vsce_target: linux-x64-gnu
           - target: x86_64-unknown-linux-musl
             vsce_target: linux-x64-musl
+          - target: aarch64-unknown-linux-gnu
+            vsce_target: linux-arm64-gnu
           - target: aarch64-unknown-linux-musl
             vsce_target: linux-arm64-musl
           - target: armv7-unknown-linux-gnueabihf
@@ -70,7 +74,7 @@ jobs:
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.91'
+          tag_name: 'v1.0.91.1'
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -100,7 +104,7 @@ jobs:
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.91'
+          tag_name: 'v1.0.91.1'
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
