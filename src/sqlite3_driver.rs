@@ -643,9 +643,14 @@ impl SQLite3Driver {
                 match mode {
                     QueryMode::Script => {
                         assert!(params.is_empty());
-                        self.con
-                            .execute_batch(query)
-                            .or_else(|err| QueryError::new(err, query, params))?;
+
+                        let result = self.con.execute_batch(query);
+
+                        // Rollback uncommitted transactions
+                        let _ = self.con.execute("ROLLBACK;", ());
+
+                        result.or_else(|err| QueryError::new(err, query, params))?;
+
                         write_value_ref_into_msgpack(&mut w, ValueRef::Null).expect("Failed to write msgpack");
                     }
                     QueryMode::ReadOnly | QueryMode::ReadWrite => {

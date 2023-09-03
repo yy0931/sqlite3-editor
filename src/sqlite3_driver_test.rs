@@ -157,12 +157,116 @@ fn test_query_error() {
             "{}",
             db.handle(
                 &mut w,
-                "SELECT * FROM nonExistent",
+                "SELECT * FROM non_existent",
                 &[],
                 crate::request_type::QueryMode::ReadOnly
             )
             .unwrap_err()
         ),
-        "no such table: nonExistent\nQuery: SELECT * FROM nonExistent\nParams: []",
+        "no such table: non_existent\nQuery: SELECT * FROM non_existent\nParams: []",
+    );
+}
+
+#[test]
+fn test_transaction_success() {
+    let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+    db.handle(
+        &mut Cursor::new(Vec::<u8>::new()),
+        r#"
+BEGIN;
+CREATE TABLE t(x);
+INSERT INTO t VALUES (1);
+COMMIT;"#,
+        &[],
+        crate::request_type::QueryMode::Script,
+    )
+    .unwrap();
+
+    assert_eq!(
+        db.select_one("SELECT * FROM t", &[], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+}
+
+#[test]
+fn test_transaction_rollback() {
+    let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+    match db.handle(
+        &mut Cursor::new(Vec::<u8>::new()),
+        r#"
+-- prepare
+CREATE TABLE t(x);
+CREATE VIEW IF NOT EXISTS invalid_view AS SELECT * FROM non_existent;
+
+-- Begin a transaction and raise an error.
+BEGIN;
+INSERT INTO t VALUES (1);
+SELECT * FROM invalid_view;
+COMMIT;"#,
+        &[],
+        crate::request_type::QueryMode::Script,
+    ) {
+        Ok(_) => panic!(),
+        Err(err) => {
+            if !err.to_string().contains("no such table") {
+                panic!("{}", err);
+            }
+        }
+    }
+
+    match db.handle(
+        &mut Cursor::new(Vec::<u8>::new()),
+        r#"
+-- The previous transaction should have been aborted.
+BEGIN;
+INSERT INTO t VALUES (1);
+SELECT * FROM invalid_view;
+COMMIT;"#,
+        &[],
+        crate::request_type::QueryMode::Script,
+    ) {
+        Ok(_) => panic!(),
+        Err(err) => {
+            if !err.to_string().contains("no such table") {
+                panic!("{}", err);
+            }
+        }
+    }
+
+    assert_eq!(
+        db.select_one("SELECT count(*) FROM t", &[], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn test_uncommitted_transaction() {
+    let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+    db.handle(
+        &mut Cursor::new(Vec::<u8>::new()),
+        r#"
+CREATE TABLE t(x);
+BEGIN;
+INSERT INTO t VALUES (1);
+"#,
+        &[],
+        crate::request_type::QueryMode::Script,
+    )
+    .unwrap();
+
+    db.handle(
+        &mut Cursor::new(Vec::<u8>::new()),
+        "BEGIN;",
+        &[],
+        crate::request_type::QueryMode::Script,
+    )
+    .unwrap();
+
+    assert_eq!(
+        db.select_one("SELECT count(*) FROM t", &[], |row| row.get::<_, i64>(0))
+            .unwrap(),
+        0
     );
 }
