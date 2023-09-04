@@ -230,7 +230,7 @@ dependencies = [
 
 [[package]]
 name = "db-driver-rs"
-version = "1.0.92"
+version = "1.0.95"
 dependencies = [
  "anyhow",
  "base64",
