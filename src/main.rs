@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
     path::PathBuf,
@@ -216,20 +215,15 @@ fn main() {
                     std::io::stdout().flush().unwrap();
                 }
 
-                fn inspect_request(mut r: impl Read + Seek) -> Cow<'static, str> {
+                fn inspect_request(mut r: impl Read + Seek) -> String {
                     r.rewind().expect("Failed to rewind the reader.");
-                    let json = vec![];
-                    match String::from_utf8(json.clone()) {
-                        Ok(v)
-                            if serde_transcode::transcode(
-                                &mut rmp_serde::Deserializer::new(&mut r),
-                                &mut serde_json::Serializer::new(json),
-                            )
-                            .is_ok() =>
-                        {
-                            Cow::Owned(v)
-                        }
-                        _ => Cow::Borrowed("<Failed to serialize as a JSON>"),
+                    let mut json = vec![];
+                    match serde_transcode::transcode(
+                        &mut rmp_serde::Deserializer::new(&mut r),
+                        &mut serde_json::Serializer::new(&mut json),
+                    ) {
+                        Ok(_) => String::from_utf8_lossy(&json).to_string(),
+                        Err(_) => "<Failed to serialize as a JSON>".to_owned(),
                     }
                 }
 
@@ -238,7 +232,7 @@ fn main() {
                     // Terminate the loop
                     "close" => return,
 
-                    // Handle the request using the MsgpackServer
+                    // Handle the request
                     "handle" => {
                         // Deserialize the request
                         let req = match rmp_serde::from_read::<_, Request>(&mut r) {
@@ -246,7 +240,7 @@ fn main() {
                             Err(err) => {
                                 let mut content = inspect_request(&mut r);
                                 if content.len() > 5000 {
-                                    content = Cow::Owned(content[0..5000].to_owned() + "... (omitted)")
+                                    content = content[0..5000].to_owned() + "... (omitted)"
                                 }
                                 w.write(
                                     format!(

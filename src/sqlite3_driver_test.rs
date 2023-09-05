@@ -5,6 +5,19 @@ use crate::{
     sqlite3_driver::{SQLite3Driver, Table, TableSchema, TableSchemaColumn},
 };
 
+impl<'a> From<rusqlite::types::ValueRef<'a>> for Literal {
+    fn from(value: rusqlite::types::ValueRef<'a>) -> Self {
+        match value {
+            rusqlite::types::ValueRef::Blob(v) => Literal::Blob(Blob(v.to_vec())),
+            rusqlite::types::ValueRef::Integer(v) => Literal::I64(v),
+            rusqlite::types::ValueRef::Null => Literal::Nil,
+            rusqlite::types::ValueRef::Real(v) => Literal::F64(v),
+            // FIXME: utf-16?
+            rusqlite::types::ValueRef::Text(v) => Literal::String(String::from_utf8_lossy(v).to_string()),
+        }
+    }
+}
+
 fn convert_msgpack_to_json(input: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
     let mut buf = vec![];
     serde_transcode::transcode(
@@ -12,7 +25,7 @@ fn convert_msgpack_to_json(input: &[u8]) -> Result<String, Box<dyn std::error::E
         &mut serde_json::Serializer::new(&mut buf),
     )
     .unwrap();
-    Ok(String::from_utf8(buf)?.to_string())
+    Ok(String::from_utf8_lossy(&buf).to_string())
 }
 
 #[test]
@@ -59,6 +72,7 @@ WITH
 SELECT * FROM temp_table;
 "#,
                 &[],
+                &mut vec![],
             )
             .unwrap(),
         )
@@ -72,11 +86,12 @@ fn test_table_schema() {
     let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
 
     // a random table
-    db.execute("CREATE TABLE t(x INTEGER NOT NULL) STRICT", &[]).unwrap();
+    db.execute("CREATE TABLE t(x INTEGER NOT NULL) STRICT", &[], &mut vec![])
+        .unwrap();
 
     assert_eq!(
-        db.table_schema("t"),
-        Ok(TableSchema {
+        db.table_schema("t").unwrap().0,
+        TableSchema {
             name: "t".to_owned(),
             type_: "table".to_owned(),
             schema: "CREATE TABLE t(x INTEGER NOT NULL) STRICT".to_owned(),
@@ -95,7 +110,7 @@ fn test_table_schema() {
             }],
             indexes: vec![],
             triggers: vec![],
-        }),
+        },
     );
 }
 
@@ -105,15 +120,17 @@ fn test_list_tables() {
     db.execute(
         "CREATE TABLE t1(x INTEGER NOT NULL PRIMARY KEY) WITHOUT ROWID, STRICT",
         &[],
+        &mut vec![],
     )
     .unwrap();
     db.execute(
         "CREATE TABLE t2(x INTEGER NOT NULL PRIMARY KEY) WITHOUT ROWID, STRICT",
         &[],
+        &mut vec![],
     )
     .unwrap();
     assert_eq!(
-        db.list_tables().unwrap().into_iter().collect::<HashSet<Table>>(),
+        db.list_tables().unwrap().0.into_iter().collect::<HashSet<Table>>(),
         HashSet::from([
             Table {
                 name: "t1".to_owned(),

@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Word};
@@ -21,6 +24,11 @@ pub struct CodeLens {
     pub start: ZeroIndexedLocation,
     pub end: ZeroIndexedLocation,
     pub stmt_executed: String,
+}
+
+lazy_static! {
+    static ref KEYWORDS_UNSUPPORTED_BY_SQLPARSER: HashSet<&'static str> =
+        HashSet::from(["VACUUM", "ATTACH", "DETACH", "PRAGMA",]);
 }
 
 /// Returns a list of code lenses for the given SQL input.
@@ -94,7 +102,7 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
                         quote_style: None,
                         value,
                         keyword: Keyword::NoKeyword,
-                    } if value == "VACUUM" || value == "ATTACH" || value == "DETACH" => {
+                    } if KEYWORDS_UNSUPPORTED_BY_SQLPARSER.contains(value.to_uppercase().as_str()) => {
                         kind = Some(CodeLensKind::Other);
                         break;
                     }

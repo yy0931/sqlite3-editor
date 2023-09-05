@@ -89,3 +89,16 @@ fn test_begin_end() {
         }]
     );
 }
+
+#[test]
+fn test_pragma() {
+    assert_eq!(
+        code_lens("PRAGMA analysis_limit;"),
+        [CodeLens {
+            kind: CodeLensKind::Other,
+            start: ZeroIndexedLocation::new(0, 0),
+            end: ZeroIndexedLocation::new(0, 22),
+            stmt_executed: "PRAGMA analysis_limit;".to_owned(),
+        }]
+    );
+}

@@ -1,4 +1,5 @@
 use crate::import::import;
+use crate::sqlite3_driver::get_string;
 use crate::FileFormat;
 use std::fs;
 use std::io::Write;
@@ -7,7 +8,7 @@ use std::io::Write;
 fn test_import_csv() {
     let tmp_db_file = tempfile::NamedTempFile::new().unwrap();
     let tmp_db_filepath = tmp_db_file.path().to_str().unwrap();
-    
+
     let mut tmp_csv_file = tempfile::NamedTempFile::new().unwrap();
     let tmp_csv_file_path = tmp_csv_file.path().to_str().unwrap().to_owned();
 
@@ -32,7 +33,7 @@ fn test_import_csv() {
                 .unwrap()
                 .prepare("SELECT * FROM test")
                 .unwrap()
-                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+                .query_map([], |row| Ok((get_string(row, 0, |_| {})?, get_string(row, 1, |_| {})?)))
                 .unwrap()
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()
@@ -71,7 +72,7 @@ fn test_import_csv_delimiter() {
                 .unwrap()
                 .prepare("SELECT * FROM test")
                 .unwrap()
-                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+                .query_map([], |row| Ok((get_string(row, 0, |_| {})?, get_string(row, 1, |_| {})?)))
                 .unwrap()
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()
@@ -110,7 +111,7 @@ fn test_import_tsv() {
                 .unwrap()
                 .prepare("SELECT * FROM test")
                 .unwrap()
-                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+                .query_map([], |row| Ok((get_string(row, 0, |_| {})?, get_string(row, 1, |_| {})?)))
                 .unwrap()
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()
@@ -148,7 +149,7 @@ fn test_import_json() {
             .unwrap()
             .prepare("SELECT * FROM test")
             .unwrap()
-            .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+            .query_map([], |row| Ok((get_string(row, 0, |_| {})?, get_string(row, 1, |_| {})?)))
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap(),

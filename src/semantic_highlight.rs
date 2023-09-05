@@ -60,7 +60,9 @@ pub fn semantic_highlight(sql: &str) -> Vec<SemanticHighlight> {
                         quote_style: None,
                         value,
                         keyword: Keyword::NoKeyword,
-                    } if KEYWORDS_UNSUPPORTED_BY_SQLPARSER.contains(value.as_str()) => SemanticTokenKind::Keyword,
+                    } if KEYWORDS_UNSUPPORTED_BY_SQLPARSER.contains(value.to_uppercase().as_str()) => {
+                        SemanticTokenKind::Keyword
+                    }
                     Word {
                         keyword: Keyword::NoKeyword,
                         ..
