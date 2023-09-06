@@ -23,8 +23,7 @@ pub fn export(
     // Query
     let mut stmt = con.prepare(query)?;
     if csv_delimiter.as_bytes().len() != 1 {
-        eprintln!("csv_delimiter needs to be a single character.");
-        std::process::exit(1);
+        bail!("csv_delimiter needs to be a single character.");
     }
 
     let column_count = stmt.column_count();

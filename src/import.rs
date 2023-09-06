@@ -43,8 +43,7 @@ pub fn import(
 
             let columns = r.headers()?.into_iter().map(|v| v.to_owned()).collect::<Vec<_>>();
             if columns.is_empty() {
-                eprintln!("No column headers present.");
-                std::process::exit(1);
+                bail!("No column headers present.");
             }
 
             let tx = con.transaction()?;
@@ -99,8 +98,7 @@ pub fn import(
                     .collect();
 
             if parsed.is_empty() {
-                eprintln!("No data present.");
-                std::process::exit(1);
+                bail!("No data present.");
             }
 
             let columns = parsed
@@ -112,8 +110,7 @@ pub fn import(
                 .collect::<Vec<_>>();
 
             if columns.is_empty() {
-                eprintln!("No column headers present.");
-                std::process::exit(1);
+                bail!("No column headers present.");
             }
 
             let tx = con.transaction()?;

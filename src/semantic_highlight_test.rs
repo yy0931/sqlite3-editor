@@ -1,17 +1,53 @@
 use crate::semantic_highlight::{semantic_highlight, SemanticTokenKind};
 
 #[test]
-fn test_simple() {
+fn test_token_kinds() {
     assert_eq!(
-        semantic_highlight("SELECT 1;")
+        semantic_highlight("SELECT 1 = 2 * a; /* b */ -- c")
             .into_iter()
             .map(|t| t.kind)
             .collect::<Vec<_>>(),
         [
-            SemanticTokenKind::Keyword, // "SELECT"
-            SemanticTokenKind::Other,   // " "
-            SemanticTokenKind::Number,  // "1"
-            SemanticTokenKind::Other,   // ";"
+            SemanticTokenKind::Keyword,  // "SELECT"
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Number,   // "1"
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Operator, // "="
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Number,   // "2"
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Operator, // "*"
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Variable, // "a"
+            SemanticTokenKind::Other,    // ";"
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Comment,  // "/* b */"
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Comment,  // "-- c"
+        ]
+    );
+}
+
+#[test]
+fn test_quotes() {
+    assert_eq!(
+        semantic_highlight("SELECT 'a', \"b\", [c], `d`")
+            .into_iter()
+            .map(|t| t.kind)
+            .collect::<Vec<_>>(),
+        [
+            SemanticTokenKind::Keyword,  // "SELECT"
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::String,   // "'a'"
+            SemanticTokenKind::Other,    // ","
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Variable, // "\"b\""
+            SemanticTokenKind::Other,    // ","
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Variable, // "[c]"
+            SemanticTokenKind::Other,    // ","
+            SemanticTokenKind::Other,    // " "
+            SemanticTokenKind::Variable, // "`d`"
         ]
     );
 }
@@ -61,5 +97,16 @@ fn test_pragma() {
             SemanticTokenKind::Other,    // " "
             SemanticTokenKind::Variable, // "analysis_limit"
         ]
+    );
+}
+
+#[test]
+fn test_tokenizer_error() {
+    assert_eq!(
+        semantic_highlight("'aa")
+            .into_iter()
+            .map(|t| t.kind)
+            .collect::<Vec<_>>(),
+        []
     );
 }

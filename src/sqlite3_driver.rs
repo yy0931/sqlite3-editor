@@ -146,6 +146,9 @@ fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> std::result::Result
     let Ok(case_sensitive) = ctx.get::<i64>(3) else {
         return Ok(0);
     };
+    if whole_word != 0 && pattern == "" {
+        return Ok(0);
+    }
 
     // Match
     let flags = if case_sensitive != 0 { "" } else { "(?i)" };
@@ -266,12 +269,12 @@ pub(crate) struct Table {
     pub type_: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ForeignKey {
     pub name: String,
     pub table: String,
     pub from: String,
-    pub to: String,
+    pub to: Option<String>,
 }
 
 fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUTF8) -> ()>(
@@ -480,7 +483,7 @@ impl SQLite3Driver {
 
     pub(crate) fn list_foreign_keys(&self) -> std::result::Result<(Vec<ForeignKey>, Vec<InvalidUTF8>), QueryError> {
         let mut warnings = vec![];
-        self.select_all(r#"SELECT name, f."table", f."from", f."to" FROM pragma_table_list JOIN pragma_foreign_key_list(name) f WHERE NOT (name LIKE "sqlite\\_%" ESCAPE "\\");"#, &[], |row| Ok(ForeignKey { name: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.name")))?, table: get_string(row, 1, |err| warnings.push(err.with("pragma_table_list.table")))?, from: get_string(row, 2, |err| warnings.push(err.with("pragma_table_list.from")))?, to: get_string(row, 3, |err| warnings.push(err.with("pragma_table_list.to")))? }))
+        self.select_all(r#"SELECT name, f."table", f."from", f."to" FROM pragma_table_list JOIN pragma_foreign_key_list(name) f WHERE NOT (name LIKE "sqlite\_%" ESCAPE "\");"#, &[], |row| Ok(ForeignKey { name: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.name")))?, table: get_string(row, 1, |err| warnings.push(err.with("pragma_table_list.table")))?, from: get_string(row, 2, |err| warnings.push(err.with("pragma_table_list.from")))?, to: get_option_string(row, 3, |err| warnings.push(err.with("pragma_table_list.to")))? }))
         .map(|v| (v, warnings))
     }
 
@@ -815,5 +818,17 @@ pub(crate) fn set_sqlcipher_key(con: &rusqlite::Connection, key: &str) -> std::r
             Ok(p) => Err(format!("{} is not compiled with sqlcipher.", p.to_string_lossy())),
             _ => Err("This executable is not compiled with sqlcipher.".to_owned()),
         }
+    }
+}
+
+pub fn read_msgpack_into_json(mut r: impl std::io::Read + std::io::Seek) -> String {
+    r.rewind().expect("Failed to rewind the reader.");
+    let mut json = vec![];
+    match serde_transcode::transcode(
+        &mut rmp_serde::Deserializer::new(&mut r),
+        &mut serde_json::Serializer::new(&mut json),
+    ) {
+        Ok(_) => String::from_utf8_lossy(&json).to_string(),
+        Err(_) => "<Failed to serialize as a JSON>".to_owned(),
     }
 }

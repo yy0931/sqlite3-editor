@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{Read, Seek, SeekFrom, Write},
+    io::{Seek, SeekFrom, Write},
     path::PathBuf,
 };
 
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 mod column_origin;
 mod export;
 mod import;
-use crate::request_type::Request;
+use crate::{request_type::Request, sqlite3_driver::read_msgpack_into_json};
 
 mod check_syntax;
 #[cfg(test)]
@@ -53,6 +53,9 @@ compile_error!("Cannot enable both 'sqlite' and 'sqlcipher' features.");
 #[cfg(not(any(feature = "sqlite", feature = "sqlcipher")))]
 compile_error!("Must use `--features sqlite` or `--features sqlcipher` command line option.");
 
+/// SQLite bindings for https://marketplace.visualstudio.com/items?itemName=yy0931.vscode-sqlite3-editor
+///
+/// Source: https://github.com/yy0931/sqlite3-editor/tree/rust-backend
 #[derive(Parser)]
 struct Args {
     #[command(subcommand)]
@@ -72,6 +75,7 @@ pub enum FileFormat {
 #[derive(Subcommand)]
 enum Commands {
     Version {},
+    FunctionList {},
     Import {
         /// Path to the database file
         #[arg(long, required = true)]
@@ -170,16 +174,44 @@ fn main() {
                     .unwrap(),
                 "ok"
             );
-            println!("version {}", env!("CARGO_PKG_VERSION"));
+            println!("db-driver-rs {}", env!("CARGO_PKG_VERSION"));
             println!(
                 "{} {}",
                 if sqlite3_driver::is_sqlcipher(&con) {
-                    "sqlcipher"
+                    "SQLCipher"
                 } else {
-                    "sqlite"
+                    "SQLite"
                 },
                 rusqlite::version()
             );
+
+            let conn = rusqlite::Connection::open_in_memory().unwrap();
+
+            println!(
+                "\nCompile options:\n{}",
+                conn.prepare("PRAGMA compile_options")
+                    .unwrap()
+                    .query_map((), |row| row.get::<_, String>(0))
+                    .unwrap()
+                    .collect::<rusqlite::Result<Vec<_>>>()
+                    .unwrap()
+                    .into_iter()
+                    .map(|line| "- ".to_owned() + &line)
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            );
+        }
+        Commands::FunctionList {} => {
+            let mut functions = rusqlite::Connection::open_in_memory()
+                .unwrap()
+                .prepare("PRAGMA function_list")
+                .unwrap()
+                .query_map((), |row| row.get::<_, String>(0))
+                .unwrap()
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .unwrap();
+            functions.sort();
+            println!("{}", serde_json::to_string(&functions).unwrap());
         }
         Commands::Server {
             database_filepath,
@@ -215,18 +247,6 @@ fn main() {
                     std::io::stdout().flush().unwrap();
                 }
 
-                fn inspect_request(mut r: impl Read + Seek) -> String {
-                    r.rewind().expect("Failed to rewind the reader.");
-                    let mut json = vec![];
-                    match serde_transcode::transcode(
-                        &mut rmp_serde::Deserializer::new(&mut r),
-                        &mut serde_json::Serializer::new(&mut json),
-                    ) {
-                        Ok(_) => String::from_utf8_lossy(&json).to_string(),
-                        Err(_) => "<Failed to serialize as a JSON>".to_owned(),
-                    }
-                }
-
                 // Handle the different commands
                 match command.trim() {
                     // Terminate the loop
@@ -238,7 +258,7 @@ fn main() {
                         let req = match rmp_serde::from_read::<_, Request>(&mut r) {
                             Ok(req) => req,
                             Err(err) => {
-                                let mut content = inspect_request(&mut r);
+                                let mut content = read_msgpack_into_json(&mut r);
                                 if content.len() > 5000 {
                                     content = content[0..5000].to_owned() + "... (omitted)"
                                 }

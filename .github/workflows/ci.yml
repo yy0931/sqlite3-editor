@@ -5,7 +5,19 @@ on:
   push:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+      - run: sudo apt install -y libsqlite3-mod-spatialite
+      - run: cargo test --features sqlite
+      - run: cargo test --features sqlcipher
+
   build-win32:
+    needs: test
     runs-on: windows-latest
     strategy:
       matrix:
@@ -32,12 +44,13 @@ jobs:
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.96'
+          tag_name: 'v1.0.98'
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-linux:
+    needs: test
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -74,12 +87,13 @@ jobs:
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.96'
+          tag_name: 'v1.0.98'
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-darwin:
+    needs: test
     runs-on: macos-latest
     strategy:
       matrix:
@@ -104,7 +118,7 @@ jobs:
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.96'
+          tag_name: 'v1.0.98'
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

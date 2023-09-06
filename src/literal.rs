@@ -86,6 +86,15 @@ impl From<Vec<u8>> for Literal {
     }
 }
 
+impl<T: Into<Literal>> From<Option<T>> for Literal {
+    fn from(value: Option<T>) -> Self {
+        match value {
+            None => Literal::Nil,
+            Some(v) => v.into(),
+        }
+    }
+}
+
 impl From<()> for Literal {
     fn from(_value: ()) -> Self {
         Literal::Nil

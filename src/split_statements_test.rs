@@ -43,3 +43,25 @@ fn test_case_expression() {
         ]
     );
 }
+
+#[test]
+fn test_unmatched_end() {
+    // Split "SELECT 1; SELECT 2;"
+    assert_eq!(
+        split_sqlite_statements("END; SELECT 1;")
+            .unwrap()
+            .into_iter()
+            .map(|t| format!("{:?}", t))
+            .collect::<Vec<_>>(),
+        [
+            r#"{
+    raw:  <line 0, column 0>-<line 0, column 4>: "END;"
+    real: <line 0, column 0>-<line 0, column 4>: "END;"
+}"#,
+            r#"{
+    raw:  <line 0, column 4>-<line 0, column 14>: " SELECT 1;"
+    real: <line 0, column 5>-<line 0, column 14>: "SELECT 1;"
+}"#
+        ]
+    );
+}

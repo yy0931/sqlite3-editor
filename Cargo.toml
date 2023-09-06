@@ -1,6 +1,6 @@
 [package]
 name = "db-driver-rs"
-version = "1.0.96"
+version = "1.0.98"
 edition = "2021"
 
 [features]
@@ -15,7 +15,6 @@ percent-encoding = "2.3.0"
 regex = "1.9.3"
 rmp = "0.8.12"
 rmp-serde = "1.1.2"
-rusqlite = { version = "0.29.0", features = ["functions", "load_extension"] }
 serde = { version = "1.0.186", features = ["derive"] }
 serde_json = "1.0.105"
 serde-transcode = "1.1.1"
@@ -23,6 +22,11 @@ sqlparser = "0.37.0"
 csv = "1.2.2"
 base64 = "0.21.2"
 hex = "0.4.3"
+
+[dependencies.rusqlite]
+git = "https://github.com/yy0931/rusqlite.git"
+branch = "master"
+features = ["functions", "load_extension"]
 
 [dev-dependencies]
 tempfile = "3.8.0"
