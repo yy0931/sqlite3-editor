@@ -1,9 +1,14 @@
-use crate::{literal::Literal, request_type::QueryMode};
+use crate::{
+    column_origin::{column_origin, ColumnOrigin},
+    literal::Literal,
+    request_type::QueryMode,
+};
 use lazy_static::lazy_static;
 use rusqlite::{functions::FunctionFlags, types::ValueRef, Row};
 use serde::{Deserialize, Serialize};
 
 use std::{
+    collections::HashMap,
     io::Write,
     mem::ManuallyDrop,
     sync::{Arc, Mutex},
@@ -113,6 +118,7 @@ impl std::fmt::Display for QueryError {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct SQLite3Driver {
     con: ManuallyDrop<rusqlite::Connection>,
 }
@@ -185,20 +191,20 @@ impl std::fmt::Display for LoadableSQLiteExtensionNotAvailable {
 
 impl std::error::Error for LoadableSQLiteExtensionNotAvailable {}
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TableSchemaColumnForeignKey {
     pub id: i64,
     pub seq: i64,
     pub table: String,
-    pub from: String,
-    pub to: Option<String>,
+    /// Column name; foreign_key.to.unwrap_or(foreign_key.from)
+    pub to: String,
     pub on_update: String,
     pub on_delete: String,
     #[serde(rename = "match")]
     pub match_: String,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DfltValue {
     Int(i64),
@@ -207,7 +213,7 @@ pub enum DfltValue {
     Blob(Vec<u8>),
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TableSchemaColumn {
     pub cid: i64,
     pub dflt_value: Option<DfltValue>,
@@ -224,14 +230,14 @@ pub struct TableSchemaColumn {
     pub hidden: i64,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndexColumn {
     pub seqno: i64,
     pub cid: i64,
     pub name: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TableSchemaIndex {
     pub seq: i64,
     pub name: String,
@@ -242,27 +248,34 @@ pub struct TableSchemaIndex {
     pub schema: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TableSchemaTriggers {
     pub name: String,
     pub sql: String,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct TableSchema {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub type_: String,
-    pub schema: String,
+    // InnerTableSchema
+    pub schema: Option<String>,
     #[serde(rename = "hasRowIdColumn")]
     pub has_rowid_column: bool,
     pub strict: bool,
     pub columns: Vec<TableSchemaColumn>,
     pub indexes: Vec<TableSchemaIndex>,
     pub triggers: Vec<TableSchemaTriggers>,
+
+    // Optional fields
+    pub name: Option<String>,
+    #[serde(rename = "type")]
+    pub type_: String,
+    #[serde(rename = "customQuery")]
+    pub custom_query: Option<String>,
+    #[serde(rename = "columnOrigins")]
+    pub column_origins: Option<HashMap<String, ColumnOrigin>>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) struct Table {
     pub name: String,
     #[serde(rename = "type")]
@@ -301,6 +314,8 @@ fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUTF8) 
     }
     Ok(())
 }
+
+type ForeignKeyList = HashMap</* column */ String, Vec<TableSchemaColumnForeignKey>>;
 
 impl SQLite3Driver {
     /// Connects to the database, set busy_timeout to 500, register the find_widget_regexp function, enable loading extensions, and fetch the version number of SQLite.
@@ -487,6 +502,50 @@ impl SQLite3Driver {
         .map(|v| (v, warnings))
     }
 
+    /// Returns foreign keys for each column.
+    fn foreign_keys(
+        &self,
+        database: &str,
+        table_name: &str,
+        warnings: &mut Vec<InvalidUTF8>,
+        cache: &mut HashMap<(String, String), ForeignKeyList>,
+    ) -> std::result::Result<ForeignKeyList, QueryError> {
+        let cache_key = (database.to_owned(), table_name.to_owned());
+        if let Some(v) = cache.get(&cache_key) {
+            return Ok(v.clone());
+        }
+
+        let mut result = HashMap::new();
+        self.select_all(
+            &format!(
+                "PRAGMA {}.foreign_key_list({})",
+                escape_sql_identifier(database),
+                escape_sql_identifier(table_name)
+            ),
+            &[],
+            |row| {
+                let from = get_string(row, 3, |err| warnings.push(err.with("foreign_key_list.from")))?;
+                let to = get_option_string(row, 4, |err| warnings.push(err.with("foreign_key_list.to")))?;
+                result
+                    .entry(from.clone())
+                    .or_insert_with(Vec::new)
+                    .push(TableSchemaColumnForeignKey {
+                        id: row.get::<_, i64>(0)?,
+                        seq: row.get::<_, i64>(1)?,
+                        table: get_string(row, 2, |err| warnings.push(err.with("foreign_key_list.table")))?,
+                        to: to.unwrap_or(from),
+                        on_update: get_string(row, 5, |err| warnings.push(err.with("foreign_key_list.on_update")))?,
+                        on_delete: get_string(row, 6, |err| warnings.push(err.with("foreign_key_list.on_delete")))?,
+                        match_: get_string(row, 7, |err| warnings.push(err.with("foreign_key_list.match")))?,
+                    });
+                Ok(())
+            },
+        )?;
+
+        cache.insert(cache_key, result.clone());
+        Ok(result)
+    }
+
     /// Collect table definitions from sqlite_schema, pragma_table_list, pragma_foreign_key_list, pragma_table_xinfo, pragma_index_list, and pragm_index_info.
     pub(crate) fn table_schema(
         &self,
@@ -511,22 +570,39 @@ impl SQLite3Driver {
         let has_rowid_column = table_type == "table" && !wr;
 
         // Select pragma_foreign_key_list
-        let foreign_keys: Vec<TableSchemaColumnForeignKey> = self.select_all(
-            &format!("PRAGMA foreign_key_list({})", escape_sql_identifier(table_name)),
-            &[],
-            |row| {
-                Ok(TableSchemaColumnForeignKey {
-                    id: row.get::<_, i64>(0)?,
-                    seq: row.get::<_, i64>(1)?,
-                    table: get_string(row, 2, |err| warnings.push(err.with("foreign_key_list.table")))?,
-                    from: get_string(row, 3, |err| warnings.push(err.with("foreign_key_list.from")))?,
-                    to: get_option_string(row, 4, |err| warnings.push(err.with("foreign_key_list.to")))?,
-                    on_update: get_string(row, 5, |err| warnings.push(err.with("foreign_key_list.on_update")))?,
-                    on_delete: get_string(row, 6, |err| warnings.push(err.with("foreign_key_list.on_delete")))?,
-                    match_: get_string(row, 7, |err| warnings.push(err.with("foreign_key_list.match")))?,
-                })
-            },
-        )?;
+        let mut foreign_key_list_cache = HashMap::new();
+        let mut foreign_keys = self.foreign_keys("main", table_name, &mut warnings, &mut foreign_key_list_cache)?;
+
+        let column_origins = if table_type == "view" {
+            let column_origins = column_origin(
+                self.con.db.borrow().db,
+                &format!("SELECT * FROM ({table_name}) LIMIT 0"),
+            )
+            .unwrap_or_default();
+
+            // In this case:
+            // ```
+            // CREATE TABLE t1(x INTEGER PRIMARY KEY);
+            // CREATE TABLE t2(y INTEGER REFERENCES t1(x));
+            // CREATE VIEW table_name AS SELECT y as z FROM t2;
+            // ```
+            // column_origins = {"z": ("main", "t2", "y")}
+            // origin_fk = { from: "y", to: "x", table: "t1" }
+            for (from, to) in &column_origins {
+                if let Some(origin_fk) = self
+                    .foreign_keys(&to.database, &to.table, &mut warnings, &mut foreign_key_list_cache)?
+                    .remove(&to.column)
+                {
+                    foreign_keys
+                        .entry(from.to_owned())
+                        .or_insert_with(Vec::new)
+                        .append(&mut origin_fk.clone());
+                }
+            }
+            Some(column_origins)
+        } else {
+            None
+        };
 
         // Select sqlite_sequence
         // NOTE: There is no way to check if an empty table has an autoincrement column.
@@ -564,10 +640,15 @@ impl SQLite3Driver {
                 Ok(TableSchemaColumn {
                     cid: row.get::<_, i64>(0)?,
                     notnull: row.get::<_, i64>(3)? != 0,
-                    type_: get_string(row, 2, |err| warnings.push(err.with("table_xinfo.type")))?,
+                    type_: if table_type == "view" {
+                        // NOTE: Why does table_xinfo always return "BLOB" for views?
+                        "".to_owned()
+                    } else {
+                        get_string(row, 2, |err| warnings.push(err.with("table_xinfo.type")))?
+                    },
                     pk,
                     auto_increment: pk && has_table_auto_increment_column,
-                    foreign_keys: foreign_keys.clone().into_iter().filter(|k| k.from == name).collect(),
+                    foreign_keys: foreign_keys.get(&name).cloned().unwrap_or_default(),
                     hidden: row.get::<_, i64>(6)?,
                     dflt_value: match row.get_ref(4)? {
                         ValueRef::Null => None,
@@ -648,14 +729,77 @@ impl SQLite3Driver {
 
         Ok((
             TableSchema {
-                name: table_name.to_string(),
-                type_: table_type,
-                schema,
+                name: Some(table_name.to_string()),
+                schema: Some(schema),
                 has_rowid_column,
                 strict,
                 columns,
                 indexes,
                 triggers,
+                custom_query: None,
+                column_origins,
+                type_: table_type,
+            },
+            warnings,
+        ))
+    }
+
+    pub(crate) fn query_schema(&self, query: &str) -> std::result::Result<(TableSchema, Vec<InvalidUTF8>), QueryError> {
+        let mut warnings = vec![];
+
+        let column_origins =
+            column_origin(self.con.db.borrow().db, &format!("SELECT * FROM ({query}) LIMIT 0")).unwrap_or_default();
+
+        let stmt = format!("SELECT * FROM ({query}) LIMIT 0");
+        let column_names = self
+            .con
+            .prepare(&stmt)
+            .or_else(|err| QueryError::new(err, &stmt, &[]))?
+            .column_names()
+            .into_iter()
+            .map(|v| v.to_owned())
+            .collect::<Vec<_>>();
+
+        let mut foreign_key_list_cache = HashMap::new();
+
+        Ok((
+            TableSchema {
+                type_: "custom query".to_owned(),
+                name: None,
+                indexes: vec![],
+                triggers: vec![],
+                schema: None,
+                has_rowid_column: false,
+                strict: false,
+                columns: column_names
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, name)| TableSchemaColumn {
+                        cid: i as i64,
+                        dflt_value: None,
+                        name: name.to_owned(),
+                        notnull: false,
+                        type_: "".to_owned(),
+                        pk: false,
+                        auto_increment: false,
+                        foreign_keys: column_origins
+                            .get(&name)
+                            .and_then(|origin| {
+                                self.foreign_keys(
+                                    &origin.database,
+                                    &origin.table,
+                                    &mut warnings,
+                                    &mut foreign_key_list_cache,
+                                )
+                                .unwrap_or_default() // ignore errors
+                                .remove(&origin.column)
+                            })
+                            .unwrap_or_default(),
+                        hidden: 0,
+                    })
+                    .collect::<Vec<_>>(),
+                custom_query: Some(query.to_owned()),
+                column_origins: Some(column_origins),
             },
             warnings,
         ))
@@ -713,6 +857,12 @@ impl SQLite3Driver {
                     return QueryError::new("invalid argument for `EDITOR_PRAGMA table_schema`", query, params);
                 };
                 write_editor_pragma(w, self.table_schema(table_name)?, start_time)
+            }
+            "EDITOR_PRAGMA query_schema" => {
+                let Some(Literal::String(query)) = params.get(0) else {
+                    return QueryError::new("invalid argument for `EDITOR_PRAGMA query_schema`", query, params);
+                };
+                write_editor_pragma(w, self.query_schema(query)?, start_time)
             }
             "EDITOR_PRAGMA load_extensions" => {
                 let mut extensions = vec![];

@@ -65,3 +65,18 @@ fn test_unmatched_end() {
         ]
     );
 }
+
+#[test]
+fn test_whitespace() {
+    assert_eq!(
+        split_sqlite_statements("    ")
+            .unwrap()
+            .into_iter()
+            .map(|t| format!("{:?}", t))
+            .collect::<Vec<_>>(),
+        [r#"{
+    raw:  <line 0, column 0>-<line 0, column 4>: "    "
+    real: <line 0, column 0>-<line 0, column 4>: "    "
+}"#,]
+    );
+}

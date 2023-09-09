@@ -44,7 +44,7 @@ jobs:
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.98'
+          tag_name: 'draft'
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -87,7 +87,7 @@ jobs:
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.98'
+          tag_name: 'draft'
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,7 +118,7 @@ jobs:
         with:
           files: 'db-driver-*'
           name: 'release'
-          tag_name: 'v1.0.98'
+          tag_name: 'draft'
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

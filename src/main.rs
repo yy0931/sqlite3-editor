@@ -127,13 +127,6 @@ enum Commands {
         #[arg(long)]
         sql_cipher_key: Option<String>,
     },
-    /// Outputs the source of data for the output columns of the query.
-    ColumnOrigin {
-        #[arg(long, required = true)]
-        database: String,
-        #[arg(long, required = true)]
-        query: String,
-    },
 }
 
 /// Structure representing a database query
@@ -359,18 +352,6 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::ColumnOrigin { database, query } => match column_origin::column_origin(&database, &query) {
-            Ok(v) => {
-                println!(
-                    "{}",
-                    serde_json::to_string(&v).expect("Failed to encode the result into a JSON.")
-                );
-            }
-            Err(err) => {
-                eprintln!("{err}");
-                std::process::exit(1);
-            }
-        },
     }
 }
 

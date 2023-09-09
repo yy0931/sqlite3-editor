@@ -1,22 +1,10 @@
 use std::{collections::HashSet, io::Cursor, vec};
 
 use crate::{
-    literal::{Blob, Literal},
+    literal::Literal,
     request_type::QueryMode,
     sqlite3_driver::{from_utf8_lossy, read_msgpack_into_json, ForeignKey, InvalidUTF8, SQLite3Driver, Table},
 };
-
-impl<'a> From<rusqlite::types::ValueRef<'a>> for Literal {
-    fn from(value: rusqlite::types::ValueRef<'a>) -> Self {
-        match value {
-            rusqlite::types::ValueRef::Blob(v) => Literal::Blob(Blob(v.to_vec())),
-            rusqlite::types::ValueRef::Integer(v) => Literal::I64(v),
-            rusqlite::types::ValueRef::Null => Literal::Nil,
-            rusqlite::types::ValueRef::Real(v) => Literal::F64(v),
-            rusqlite::types::ValueRef::Text(v) => Literal::String(String::from_utf8_lossy(v).to_string()),
-        }
-    }
-}
 
 fn convert_msgpack_to_json(input: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
     let mut buf = vec![];
@@ -93,13 +81,18 @@ SELECT * FROM temp_table;
 
 #[cfg(test)]
 mod test_table_schema {
-    use crate::sqlite3_driver::{
-        DfltValue, IndexColumn, SQLite3Driver, TableSchema, TableSchemaColumn, TableSchemaColumnForeignKey,
-        TableSchemaIndex,
+    use std::collections::HashMap;
+
+    use crate::{
+        column_origin::ColumnOrigin,
+        sqlite3_driver::{
+            DfltValue, IndexColumn, SQLite3Driver, TableSchema, TableSchemaColumn, TableSchemaColumnForeignKey,
+            TableSchemaIndex, TableSchemaTriggers,
+        },
     };
 
     #[test]
-    fn test_simple() {
+    fn test_table() {
         let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
 
         db.execute(
@@ -112,9 +105,9 @@ mod test_table_schema {
         assert_eq!(
             db.table_schema("t").unwrap().0,
             TableSchema {
-                name: "t".to_owned(),
+                name: Some("t".to_owned()),
                 type_: "table".to_owned(),
-                schema: "CREATE TABLE t(x INTEGER PRIMARY KEY NOT NULL) STRICT".to_owned(),
+                schema: Some("CREATE TABLE t(x INTEGER PRIMARY KEY NOT NULL) STRICT".to_owned()),
                 has_rowid_column: true,
                 strict: true,
                 columns: vec![TableSchemaColumn {
@@ -130,6 +123,50 @@ mod test_table_schema {
                 }],
                 indexes: vec![],
                 triggers: vec![],
+                column_origins: None,
+                custom_query: None,
+            },
+        );
+    }
+
+    #[test]
+    fn test_view() {
+        let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+
+        db.execute("CREATE TABLE t(x)", &[], &mut vec![]).unwrap();
+        db.execute("CREATE VIEW u AS SELECT x as y FROM t", &[], &mut vec![])
+            .unwrap();
+
+        assert_eq!(
+            db.table_schema("u").unwrap().0,
+            TableSchema {
+                name: Some("u".to_owned()),
+                type_: "view".to_owned(),
+                schema: Some("CREATE VIEW u AS SELECT x as y FROM t".to_owned()),
+                has_rowid_column: false,
+                strict: false,
+                columns: vec![TableSchemaColumn {
+                    cid: 0,
+                    dflt_value: None,
+                    name: "y".to_owned(),
+                    notnull: false,
+                    type_: "".to_owned(),
+                    pk: false,
+                    auto_increment: false,
+                    foreign_keys: vec![],
+                    hidden: 0,
+                }],
+                indexes: vec![],
+                triggers: vec![],
+                column_origins: Some(HashMap::from([(
+                    "y".to_owned(),
+                    ColumnOrigin {
+                        database: "main".to_owned(),
+                        table: "t".to_owned(),
+                        column: "x".to_owned(),
+                    }
+                )])),
+                custom_query: None,
             },
         );
     }
@@ -151,11 +188,10 @@ mod test_table_schema {
                 id: 0,
                 seq: 0,
                 table: "t".to_owned(),
-                from: "y".to_owned(),
-                to: Some("x".to_owned()),
+                to: "x".to_owned(),
                 on_update: "NO ACTION".to_owned(),
                 on_delete: "NO ACTION".to_owned(),
-                match_: "NONE".to_owned()
+                match_: "NONE".to_owned(),
             }
         );
     }
@@ -177,11 +213,10 @@ mod test_table_schema {
                 id: 0,
                 seq: 0,
                 table: "t".to_owned(),
-                from: "x".to_owned(),
-                to: None, // test this
+                to: "x".to_owned(),
                 on_update: "NO ACTION".to_owned(),
                 on_delete: "NO ACTION".to_owned(),
-                match_: "NONE".to_owned()
+                match_: "NONE".to_owned(),
             }
         );
     }
@@ -267,6 +302,156 @@ mod test_table_schema {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn test_trigger() {
+        let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+        db.execute("CREATE TABLE t(x)", &[], &mut vec![]).unwrap();
+        let sql = "CREATE TRIGGER trigger_insert AFTER INSERT ON t BEGIN SELECT 1; END";
+        db.execute(sql, &[], &mut vec![]).unwrap();
+        assert_eq!(
+            db.table_schema("t").unwrap().0.triggers,
+            vec![TableSchemaTriggers {
+                name: "trigger_insert".to_owned(),
+                sql: sql.to_owned(),
+            },]
+        );
+    }
+
+    #[test]
+    fn test_query_schema() {
+        let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+
+        db.execute("CREATE TABLE t(x INTEGER)", &[], &mut vec![]).unwrap();
+        assert_eq!(
+            db.query_schema("SELECT 1, x FROM t").unwrap().0,
+            TableSchema {
+                name: None,
+                type_: "custom query".to_owned(),
+                schema: None,
+                has_rowid_column: false,
+                strict: false,
+                columns: vec![
+                    TableSchemaColumn {
+                        cid: 0,
+                        dflt_value: None,
+                        name: "1".to_owned(),
+                        notnull: false,
+                        type_: "".to_owned(),
+                        pk: false,
+                        auto_increment: false,
+                        foreign_keys: vec![],
+                        hidden: 0,
+                    },
+                    TableSchemaColumn {
+                        cid: 1,
+                        dflt_value: None,
+                        name: "x".to_owned(),
+                        notnull: false,
+                        type_: "".to_owned(),
+                        pk: false,
+                        auto_increment: false,
+                        foreign_keys: vec![],
+                        hidden: 0,
+                    }
+                ],
+                indexes: vec![],
+                triggers: vec![],
+                column_origins: Some(HashMap::from([(
+                    "x".to_owned(),
+                    ColumnOrigin {
+                        database: "main".to_owned(),
+                        table: "t".to_owned(),
+                        column: "x".to_owned(),
+                    },
+                )])),
+                custom_query: Some("SELECT 1, x FROM t".to_owned()),
+            },
+        );
+    }
+
+    mod test_indirect_foreign_key {
+        use std::collections::HashMap;
+
+        use crate::{
+            column_origin::ColumnOrigin,
+            sqlite3_driver::{SQLite3Driver, TableSchemaColumnForeignKey},
+        };
+
+        #[test]
+        fn test_table_schema() {
+            let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+
+            db.execute("CREATE TABLE t1(x INTEGER PRIMARY KEY)", &[], &mut vec![])
+                .unwrap();
+            db.execute("CREATE TABLE t2(y INTEGER REFERENCES t1(x))", &[], &mut vec![])
+                .unwrap();
+            db.execute("CREATE VIEW table_name AS SELECT y as z FROM t2;", &[], &mut vec![])
+                .unwrap();
+            let schema = db.table_schema("table_name").unwrap().0;
+            assert_eq!(
+                schema.column_origins,
+                Some(HashMap::from([(
+                    "z".to_owned(),
+                    ColumnOrigin {
+                        database: "main".to_owned(),
+                        table: "t2".to_owned(),
+                        column: "y".to_owned(),
+                    }
+                )]))
+            );
+            assert_eq!(schema.columns[0].name, "z");
+            assert_eq!(
+                schema.columns[0].foreign_keys,
+                vec![TableSchemaColumnForeignKey {
+                    id: 0,
+                    seq: 0,
+                    table: "t1".to_owned(),
+                    to: "x".to_owned(),
+                    on_update: "NO ACTION".to_owned(),
+                    on_delete: "NO ACTION".to_owned(),
+                    match_: "NONE".to_owned(),
+                }]
+            );
+        }
+
+        #[test]
+        fn test_query_schema() {
+            let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+
+            db.execute("CREATE TABLE t1(x INTEGER PRIMARY KEY)", &[], &mut vec![])
+                .unwrap();
+            db.execute("CREATE TABLE t2(y INTEGER REFERENCES t1(x))", &[], &mut vec![])
+                .unwrap();
+            db.execute("CREATE VIEW table_name AS SELECT y as z FROM t2;", &[], &mut vec![])
+                .unwrap();
+            let schema = db.query_schema("SELECT * FROM table_name").unwrap().0;
+            assert_eq!(
+                schema.column_origins,
+                Some(HashMap::from([(
+                    "z".to_owned(),
+                    ColumnOrigin {
+                        database: "main".to_owned(),
+                        table: "t2".to_owned(),
+                        column: "y".to_owned(),
+                    }
+                )]))
+            );
+            assert_eq!(schema.columns[0].name, "z");
+            assert_eq!(
+                schema.columns[0].foreign_keys,
+                vec![TableSchemaColumnForeignKey {
+                    id: 0,
+                    seq: 0,
+                    table: "t1".to_owned(),
+                    to: "x".to_owned(),
+                    on_update: "NO ACTION".to_owned(),
+                    on_delete: "NO ACTION".to_owned(),
+                    match_: "NONE".to_owned(),
+                }]
+            );
+        }
     }
 }
 
@@ -574,6 +759,37 @@ fn test_handle_table_schema() {
     let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
     handle(&db, "CREATE TABLE t(x)", &[], QueryMode::ReadWrite);
     handle(&db, "EDITOR_PRAGMA table_schema", &["t".into()], QueryMode::ReadOnly);
+    handle(
+        &db,
+        "EDITOR_PRAGMA query_schema",
+        &["SELECT * FROM t".into()],
+        QueryMode::ReadOnly,
+    );
+}
+
+#[test]
+fn test_handle_table_schema_invalid_params() {
+    let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+    assert!(db
+        .handle(
+            &mut vec![],
+            "EDITOR_PRAGMA table_schema",
+            &[1.into()],
+            QueryMode::ReadOnly,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("invalid argument"),);
+    assert!(db
+        .handle(
+            &mut vec![],
+            "EDITOR_PRAGMA query_schema",
+            &[1.into()],
+            QueryMode::ReadOnly,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("invalid argument"));
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -626,4 +842,23 @@ fn test_invalid_utf8_table_name() {
             }],
         )
     );
+}
+
+#[cfg(feature = "sqlcipher")]
+#[test]
+fn test_sqlcipher() {
+    let f = tempfile::NamedTempFile::new().unwrap();
+    let path = &f.path().to_string_lossy();
+    {
+        let db = SQLite3Driver::connect(path, false, &Some("key1")).unwrap();
+        db.execute(&"CREATE TABLE t(x)", &[], &mut vec![]).unwrap();
+    }
+    {
+        let db = SQLite3Driver::connect(path, false, &Some("key2")).unwrap();
+        db.execute(&"SELECT * FROM t", &[], &mut vec![]).unwrap_err();
+    }
+    {
+        let db = SQLite3Driver::connect(path, false, &Some("key1")).unwrap();
+        db.execute(&"SELECT * FROM t", &[], &mut vec![]).unwrap();
+    }
 }

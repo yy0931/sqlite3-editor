@@ -113,3 +113,15 @@ impl rusqlite::ToSql for Literal {
         }
     }
 }
+
+impl<'a> From<rusqlite::types::ValueRef<'a>> for Literal {
+    fn from(value: rusqlite::types::ValueRef<'a>) -> Self {
+        match value {
+            rusqlite::types::ValueRef::Blob(v) => Literal::Blob(Blob(v.to_vec())),
+            rusqlite::types::ValueRef::Integer(v) => Literal::I64(v),
+            rusqlite::types::ValueRef::Null => Literal::Nil,
+            rusqlite::types::ValueRef::Real(v) => Literal::F64(v),
+            rusqlite::types::ValueRef::Text(v) => Literal::String(String::from_utf8_lossy(v).to_string()),
+        }
+    }
+}
