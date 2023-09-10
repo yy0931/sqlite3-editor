@@ -14,6 +14,17 @@ pub struct ColumnOrigin {
     pub column: String,
 }
 
+impl ColumnOrigin {
+    #[allow(dead_code)]
+    pub fn new<T: Into<String>, U: Into<String>, V: Into<String>>(database: T, table: U, column: V) -> Self {
+        Self {
+            database: database.into(),
+            table: table.into(),
+            column: column.into(),
+        }
+    }
+}
+
 fn ptr_to_string(ptr: *const c_char) -> Option<String> {
     if ptr.is_null() {
         None

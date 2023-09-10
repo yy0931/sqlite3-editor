@@ -17,22 +17,8 @@ CREATE VIEW v1 AS SELECT c1 as c3, c2 FROM t1;
     assert_eq!(
         column_origin(con.db.borrow().db, "SELECT * FROM v1"),
         Ok(HashMap::from([
-            (
-                "c3".to_owned(),
-                ColumnOrigin {
-                    database: "main".to_owned(),
-                    table: "t1".to_owned(),
-                    column: "c1".to_owned(),
-                }
-            ),
-            (
-                "c2".to_owned(),
-                ColumnOrigin {
-                    database: "main".to_owned(),
-                    table: "t1".to_owned(),
-                    column: "c2".to_owned(),
-                }
-            ),
+            ("c3".to_owned(), ColumnOrigin::new("main", "t1", "c1")),
+            ("c2".to_owned(), ColumnOrigin::new("main", "t1", "c2")),
         ]))
     );
 

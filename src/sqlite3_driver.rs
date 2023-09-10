@@ -254,6 +254,25 @@ pub struct TableSchemaTriggers {
     pub sql: String,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ColumnOriginAndIsRowId {
+    pub database: String,
+    pub table: String,
+    pub column: String,
+    pub is_rowid: bool,
+}
+
+impl ColumnOriginAndIsRowId {
+    pub fn new(is_rowid: bool, column_origin: ColumnOrigin) -> Self {
+        Self {
+            is_rowid,
+            database: column_origin.database,
+            table: column_origin.table,
+            column: column_origin.column,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct TableSchema {
     // InnerTableSchema
@@ -272,7 +291,7 @@ pub(crate) struct TableSchema {
     #[serde(rename = "customQuery")]
     pub custom_query: Option<String>,
     #[serde(rename = "columnOrigins")]
-    pub column_origins: Option<HashMap<String, ColumnOrigin>>,
+    pub column_origins: Option<HashMap<String, ColumnOriginAndIsRowId>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -546,6 +565,62 @@ impl SQLite3Driver {
         Ok(result)
     }
 
+    pub fn is_rowid(
+        &self,
+        column_origin: &ColumnOrigin,
+        warnings: &mut Vec<InvalidUTF8>,
+    ) -> std::result::Result<bool, QueryError> {
+        struct Column {
+            name: String,
+            type_: String,
+            pk: i64,
+        }
+
+        let table_xinfo = self.select_all(
+            &format!(
+                "PRAGMA {}.table_xinfo({})",
+                escape_sql_identifier(&column_origin.database),
+                escape_sql_identifier(&column_origin.table)
+            ),
+            &[],
+            |row| {
+                Ok(Column {
+                    name: get_string(&row, 1, |err| warnings.push(err.with("is_rowid.table_xinfo.name")))?,
+                    type_: get_string(&row, 2, |err| warnings.push(err.with("is_rowid.table_xinfo.type")))?,
+                    pk: row.get::<_, i64>(5)?,
+                })
+            },
+        )?;
+
+        // - column_origin.column is "rowid" and there isn't a user-defined column named "rowid".
+        // - column_origin.column is "_rowid_" and there isn't a user-defined column named "_rowid_".
+        // - column_origin.column is "oid" and there isn't a user-defined column named "oid".
+        if column_origin.column.to_lowercase() == "rowid"
+            && table_xinfo.iter().all(|v| v.name.to_lowercase() != "rowid")
+            || column_origin.column.to_lowercase() == "_rowid_"
+                && table_xinfo.iter().all(|v| v.name.to_lowercase() != "_rowid_")
+            || column_origin.column.to_lowercase() == "oid"
+                && table_xinfo.iter().all(|v| v.name.to_lowercase() != "oid")
+        {
+            return Ok(true);
+        }
+
+        // - column_origin.column is a INTEGER PRIMARY KEY, where "INTEGER" need to be case-insensitive exact match, and there aren't multiple primary keys in the table.
+        // > In the exception, the INTEGER PRIMARY KEY becomes an alias for the rowid.
+        // > https://www.sqlite.org/rowidtable.html
+        // sqlite3_column_origin_name() returns the INTEGER PRIMARY KEY column when queried against rowid.
+        if table_xinfo
+            .iter()
+            .find(|v| v.name.to_lowercase() == column_origin.column.to_lowercase())
+            .is_some_and(|v| v.type_.to_lowercase() == "integer" && v.pk != 0)
+            && table_xinfo.iter().filter(|v| v.pk != 0).count() == 1
+        {
+            return Ok(true);
+        }
+
+        return Ok(false);
+    }
+
     /// Collect table definitions from sqlite_schema, pragma_table_list, pragma_foreign_key_list, pragma_table_xinfo, pragma_index_list, and pragm_index_info.
     pub(crate) fn table_schema(
         &self,
@@ -599,7 +674,21 @@ impl SQLite3Driver {
                         .append(&mut origin_fk.clone());
                 }
             }
-            Some(column_origins)
+            Some(
+                column_origins
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            k,
+                            ColumnOriginAndIsRowId::new(
+                                self.is_rowid(&v, &mut warnings)
+                                    .unwrap_or(false /* TODO: error handling */),
+                                v,
+                            ),
+                        )
+                    })
+                    .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
+            )
         } else {
             None
         };
@@ -799,7 +888,21 @@ impl SQLite3Driver {
                     })
                     .collect::<Vec<_>>(),
                 custom_query: Some(query.to_owned()),
-                column_origins: Some(column_origins),
+                column_origins: Some(
+                    column_origins
+                        .into_iter()
+                        .map(|(k, v)| {
+                            (
+                                k,
+                                ColumnOriginAndIsRowId::new(
+                                    self.is_rowid(&v, &mut warnings)
+                                        .unwrap_or(false /* TODO: error handling */),
+                                    v,
+                                ),
+                            )
+                        })
+                        .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
+                ),
             },
             warnings,
         ))

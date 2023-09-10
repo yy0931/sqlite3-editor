@@ -83,12 +83,9 @@ SELECT * FROM temp_table;
 mod test_table_schema {
     use std::collections::HashMap;
 
-    use crate::{
-        column_origin::ColumnOrigin,
-        sqlite3_driver::{
-            DfltValue, IndexColumn, SQLite3Driver, TableSchema, TableSchemaColumn, TableSchemaColumnForeignKey,
-            TableSchemaIndex, TableSchemaTriggers,
-        },
+    use crate::sqlite3_driver::{
+        ColumnOriginAndIsRowId, DfltValue, IndexColumn, SQLite3Driver, TableSchema, TableSchemaColumn,
+        TableSchemaColumnForeignKey, TableSchemaIndex, TableSchemaTriggers,
     };
 
     #[test]
@@ -160,10 +157,11 @@ mod test_table_schema {
                 triggers: vec![],
                 column_origins: Some(HashMap::from([(
                     "y".to_owned(),
-                    ColumnOrigin {
+                    ColumnOriginAndIsRowId {
                         database: "main".to_owned(),
                         table: "t".to_owned(),
                         column: "x".to_owned(),
+                        is_rowid: false,
                     }
                 )])),
                 custom_query: None,
@@ -360,10 +358,11 @@ mod test_table_schema {
                 triggers: vec![],
                 column_origins: Some(HashMap::from([(
                     "x".to_owned(),
-                    ColumnOrigin {
+                    ColumnOriginAndIsRowId {
                         database: "main".to_owned(),
                         table: "t".to_owned(),
                         column: "x".to_owned(),
+                        is_rowid: false,
                     },
                 )])),
                 custom_query: Some("SELECT 1, x FROM t".to_owned()),
@@ -374,10 +373,7 @@ mod test_table_schema {
     mod test_indirect_foreign_key {
         use std::collections::HashMap;
 
-        use crate::{
-            column_origin::ColumnOrigin,
-            sqlite3_driver::{SQLite3Driver, TableSchemaColumnForeignKey},
-        };
+        use crate::sqlite3_driver::{ColumnOriginAndIsRowId, SQLite3Driver, TableSchemaColumnForeignKey};
 
         #[test]
         fn test_table_schema() {
@@ -394,10 +390,11 @@ mod test_table_schema {
                 schema.column_origins,
                 Some(HashMap::from([(
                     "z".to_owned(),
-                    ColumnOrigin {
+                    ColumnOriginAndIsRowId {
                         database: "main".to_owned(),
                         table: "t2".to_owned(),
                         column: "y".to_owned(),
+                        is_rowid: false,
                     }
                 )]))
             );
@@ -431,10 +428,11 @@ mod test_table_schema {
                 schema.column_origins,
                 Some(HashMap::from([(
                     "z".to_owned(),
-                    ColumnOrigin {
+                    ColumnOriginAndIsRowId {
                         database: "main".to_owned(),
                         table: "t2".to_owned(),
                         column: "y".to_owned(),
+                        is_rowid: false,
                     }
                 )]))
             );
@@ -451,6 +449,78 @@ mod test_table_schema {
                     match_: "NONE".to_owned(),
                 }]
             );
+        }
+    }
+
+    mod test_rowid_alias {
+        use crate::{column_origin::ColumnOrigin, sqlite3_driver::SQLite3Driver};
+
+        fn execute(db: &SQLite3Driver, query: &str) {
+            db.execute(query, &[], &mut vec![]).unwrap();
+        }
+        fn check(db: &SQLite3Driver, table: &str, column: &str, is_rowid: bool) {
+            assert_eq!(
+                db.is_rowid(&ColumnOrigin::new("main", table, column), &mut vec![])
+                    .unwrap(),
+                is_rowid
+            );
+        }
+
+        #[test]
+        fn test_single_integer_pk() {
+            let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+            execute(&db, "CREATE TABLE t(x INTEGER PRIMARY KEY)");
+            check(&db, "t", "x", true);
+            check(&db, "t", "rowid", true);
+        }
+
+        #[test]
+        fn test_single_integer_not_null_pk() {
+            let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+            execute(&db, "CREATE TABLE t(x INTEGER NOT NULL PRIMARY KEY)");
+            check(&db, "t", "x", true);
+            check(&db, "t", "rowid", true);
+        }
+
+        #[test]
+        fn test_multiple_integer_pk() {
+            let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+            execute(&db, "CREATE TABLE t(x INTEGER, y INTEGER, PRIMARY KEY (x, y))");
+            check(&db, "t", "x", false);
+            check(&db, "t", "rowid", true);
+        }
+
+        #[test]
+        fn test_int_pk() {
+            let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+            execute(&db, "CREATE TABLE t(x INT PRIMARY KEY)");
+            check(&db, "t", "x", false);
+            check(&db, "t", "rowid", true);
+        }
+
+        #[test]
+        fn test_lowercase_integer_pk() {
+            let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+            execute(&db, "CREATE TABLE t(x integer primary key)");
+            check(&db, "t", "x", true);
+            check(&db, "t", "rowid", true);
+        }
+
+        #[test]
+        fn test_shadowed_rowid() {
+            let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+            execute(&db, "CREATE TABLE t(rowid TEXT)");
+            check(&db, "t", "rowid", false);
+            check(&db, "t", "_rowid_", true);
+        }
+
+        #[test]
+        fn test_shadowed_rowid_and_oid() {
+            let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+            execute(&db, "CREATE TABLE t(rowid TEXT, oid TEXT)");
+            check(&db, "t", "rowid", false);
+            check(&db, "t", "oid", false);
+            check(&db, "t", "_rowid_", true);
         }
     }
 }
