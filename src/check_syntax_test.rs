@@ -50,6 +50,11 @@ fn test_ignore_errors_in_pragma_stmt() {
 }
 
 #[test]
+fn test_pragma_functions() {
+    assert_eq!(check_syntax("SELECT * FROM pragma_index_info(;").unwrap().len(), 1);
+}
+
+#[test]
 fn test_ignore_errors_in_explain_stmt() {
     assert_eq!(check_syntax("EXPLAIN foo bar"), Ok(vec![]));
     assert_eq!(check_syntax("EXPLAIN QUERY PLAN foo bar"), Ok(vec![]));

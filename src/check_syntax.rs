@@ -7,11 +7,10 @@ use crate::{
     tokenize::ZeroIndexedLocation,
 };
 
-// Define regular expressions for matching specific SQL keywords
 lazy_static! {
-    static ref PRAGMA: regex::Regex = regex::Regex::new(r#"(?i)(?s).*\bPRAGMA\b"#).unwrap();
-    static ref QUERY: regex::Regex = regex::Regex::new(r#"(?i)(?s).*\bQUERY\b"#).unwrap();
-    static ref EXPLAIN: regex::Regex = regex::Regex::new(r#"(?i)(?s).*\bEXPLAIN\b"#).unwrap();
+    static ref PRAGMA: regex::Regex = regex::Regex::new(r#"(?i)(?s).*\bPRAGMA[^_a-zA-Z0-9]"#).unwrap();
+    static ref QUERY: regex::Regex = regex::Regex::new(r#"(?i)(?s).*\bQUERY[^_a-zA-Z0-9]"#).unwrap();
+    static ref EXPLAIN: regex::Regex = regex::Regex::new(r#"(?i)(?s).*\bEXPLAIN[^_a-zA-Z0-9]"#).unwrap();
 }
 
 lazy_static! {

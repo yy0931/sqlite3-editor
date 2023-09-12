@@ -1,6 +1,6 @@
 [package]
 name = "db-driver-rs"
-version = "1.0.106"
+version = "1.0.109"
 edition = "2021"
 
 [features]
@@ -16,11 +16,11 @@ regex = "1.9.5"
 rmp = "0.8.12"
 rmp-serde = "1.1.2"
 serde = { version = "1.0.188", features = ["derive"] }
-serde_json = "1.0.105"
+serde_json = "1.0.106"
 serde-transcode = "1.1.1"
 sqlparser = "0.37.0"
 csv = "1.2.2"
-base64 = "0.21.3"
+base64 = "0.21.4"
 hex = "0.4.3"
 
 [dependencies.rusqlite]

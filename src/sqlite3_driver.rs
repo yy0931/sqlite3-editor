@@ -650,7 +650,7 @@ impl SQLite3Driver {
 
         let column_origins = if table_type == "view" {
             let column_origins = column_origin(
-                self.con.db.borrow().db,
+                unsafe { self.con.handle() },
                 &format!("SELECT * FROM ({table_name}) LIMIT 0"),
             )
             .unwrap_or_default();
@@ -836,10 +836,14 @@ impl SQLite3Driver {
     pub(crate) fn query_schema(&self, query: &str) -> std::result::Result<(TableSchema, Vec<InvalidUTF8>), QueryError> {
         let mut warnings = vec![];
 
-        let column_origins =
-            column_origin(self.con.db.borrow().db, &format!("SELECT * FROM ({query}) LIMIT 0")).unwrap_or_default();
+        let column_origins = column_origin(
+            unsafe { self.con.handle() },
+            // \n is needed to handle comments, e.g. customQuery = "SELECT ... FROM ... -- comments"
+            &format!("SELECT * FROM ({query}\n) LIMIT 0"),
+        )
+        .unwrap_or_default();
 
-        let stmt = format!("SELECT * FROM ({query}) LIMIT 0");
+        let stmt = format!("SELECT * FROM ({query}\n) LIMIT 0");
         let column_names = self
             .con
             .prepare(&stmt)

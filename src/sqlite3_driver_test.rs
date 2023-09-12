@@ -453,12 +453,16 @@ mod test_table_schema {
     }
 
     mod test_rowid_alias {
-        use crate::{column_origin::ColumnOrigin, sqlite3_driver::SQLite3Driver};
+        use crate::{
+            column_origin::ColumnOrigin,
+            sqlite3_driver::{escape_sql_identifier, get_string, SQLite3Driver},
+        };
 
         fn execute(db: &SQLite3Driver, query: &str) {
             db.execute(query, &[], &mut vec![]).unwrap();
         }
-        fn check(db: &SQLite3Driver, table: &str, column: &str, is_rowid: bool) {
+
+        fn check_is_rowid(db: &SQLite3Driver, table: &str, column: &str, is_rowid: bool) {
             assert_eq!(
                 db.is_rowid(&ColumnOrigin::new("main", table, column), &mut vec![])
                     .unwrap(),
@@ -466,61 +470,94 @@ mod test_table_schema {
             );
         }
 
+        fn check_is_alias_to_rowid(db: &SQLite3Driver, table: &str, column: &str, yes: bool) {
+            execute(&db, &format!("INSERT INTO {table} DEFAULT VALUES"));
+            assert_eq!(
+                db.select_one(
+                    &format!(
+                        "SELECT typeof({}) FROM {}",
+                        escape_sql_identifier(column),
+                        escape_sql_identifier(table)
+                    ),
+                    &[],
+                    |row| { get_string(row, 0, |_| {}) }
+                )
+                .unwrap(),
+                if yes { "integer" } else { "null" }
+            );
+        }
+
         #[test]
         fn test_single_integer_pk() {
             let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
             execute(&db, "CREATE TABLE t(x INTEGER PRIMARY KEY)");
-            check(&db, "t", "x", true);
-            check(&db, "t", "rowid", true);
+            check_is_rowid(&db, "t", "x", true);
+            check_is_rowid(&db, "t", "rowid", true);
+            check_is_alias_to_rowid(&db, "t", "x", true);
         }
 
         #[test]
         fn test_single_integer_not_null_pk() {
             let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
             execute(&db, "CREATE TABLE t(x INTEGER NOT NULL PRIMARY KEY)");
-            check(&db, "t", "x", true);
-            check(&db, "t", "rowid", true);
+            check_is_rowid(&db, "t", "x", true);
+            check_is_rowid(&db, "t", "rowid", true);
+            check_is_alias_to_rowid(&db, "t", "x", true);
+        }
+
+        #[test]
+        fn test_integer_unique_pk() {
+            let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+            execute(&db, "CREATE TABLE t(x INTEGER UNIQUE PRIMARY KEY)");
+            check_is_rowid(&db, "t", "x", true);
+            check_is_rowid(&db, "t", "rowid", true);
+            check_is_alias_to_rowid(&db, "t", "x", true);
         }
 
         #[test]
         fn test_multiple_integer_pk() {
             let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
             execute(&db, "CREATE TABLE t(x INTEGER, y INTEGER, PRIMARY KEY (x, y))");
-            check(&db, "t", "x", false);
-            check(&db, "t", "rowid", true);
+            check_is_rowid(&db, "t", "x", false);
+            check_is_rowid(&db, "t", "rowid", true);
+            check_is_alias_to_rowid(&db, "t", "x", false);
         }
 
         #[test]
         fn test_int_pk() {
             let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
             execute(&db, "CREATE TABLE t(x INT PRIMARY KEY)");
-            check(&db, "t", "x", false);
-            check(&db, "t", "rowid", true);
+            check_is_rowid(&db, "t", "x", false);
+            check_is_rowid(&db, "t", "rowid", true);
+            check_is_alias_to_rowid(&db, "t", "x", false);
         }
 
         #[test]
         fn test_lowercase_integer_pk() {
             let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
             execute(&db, "CREATE TABLE t(x integer primary key)");
-            check(&db, "t", "x", true);
-            check(&db, "t", "rowid", true);
+            check_is_rowid(&db, "t", "x", true);
+            check_is_rowid(&db, "t", "rowid", true);
+            check_is_alias_to_rowid(&db, "t", "x", true);
         }
 
         #[test]
         fn test_shadowed_rowid() {
             let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
             execute(&db, "CREATE TABLE t(rowid TEXT)");
-            check(&db, "t", "rowid", false);
-            check(&db, "t", "_rowid_", true);
+            check_is_rowid(&db, "t", "rowid", false);
+            check_is_rowid(&db, "t", "_rowid_", true);
+            check_is_alias_to_rowid(&db, "t", "rowid", false);
         }
 
         #[test]
         fn test_shadowed_rowid_and_oid() {
             let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
             execute(&db, "CREATE TABLE t(rowid TEXT, oid TEXT)");
-            check(&db, "t", "rowid", false);
-            check(&db, "t", "oid", false);
-            check(&db, "t", "_rowid_", true);
+            check_is_rowid(&db, "t", "rowid", false);
+            check_is_rowid(&db, "t", "oid", false);
+            check_is_rowid(&db, "t", "_rowid_", true);
+            check_is_alias_to_rowid(&db, "t", "oid", false);
         }
     }
 }
