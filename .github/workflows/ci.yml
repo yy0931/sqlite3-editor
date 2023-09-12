@@ -7,6 +7,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v1
       - uses: dtolnay/rust-toolchain@stable
@@ -15,6 +17,10 @@ jobs:
       - run: sudo apt install -y libsqlite3-mod-spatialite
       - run: cargo test --features sqlite
       - run: cargo test --features sqlcipher
+      - id: version
+        run: |
+          version=$(grep "^version" Cargo.toml | sed 's/version = "//g' | sed 's/"//g')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build-win32:
     needs: test
@@ -43,8 +49,8 @@ jobs:
       - uses: softprops/action-gh-release@v1
         with:
           files: 'db-driver-*'
-          name: 'release'
-          tag_name: 'draft'
+          name: ${{ needs.test.outputs.version }}
+          tag_name: ${{ needs.test.outputs.version }}
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -86,8 +92,8 @@ jobs:
       - uses: softprops/action-gh-release@v1
         with:
           files: 'db-driver-*'
-          name: 'release'
-          tag_name: 'draft'
+          name: ${{ needs.test.outputs.version }}
+          tag_name: ${{ needs.test.outputs.version }}
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -117,8 +123,8 @@ jobs:
       - uses: softprops/action-gh-release@v1
         with:
           files: 'db-driver-*'
-          name: 'release'
-          tag_name: 'draft'
+          name: ${{ needs.test.outputs.version }}
+          tag_name: ${{ needs.test.outputs.version }}
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
