@@ -26,6 +26,9 @@ mod import_test;
 mod literal;
 #[cfg(test)]
 mod literal_test;
+mod online_backup;
+#[cfg(test)]
+mod online_backup_test;
 mod parse_cte;
 #[cfg(test)]
 mod parse_cte_test;

@@ -296,6 +296,7 @@ pub(crate) struct TableSchema {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) struct Table {
+    pub database: String,
     pub name: String,
     #[serde(rename = "type")]
     pub type_: String,
@@ -501,12 +502,13 @@ impl SQLite3Driver {
     pub(crate) fn list_tables(&self) -> std::result::Result<(Vec<Table>, Vec<InvalidUTF8>), QueryError> {
         let mut warnings = vec![];
         self.select_all(
-            r#"SELECT name, type FROM pragma_table_list WHERE NOT (name LIKE "sqlite\_%" ESCAPE "\")"#,
+            r#"SELECT schema, name, type FROM pragma_table_list WHERE NOT (name LIKE "sqlite\_%" ESCAPE "\")"#,
             &[],
             |row| {
                 Ok(Table {
-                    name: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.name")))?,
-                    type_: get_string(row, 1, |err| {
+                    database: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.schema")))?,
+                    name: get_string(row, 1, |err| warnings.push(err.with("pragma_table_list.name")))?,
+                    type_: get_string(row, 2, |err| {
                         warnings.push(err.with("pragma_table_list.type (list_tables)"))
                     })?,
                 })
@@ -624,14 +626,15 @@ impl SQLite3Driver {
     /// Collect table definitions from sqlite_schema, pragma_table_list, pragma_foreign_key_list, pragma_table_xinfo, pragma_index_list, and pragm_index_info.
     pub(crate) fn table_schema(
         &self,
+        database: &str,
         table_name: &str,
     ) -> std::result::Result<(TableSchema, Vec<InvalidUTF8>), QueryError> {
         let mut warnings = vec![];
 
         // Select pragma_table_list
         let (table_type, wr, strict) = self.select_one(
-            "SELECT type, wr, strict FROM pragma_table_list WHERE name = ?",
-            &[Literal::String(table_name.to_owned())],
+            "SELECT type, wr, strict FROM pragma_table_list WHERE schema = ? COLLATE NOCASE AND name = ? COLLATE NOCASE",
+            &[database.into(), table_name.into()],
             |row| {
                 Ok((
                     get_string(row, 0, |err| {
@@ -646,12 +649,12 @@ impl SQLite3Driver {
 
         // Select pragma_foreign_key_list
         let mut foreign_key_list_cache = HashMap::new();
-        let mut foreign_keys = self.foreign_keys("main", table_name, &mut warnings, &mut foreign_key_list_cache)?;
+        let mut foreign_keys = self.foreign_keys(database, table_name, &mut warnings, &mut foreign_key_list_cache)?;
 
         let column_origins = if table_type == "view" {
             let column_origins = column_origin(
                 unsafe { self.con.handle() },
-                &format!("SELECT * FROM ({table_name}) LIMIT 0"),
+                &format!("SELECT * FROM {} LIMIT 0", escape_sql_identifier(table_name)),
             )
             .unwrap_or_default();
 
@@ -697,15 +700,21 @@ impl SQLite3Driver {
         // NOTE: There is no way to check if an empty table has an autoincrement column.
         let has_table_auto_increment_column: bool = !self
             .select_all(
-                "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'sqlite_sequence'",
+                &format!(
+                    "SELECT name FROM {}.sqlite_schema WHERE type = 'table' AND name = 'sqlite_sequence'",
+                    escape_sql_identifier(database)
+                ),
                 &[],
                 |_row| Ok(()),
             )?
             .is_empty()
             && !self
                 .select_all(
-                    "SELECT * FROM sqlite_sequence WHERE name = ?",
-                    &[Literal::String(table_name.to_owned())],
+                    &format!(
+                        "SELECT * FROM {}.sqlite_sequence WHERE name = ?",
+                        escape_sql_identifier(database)
+                    ),
+                    &[table_name.into()],
                     |_row| Ok(()),
                 )?
                 .is_empty();
@@ -721,7 +730,11 @@ impl SQLite3Driver {
 
         // Select pragma_table_xinfo
         let columns: Vec<TableSchemaColumn> = self.select_all(
-            &format!("PRAGMA table_xinfo({})", escape_sql_identifier(table_name)),
+            &format!(
+                "PRAGMA {}.table_xinfo({})",
+                escape_sql_identifier(database),
+                escape_sql_identifier(table_name)
+            ),
             &[],
             |row| {
                 let name = get_string(row, 1, |err| warnings.push(err.with("table_xinfo.name")))?;
@@ -755,7 +768,11 @@ impl SQLite3Driver {
 
         // Select pragma_index_list
         let mut indexes: Vec<TableSchemaIndex> = self.select_all(
-            &format!("PRAGMA index_list({})", escape_sql_identifier(table_name)),
+            &format!(
+                "PRAGMA {}.index_list({})",
+                escape_sql_identifier(database),
+                escape_sql_identifier(table_name)
+            ),
             &[],
             |row| {
                 let name = get_string(row, 1, |err| warnings.push(err.with("index_list.name")))?;
@@ -766,7 +783,10 @@ impl SQLite3Driver {
                     partial: row.get::<_, i64>(4)?,
                     schema: get_sql_column(
                         self.select_all(
-                            "SELECT sql FROM sqlite_schema WHERE type = 'index' AND name = ?",
+                            &format!(
+                                "SELECT sql FROM {}.sqlite_schema WHERE type = 'index' AND name = ?",
+                                escape_sql_identifier(database)
+                            ),
                             &[Literal::String(name.to_owned())],
                             |row| Ok((get_string(row, 0, |err| warnings.push(err.with("sqlite_schema.sql"))).ok(),)),
                         )
@@ -796,8 +816,11 @@ impl SQLite3Driver {
         // Get the table schema
         let schema = get_sql_column(
             self.select_all(
-                "SELECT sql FROM sqlite_schema WHERE name = ?",
-                &[Literal::String(table_name.to_owned())],
+                &format!(
+                    "SELECT sql FROM {}.sqlite_schema WHERE name = ?",
+                    escape_sql_identifier(database)
+                ),
+                &[table_name.into()],
                 |row| Ok((get_string(row, 0, |err| warnings.push(err.with("sqlite_schema.sql (table)"))).ok(),)),
             )
             .ok(),
@@ -806,8 +829,11 @@ impl SQLite3Driver {
 
         // List triggers
         let triggers: Vec<TableSchemaTriggers> = self.select_all(
-            "SELECT name, sql FROM sqlite_schema WHERE tbl_name = ? AND type = 'trigger'",
-            &[Literal::String(table_name.to_owned())],
+            &format!(
+                "SELECT name, sql FROM {}.sqlite_schema WHERE tbl_name = ? AND type = 'trigger'",
+                escape_sql_identifier(database)
+            ),
+            &[table_name.into()],
             |row| {
                 Ok(TableSchemaTriggers {
                     name: get_string(row, 0, |err| warnings.push(err.with("sqlite_schema.name (trigger)")))?,
@@ -838,7 +864,7 @@ impl SQLite3Driver {
 
         let column_origins = column_origin(
             unsafe { self.con.handle() },
-            // \n is needed to handle comments, e.g. customQuery = "SELECT ... FROM ... -- comments"
+            // \n is to handle comments, e.g. customQuery = "SELECT ... FROM ... -- comments"
             &format!("SELECT * FROM ({query}\n) LIMIT 0"),
         )
         .unwrap_or_default();
@@ -960,10 +986,12 @@ impl SQLite3Driver {
             "EDITOR_PRAGMA list_tables" => write_editor_pragma(w, self.list_tables()?, start_time),
             "EDITOR_PRAGMA list_foreign_keys" => write_editor_pragma(w, self.list_foreign_keys()?, start_time),
             "EDITOR_PRAGMA table_schema" => {
-                let Some(Literal::String(table_name)) = params.get(0) else {
-                    return QueryError::new("invalid argument for `EDITOR_PRAGMA table_schema`", query, params);
+                let (Some(Literal::String(database)), Some(Literal::String(table_name))) =
+                    (params.get(0), params.get(1))
+                else {
+                    return QueryError::new("invalid arguments for `EDITOR_PRAGMA table_schema`", query, params);
                 };
-                write_editor_pragma(w, self.table_schema(table_name)?, start_time)
+                write_editor_pragma(w, self.table_schema(database, table_name)?, start_time)
             }
             "EDITOR_PRAGMA query_schema" => {
                 let Some(Literal::String(query)) = params.get(0) else {

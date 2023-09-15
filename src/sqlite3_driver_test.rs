@@ -100,7 +100,7 @@ mod test_table_schema {
         .unwrap();
 
         assert_eq!(
-            db.table_schema("t").unwrap().0,
+            db.table_schema("main", "t").unwrap().0,
             TableSchema {
                 name: Some("t".to_owned()),
                 type_: "table".to_owned(),
@@ -135,7 +135,7 @@ mod test_table_schema {
             .unwrap();
 
         assert_eq!(
-            db.table_schema("u").unwrap().0,
+            db.table_schema("main", "u").unwrap().0,
             TableSchema {
                 name: Some("u".to_owned()),
                 type_: "view".to_owned(),
@@ -181,7 +181,7 @@ mod test_table_schema {
         db.execute("CREATE TABLE u(y INTEGER NOT NULL REFERENCES t(x))", &[], &mut vec![])
             .unwrap();
         assert_eq!(
-            db.table_schema("u").unwrap().0.columns[0].foreign_keys[0],
+            db.table_schema("main", "u").unwrap().0.columns[0].foreign_keys[0],
             TableSchemaColumnForeignKey {
                 id: 0,
                 seq: 0,
@@ -206,7 +206,7 @@ mod test_table_schema {
         db.execute("CREATE TABLE v(x INTEGER NOT NULL REFERENCES t)", &[], &mut vec![])
             .unwrap();
         assert_eq!(
-            db.table_schema("v").unwrap().0.columns[0].foreign_keys[0],
+            db.table_schema("main", "v").unwrap().0.columns[0].foreign_keys[0],
             TableSchemaColumnForeignKey {
                 id: 0,
                 seq: 0,
@@ -229,7 +229,7 @@ mod test_table_schema {
         )
         .unwrap();
         db.execute("INSERT INTO t DEFAULT VALUES", &[], &mut vec![]).unwrap();
-        assert_eq!(db.table_schema("t").unwrap().0.columns[0].auto_increment, true);
+        assert_eq!(db.table_schema("main", "t").unwrap().0.columns[0].auto_increment, true);
     }
 
     #[test]
@@ -238,7 +238,7 @@ mod test_table_schema {
         db.execute("CREATE TABLE t(x INTEGER NOT NULL PRIMARY KEY)", &[], &mut vec![])
             .unwrap();
         db.execute("INSERT INTO t DEFAULT VALUES", &[], &mut vec![]).unwrap();
-        assert_eq!(db.table_schema("t").unwrap().0.columns[0].auto_increment, false);
+        assert_eq!(db.table_schema("main", "t").unwrap().0.columns[0].auto_increment, false);
     }
 
     #[test]
@@ -246,7 +246,7 @@ mod test_table_schema {
         let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
         db.execute("CREATE TABLE t(a DEFAULT NULL, b DEFAULT 1, c DEFAULT 1.2, d DEFAULT 'a', e DEFAULT x'1234', f DEFAULT (1 + 2))", &[], &mut vec![]).unwrap();
         assert_eq!(
-            db.table_schema("t")
+            db.table_schema("main", "t")
                 .unwrap()
                 .0
                 .columns
@@ -270,7 +270,7 @@ mod test_table_schema {
         db.execute("CREATE TABLE t(x UNIQUE)", &[], &mut vec![]).unwrap();
         db.execute("CREATE INDEX idx1 ON t(x)", &[], &mut vec![]).unwrap();
         assert_eq!(
-            db.table_schema("t").unwrap().0.indexes,
+            db.table_schema("main", "t").unwrap().0.indexes,
             vec![
                 TableSchemaIndex {
                     seq: 0,
@@ -309,7 +309,7 @@ mod test_table_schema {
         let sql = "CREATE TRIGGER trigger_insert AFTER INSERT ON t BEGIN SELECT 1; END";
         db.execute(sql, &[], &mut vec![]).unwrap();
         assert_eq!(
-            db.table_schema("t").unwrap().0.triggers,
+            db.table_schema("main", "t").unwrap().0.triggers,
             vec![TableSchemaTriggers {
                 name: "trigger_insert".to_owned(),
                 sql: sql.to_owned(),
@@ -370,6 +370,28 @@ mod test_table_schema {
         );
     }
 
+    #[test]
+    fn test_temp_table() {
+        let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+
+        db.execute("CREATE TABLE t(x)", &[], &mut vec![]).unwrap();
+        db.execute("CREATE TEMP TABLE t(y)", &[], &mut vec![]).unwrap();
+        db.execute("CREATE TEMP TABLE u(y)", &[], &mut vec![]).unwrap();
+
+        assert_eq!(
+            db.table_schema("main", "t").unwrap().0.schema.unwrap(),
+            "CREATE TABLE t(x)"
+        );
+        assert_eq!(
+            db.table_schema("temp", "t").unwrap().0.schema.unwrap(),
+            "CREATE TABLE t(y)"
+        );
+        assert_eq!(
+            db.table_schema("temp", "u").unwrap().0.schema.unwrap(),
+            "CREATE TABLE u(y)"
+        );
+    }
+
     mod test_indirect_foreign_key {
         use std::collections::HashMap;
 
@@ -385,7 +407,7 @@ mod test_table_schema {
                 .unwrap();
             db.execute("CREATE VIEW table_name AS SELECT y as z FROM t2;", &[], &mut vec![])
                 .unwrap();
-            let schema = db.table_schema("table_name").unwrap().0;
+            let schema = db.table_schema("main", "table_name").unwrap().0;
             assert_eq!(
                 schema.column_origins,
                 Some(HashMap::from([(
@@ -599,15 +621,28 @@ fn test_list_tables() {
         &mut vec![],
     )
     .unwrap();
+    db.execute(
+        "CREATE TEMP TABLE t3(x INTEGER NOT NULL PRIMARY KEY) WITHOUT ROWID, STRICT",
+        &[],
+        &mut vec![],
+    )
+    .unwrap();
     assert_eq!(
         db.list_tables().unwrap().0.into_iter().collect::<HashSet<Table>>(),
         HashSet::from([
             Table {
+                database: "main".to_owned(),
                 name: "t1".to_owned(),
                 type_: "table".to_owned()
             },
             Table {
+                database: "main".to_owned(),
                 name: "t2".to_owned(),
+                type_: "table".to_owned()
+            },
+            Table {
+                database: "temp".to_owned(),
+                name: "t3".to_owned(),
                 type_: "table".to_owned()
             },
         ]),
@@ -865,7 +900,12 @@ fn test_handle_select() {
 fn test_handle_table_schema() {
     let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
     handle(&db, "CREATE TABLE t(x)", &[], QueryMode::ReadWrite);
-    handle(&db, "EDITOR_PRAGMA table_schema", &["t".into()], QueryMode::ReadOnly);
+    handle(
+        &db,
+        "EDITOR_PRAGMA table_schema",
+        &["main".into(), "t".into()],
+        QueryMode::ReadOnly,
+    );
     handle(
         &db,
         "EDITOR_PRAGMA query_schema",
@@ -881,7 +921,7 @@ fn test_handle_table_schema_invalid_params() {
         .handle(
             &mut vec![],
             "EDITOR_PRAGMA table_schema",
-            &[1.into()],
+            &[1.into(), 2.into()],
             QueryMode::ReadOnly,
         )
         .unwrap_err()
@@ -939,6 +979,7 @@ fn test_invalid_utf8_table_name() {
         db.list_tables().unwrap(),
         (
             vec![Table {
+                database: "main".to_owned(),
                 name: "a�".to_owned(),
                 type_: "table".to_owned(),
             }],
