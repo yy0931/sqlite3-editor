@@ -418,6 +418,11 @@ impl SQLite3Driver {
         })
     }
 
+    #[cfg(test)]
+    pub(super) fn pager(&mut self) -> &mut Pager {
+        &mut self.pager
+    }
+
     /// Executes a SQL statement and returns the result as a msgpack.
     pub(crate) fn execute(
         &mut self,
@@ -1093,6 +1098,7 @@ impl SQLite3Driver {
                 match mode {
                     QueryMode::Script => {
                         assert!(params.is_empty());
+                        self.pager.clear_cache();
                         let result = self.con.execute_batch(query);
 
                         // Rollback uncommitted transactions
