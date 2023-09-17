@@ -1,6 +1,7 @@
 use crate::{
     column_origin::{column_origin, ColumnOrigin},
     literal::Literal,
+    pager::{Pager, Records},
     request_type::QueryMode,
 };
 use lazy_static::lazy_static;
@@ -121,6 +122,7 @@ impl std::fmt::Display for QueryError {
 #[derive(Debug)]
 pub(crate) struct SQLite3Driver {
     con: ManuallyDrop<rusqlite::Connection>,
+    pager: Pager,
 }
 
 lazy_static! {
@@ -129,7 +131,7 @@ lazy_static! {
         regex::Regex::new("").unwrap(),
     )));
     static ref NON_READONLY_SQL_PATTERN: regex::Regex =
-        regex::Regex::new("(?i)^(INSERT |DELETE |UPDATE |CREATE |DROP |ALTER TABLE)").unwrap();
+        regex::Regex::new(r"(?i)^\s*(INSERT|DELETE|UPDATE|CREATE|DROP|ALTER\s+TABLE)\b").unwrap();
 }
 
 /// Text matching implementation for the find widget.
@@ -310,7 +312,7 @@ pub(crate) struct ForeignKey {
     pub to: Option<String>,
 }
 
-fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUTF8) -> ()>(
+pub fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUTF8) -> ()>(
     wr: &mut W,
     value: ValueRef,
     on_invalid_utf8: F,
@@ -337,6 +339,37 @@ fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUTF8) 
 
 type ForeignKeyList = HashMap</* column */ String, Vec<TableSchemaColumnForeignKey>>;
 
+pub fn connect_immutable(database_filepath: &str) -> std::result::Result<rusqlite::Connection, String> {
+    // Connect to the database with `?immutable=1` and the readonly flag
+    const ASCII_SET: percent_encoding::AsciiSet = percent_encoding::NON_ALPHANUMERIC.remove(b'/');
+    Ok(rusqlite::Connection::open_with_flags(
+        format!(
+            "file:{}?immutable=1",
+            percent_encoding::utf8_percent_encode(database_filepath, &ASCII_SET)
+        ),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+    )
+    .or_else(|err| {
+        Err(format!(
+            "Failed to open the database {database_filepath:?} with immutable=1: {err}"
+        ))
+    })?)
+}
+
+fn assert_readonly_query(query: &str) -> std::result::Result<(), QueryError> {
+    if NON_READONLY_SQL_PATTERN.is_match(query) {
+        QueryError::new(format!("Cannot execute {query:?} while in read-only mode."), query, &[])
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ExecMode {
+    ReadOnly,
+    ReadWrite,
+}
+
 impl SQLite3Driver {
     /// Connects to the database, set busy_timeout to 500, register the find_widget_regexp function, enable loading extensions, and fetch the version number of SQLite.
     /// * `read_only` - If true, connects to the database with immutable=1 and the readonly flag. Use this argument to read a database that is under an EXCLUSIVE lock.
@@ -351,20 +384,7 @@ impl SQLite3Driver {
             rusqlite::Connection::open(database_filepath)
                 .or_else(|err| Err(format!("Failed to open the database {database_filepath:?}: {err}")))?
         } else {
-            // Connect to the database with `?immutable=1` and the readonly flag
-            const ASCII_SET: percent_encoding::AsciiSet = percent_encoding::NON_ALPHANUMERIC.remove(b'/');
-            rusqlite::Connection::open_with_flags(
-                format!(
-                    "file:{}?immutable=1",
-                    percent_encoding::utf8_percent_encode(database_filepath, &ASCII_SET)
-                ),
-                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
-            )
-            .or_else(|err| {
-                Err(format!(
-                    "Failed to open the database {database_filepath:?} with immutable=1: {err}"
-                ))
-            })?
+            connect_immutable(database_filepath)?
         };
 
         // Set the SQLite Cipher key if given
@@ -394,63 +414,100 @@ impl SQLite3Driver {
         // Get the SQLite version as a string
         Ok(Self {
             con: ManuallyDrop::new(con),
+            pager: Pager::new(),
         })
     }
 
     /// Executes a SQL statement and returns the result as a msgpack.
     pub(crate) fn execute(
-        &self,
+        &mut self,
         query: &str,
         params: &[Literal],
+        read_only: ExecMode,
         warnings: &mut Vec<InvalidUTF8>,
     ) -> std::result::Result<Vec<u8>, QueryError> {
-        // Prepare the statement
-        let mut stmt = self
-            .con
-            .prepare(query)
-            .or_else(|err| QueryError::new(err, query, params))?;
+        if read_only == ExecMode::ReadOnly {
+            assert_readonly_query(query)?;
+        } else {
+            self.pager.clear_cache();
+        }
 
-        // Fetch data and pack into msgpack
-        let mut col_buf: Vec<Vec<u8>> = vec![];
-        let column_count = stmt.column_count();
-        for _ in 0..column_count {
-            col_buf.push(vec![]);
-        }
-        for (i, param) in params.iter().enumerate() {
-            stmt.raw_bind_parameter(i + 1, param).unwrap();
-        }
-        let mut num_rows = 0u32;
-        stmt.raw_query()
-            .mapped(|row| {
-                num_rows += 1;
-                for i in 0..column_count {
-                    write_value_ref_into_msgpack(&mut col_buf[i], row.get_ref_unwrap(i), |err| {
-                        warnings.push(err.with(query))
-                    })
-                    .expect("Failed to write msgpack");
+        let Records {
+            col_buf,
+            columns,
+            n_rows,
+        } = if let Some(records) = self
+            .pager
+            .query(&mut self.con, query, params, |err| warnings.push(err.with(query)))?
+        {
+            records
+        } else {
+            // Prepare
+            let mut stmt = self
+                .con
+                .prepare(query)
+                .or_else(|err| QueryError::new(err, query, params))?;
+
+            // Bind parameters
+            for (i, param) in params.iter().enumerate() {
+                stmt.raw_bind_parameter(i + 1, param)
+                    .or_else(|err| QueryError::new(err, &query, &params))?;
+            }
+
+            // List columns
+            let columns = stmt
+                .column_names()
+                .into_iter()
+                .map(|v| v.to_owned())
+                .collect::<Vec<_>>();
+
+            // Fetch records
+            let mut col_buf: Vec<Vec<u8>> = vec![vec![]; columns.len()];
+
+            let mut n_rows = 0;
+            let mut rows = stmt.raw_query();
+            loop {
+                match rows.next() {
+                    Ok(Some(row)) => {
+                        for i in 0..columns.len() {
+                            write_value_ref_into_msgpack(&mut col_buf[i], row.get_ref_unwrap(i), |err| {
+                                warnings.push(err.with(query))
+                            })
+                            .expect("Failed to write msgpack");
+                        }
+                        n_rows += 1;
+                    }
+                    Ok(None) => break,
+                    Err(err) => QueryError::new(err, query, params)?,
                 }
-                Ok(())
-            })
-            .collect::<rusqlite::Result<Vec<_>>>()
-            .or_else(|err| QueryError::new(err, query, params))?;
+            }
+            Records {
+                col_buf,
+                columns,
+                n_rows,
+            }
+        };
+
+        // Pack the result into a msgpack
         let mut buf = vec![];
-        let column_names = stmt.column_names();
-        rmp::encode::write_map_len(&mut buf, column_names.len() as u32).expect("Failed to write msgpack");
-        for (i, column_name) in column_names.iter().enumerate() {
+        rmp::encode::write_map_len(&mut buf, columns.len() as u32).expect("Failed to write msgpack");
+        for (i, column_name) in columns.iter().enumerate() {
             rmp::encode::write_str(&mut buf, column_name).expect("Failed to write msgpack");
-            rmp::encode::write_array_len(&mut buf, num_rows).expect("Failed to write msgpack");
+            rmp::encode::write_array_len(&mut buf, n_rows as u32).expect("Failed to write msgpack");
             buf.extend(&col_buf[i]);
         }
         Ok(buf)
     }
 
     /// Executes a SQL statement and returns the result.
-    pub(crate) fn select_all<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T>(
+    fn select_all<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T>(
         &self,
         query: &str,
         params: &[Literal],
         map: F,
     ) -> std::result::Result<Vec<T>, QueryError> {
+        assert_readonly_query(query)?;
+
         // Prepare the statement
         let mut stmt = self
             .con
@@ -477,12 +534,14 @@ impl SQLite3Driver {
     }
 
     /// Executes a SQL statement and returns the first row.
-    pub(crate) fn select_one<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T: ToOwned<Owned = T>>(
+    pub(super) fn select_one<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T: ToOwned<Owned = T>>(
         &self,
         query: &str,
         params: &[Literal],
         map: F,
     ) -> std::result::Result<T, QueryError> {
+        assert_readonly_query(query)?;
+
         let select_all = self.select_all(query, params, map)?;
         let get = select_all.get(0);
         let Some(one) = get else {
@@ -950,7 +1009,7 @@ impl SQLite3Driver {
     }
 
     pub fn handle(
-        &self,
+        &mut self,
         mut w: &mut dyn Write,
         query: &str,
         params: &[Literal],
@@ -999,6 +1058,9 @@ impl SQLite3Driver {
                 };
                 write_editor_pragma(w, self.query_schema(query)?, start_time)
             }
+            "EDITOR_PRAGMA total_cache_size_bytes" => {
+                write_editor_pragma(w, (self.pager.total_cache_size_bytes(), vec![]), start_time)
+            }
             "EDITOR_PRAGMA load_extensions" => {
                 let mut extensions = vec![];
                 for param in params {
@@ -1018,12 +1080,8 @@ impl SQLite3Driver {
             }
 
             _ => {
-                if mode == QueryMode::ReadOnly && NON_READONLY_SQL_PATTERN.is_match(query) {
-                    return QueryError::new(
-                        format!("Cannot execute {query:?} while in read-only mode."),
-                        query,
-                        params,
-                    );
+                if mode == QueryMode::ReadOnly {
+                    assert_readonly_query(query)?;
                 }
 
                 rmp::encode::write_map_len(&mut w, 3).expect("Failed to write msgpack");
@@ -1035,7 +1093,6 @@ impl SQLite3Driver {
                 match mode {
                     QueryMode::Script => {
                         assert!(params.is_empty());
-
                         let result = self.con.execute_batch(query);
 
                         // Rollback uncommitted transactions
@@ -1048,8 +1105,12 @@ impl SQLite3Driver {
                         })
                         .expect("Failed to write msgpack");
                     }
-                    QueryMode::ReadOnly | QueryMode::ReadWrite => {
-                        w.write_all(&self.execute(query, params, &mut warnings)?)
+                    QueryMode::ReadOnly => {
+                        w.write_all(&self.execute(query, params, ExecMode::ReadOnly, &mut warnings)?)
+                            .expect("Failed to write msgpack");
+                    }
+                    QueryMode::ReadWrite => {
+                        w.write_all(&self.execute(query, params, ExecMode::ReadWrite, &mut warnings)?)
                             .expect("Failed to write msgpack");
                     }
                 }

@@ -10,7 +10,6 @@ mod column_origin;
 mod export;
 mod import;
 use crate::{request_type::Request, sqlite3_driver::read_msgpack_into_json};
-
 mod check_syntax;
 #[cfg(test)]
 mod check_syntax_test;
@@ -29,6 +28,9 @@ mod literal_test;
 mod online_backup;
 #[cfg(test)]
 mod online_backup_test;
+mod pager;
+#[cfg(test)]
+mod pager_test;
 mod parse_cte;
 #[cfg(test)]
 mod parse_cte_test;
@@ -216,7 +218,8 @@ fn main() {
             response_body_filepath,
         } => {
             // Create a server with the specified driver
-            let server = sqlite3_driver::SQLite3Driver::connect(&database_filepath, false, &sql_cipher_key).unwrap();
+            let mut server =
+                sqlite3_driver::SQLite3Driver::connect(&database_filepath, false, &sql_cipher_key).unwrap();
 
             // Start the main loop
             let stdin = std::io::stdin();
