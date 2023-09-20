@@ -4,6 +4,7 @@ use std::{
     path::PathBuf,
 };
 
+use rmp_serde::encode::write_named;
 mod completion;
 #[cfg(test)]
 mod completion_test;
@@ -240,12 +241,14 @@ where
             sql_cipher_key,
             response_body_filepath,
         } => {
+            const READ_ONLY: bool = false;
+
             // Create a server with the specified driver
-            let mut server =
-                sqlite3_driver::SQLite3Driver::connect(&database_filepath, false, &sql_cipher_key).unwrap();
+            let mut db =
+                sqlite3_driver::SQLite3Driver::connect(&database_filepath, READ_ONLY, &sql_cipher_key).unwrap();
 
             let (command_sender, command_receiver) = std::sync::mpsc::channel::<String>();
-            let abort_signal = server.abort_signal();
+            let abort_signal = db.abort_signal();
             let _thread = std::thread::spawn(move || {
                 let mut stdin = stdin();
                 loop {
@@ -292,6 +295,26 @@ where
                     // Terminate the loop
                     "close" => return 0,
 
+                    "try_reconnect" => {
+                        match sqlite3_driver::SQLite3Driver::connect_with_abort_signal(
+                            &database_filepath,
+                            READ_ONLY,
+                            &sql_cipher_key,
+                            db.abort_signal(),
+                        ) {
+                            Ok(new_db) => {
+                                db = new_db;
+                                write_named(&mut w, &None::<&i64>).expect("Failed to write the result.");
+                                finish(&mut stdout, &mut w, 200);
+                            }
+                            Err(err) => {
+                                w.truncate_all();
+                                write!(w, "{err}").expect("Failed to write an error message.");
+                                finish(&mut stdout, &mut w, 400);
+                            }
+                        }
+                    }
+
                     // Handle the request
                     "handle" => {
                         // Deserialize the request
@@ -302,13 +325,11 @@ where
                                 if content.len() > 5000 {
                                     content = content[0..5000].to_owned() + "... (omitted)"
                                 }
-                                w.write(
-                                    format!(
-                                        "Failed to parse the request body: {err} (content = {}, len = {})",
-                                        content,
-                                        r.metadata().unwrap().len()
-                                    )
-                                    .as_bytes(),
+                                write!(
+                                    w,
+                                    "Failed to parse the request body: {err} (content = {}, len = {})",
+                                    content,
+                                    r.metadata().unwrap().len()
                                 )
                                 .expect("Failed to write an error message.");
                                 finish(&mut stdout, &mut w, 400);
@@ -316,15 +337,14 @@ where
                             }
                         };
 
-                        match server.handle(&mut w, &req.query, &req.params, req.mode) {
-                            Err(err) => {
-                                w.truncate_all();
-                                w.write(format!("{err}").as_bytes())
-                                    .expect("Failed to write an error message.");
-                                finish(&mut stdout, &mut w, 400);
-                            }
+                        match db.handle(&mut w, &req.query, &req.params, req.mode) {
                             Ok(_) => {
                                 finish(&mut stdout, &mut w, 200);
+                            }
+                            Err(err) => {
+                                w.truncate_all();
+                                write!(w, "{err}").expect("Failed to write an error message.");
+                                finish(&mut stdout, &mut w, 400);
                             }
                         }
                     }
@@ -333,7 +353,6 @@ where
                     "semantic_highlight" | "code_lens" | "check_syntax" => {
                         // Handle the command
                         if let Err(err) = rmp_serde::from_read(r).map(|Query { query }: Query| -> anyhow::Result<()> {
-                            use rmp_serde::encode::write_named;
                             match command.trim() {
                                 "semantic_highlight" => {
                                     write_named(&mut w, &semantic_highlight::semantic_highlight(&query))?
@@ -345,8 +364,8 @@ where
                             Ok(())
                         }) {
                             w.flush().unwrap();
-                            w.set_len(0).unwrap();
-                            w.write_fmt(format_args!("{err:?}")).unwrap();
+                            w.truncate_all();
+                            write!(w, "{err:?}").unwrap();
                             finish(&mut stdout, &mut w, 400);
                         } else {
                             w.flush().unwrap();
@@ -359,27 +378,23 @@ where
                         // Handle the command
                         if let Err(err) = rmp_serde::from_read(r).map(
                             |CompletionQuery { sql, line, column }: CompletionQuery| -> anyhow::Result<()> {
-                                use rmp_serde::encode::write_named;
-                                match command.trim() {
-                                    "completion" => write_named(
-                                        &mut w,
-                                        &completion::complete(
-                                            &server,
-                                            &sql,
-                                            &ZeroIndexedLocation {
-                                                line: line as usize,
-                                                column: column as usize,
-                                            },
-                                        ),
-                                    )?,
-                                    _ => panic!("Unexpected command {:?}", command),
-                                };
+                                write_named(
+                                    &mut w,
+                                    &completion::complete(
+                                        &db,
+                                        &sql,
+                                        &ZeroIndexedLocation {
+                                            line: line as usize,
+                                            column: column as usize,
+                                        },
+                                    ),
+                                )?;
                                 Ok(())
                             },
                         ) {
                             w.flush().unwrap();
-                            w.set_len(0).unwrap();
-                            w.write_fmt(format_args!("{err:?}")).unwrap();
+                            w.truncate_all();
+                            write!(w, "{err:?}").unwrap();
                             finish(&mut stdout, &mut w, 400);
                         } else {
                             w.flush().unwrap();

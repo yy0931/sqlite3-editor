@@ -410,6 +410,20 @@ impl SQLite3Driver {
         read_only: bool,
         sql_cipher_key: &Option<impl AsRef<str>>,
     ) -> std::result::Result<Self, String> {
+        Self::connect_with_abort_signal(
+            database_filepath,
+            read_only,
+            sql_cipher_key,
+            Arc::new(AtomicBool::new(false)),
+        )
+    }
+
+    pub fn connect_with_abort_signal<'a>(
+        database_filepath: &str,
+        read_only: bool,
+        sql_cipher_key: &Option<impl AsRef<str>>,
+        abort_signal: Arc<AtomicBool>,
+    ) -> std::result::Result<Self, String> {
         let con = if !read_only {
             // Connect to the database
             rusqlite::Connection::open(database_filepath)
@@ -446,7 +460,7 @@ impl SQLite3Driver {
         Ok(Self {
             con: ManuallyDrop::new(con),
             pager: Pager::new(),
-            abort_signal: Arc::new(AtomicBool::new(false)),
+            abort_signal,
         })
     }
 
