@@ -1,4 +1,4 @@
-use crate::check_syntax::{check_syntax, Diagnostic, PossibleCause};
+use crate::check_syntax::{check_syntax, Diagnostic, PossibleCause, Severity};
 
 #[test]
 fn test_simple_pass() {
@@ -10,8 +10,9 @@ fn test_syntax_error() {
     assert_eq!(
         check_syntax("DELETE t"),
         Ok(vec![Diagnostic {
-            possible_causes: vec![PossibleCause { offset: 7, length: 1 },],
+            possible_causes: vec![PossibleCause { offset: 7 },],
             message: "near \"t\": syntax error".to_owned(),
+            severity: Severity::Error,
         }]),
     );
 }
@@ -21,8 +22,9 @@ fn test_unterminated_string_literal() {
     assert_eq!(
         check_syntax(r#"SELECT 'a"#),
         Ok(vec![Diagnostic {
-            possible_causes: vec![PossibleCause { offset: 7, length: 1 },],
+            possible_causes: vec![PossibleCause { offset: 7 },],
             message: "Unterminated string literal".to_owned(),
+            severity: Severity::Error,
         }])
     );
 }
@@ -33,12 +35,14 @@ fn test_multiple_errors() {
         check_syntax("foo; bar;"),
         Ok(vec![
             Diagnostic {
-                possible_causes: vec![PossibleCause { offset: 0, length: 1 },],
+                possible_causes: vec![PossibleCause { offset: 0 },],
                 message: "near \"foo\": syntax error".to_owned(),
+                severity: Severity::Error,
             },
             Diagnostic {
-                possible_causes: vec![PossibleCause { offset: 5, length: 1 },],
+                possible_causes: vec![PossibleCause { offset: 5 },],
                 message: "near \"bar\": syntax error".to_owned(),
+                severity: Severity::Error,
             },
         ]),
     );
@@ -70,8 +74,9 @@ fn test_unknown_table_option() {
     assert_eq!(
         check_syntax("CREATE TABLE t(c) foobar"),
         Ok(vec![Diagnostic {
-            possible_causes: vec![PossibleCause { offset: 24, length: 1 }],
-            message: "unknown table option: foobar".to_owned()
+            possible_causes: vec![PossibleCause { offset: 24 }],
+            message: "unknown table option: foobar".to_owned(),
+            severity: Severity::Error,
         }])
     );
 }

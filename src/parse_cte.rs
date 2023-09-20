@@ -7,6 +7,7 @@ use crate::{split_statements::SplittedStatement, tokenize::ZeroIndexedLocation};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CTEEntry {
+    pub ident_text: String,
     pub ident_start: ZeroIndexedLocation,
     pub ident_end: ZeroIndexedLocation,
     pub query_start: ZeroIndexedLocation,
@@ -79,6 +80,12 @@ pub fn parse_cte(stmt: &SplittedStatement) -> Option<CTE> {
                                 Token::RParen => { paren_depth2 += 1;}
                                 _ if paren_depth2 == 0 => {
                                     current_entry = Some(CTEEntry {
+                                        ident_text: match &stmt.real_tokens[j].token {
+                                            Token::Word(word) => word.value.clone(),
+
+                                            // this branch should not be used
+                                            token => token.to_string(),
+                                        },
                                         ident_start: stmt.real_tokens[j].start.clone(),
                                         ident_end: stmt.real_tokens[j].end.clone(),
                                         query_start: token.end.clone(), // placeholder

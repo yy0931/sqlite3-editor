@@ -1,6 +1,3 @@
-use std::collections::HashSet;
-
-use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use sqlparser::{
     dialect::SQLiteDialect,
@@ -8,7 +5,10 @@ use sqlparser::{
     tokenizer::{Token, Whitespace, Word},
 };
 
-use crate::tokenize::{tokenize_with_range_location, TokenWithRangeLocation, ZeroIndexedLocation};
+use crate::{
+    keywords::KEYWORDS_UNSUPPORTED_BY_SQLPARSER,
+    tokenize::{tokenize_with_range_location, TokenWithRangeLocation, ZeroIndexedLocation},
+};
 
 /// Represents the kind of token highlighting.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,18 +28,6 @@ pub struct SemanticHighlight {
     pub kind: SemanticTokenKind,
     pub start: ZeroIndexedLocation,
     pub end: ZeroIndexedLocation,
-}
-
-lazy_static! {
-    static ref KEYWORDS_UNSUPPORTED_BY_SQLPARSER: HashSet<&'static str> = HashSet::from([
-        "VACUUM",
-        "ATTACH",
-        "DETACH",
-        "PRAGMA",
-        "DEFERRED",
-        "IMMEDIATE",
-        "EXCLUSIVE"
-    ]);
 }
 
 /// Tokenizes the given SQL input string and returns the tokens with highlighting information.

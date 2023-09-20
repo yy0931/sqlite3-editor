@@ -12,7 +12,7 @@ use std::{
     collections::HashMap,
     io::Write,
     mem::ManuallyDrop,
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
 #[derive(Debug, Clone)]
@@ -120,9 +120,10 @@ impl std::fmt::Display for QueryError {
 }
 
 #[derive(Debug)]
-pub(crate) struct SQLite3Driver {
+pub struct SQLite3Driver {
     con: ManuallyDrop<rusqlite::Connection>,
     pager: Pager,
+    abort_signal: Arc<AtomicBool>,
 }
 
 lazy_static! {
@@ -143,7 +144,7 @@ fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> std::result::Result
         ValueRef::Integer(v) => format!("{v}"),
         ValueRef::Real(v) => format!("{v}"),
         ValueRef::Text(v) => String::from_utf8_lossy(v).to_string(),
-        ValueRef::Blob(_v) => "".to_owned(), // TODO: hex?
+        ValueRef::Blob(_v) => "".to_owned(), // hex won't match against anything
     };
     let Ok(pattern) = ctx.get::<String>(1) else {
         return Ok(0);
@@ -181,7 +182,6 @@ fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> std::result::Result
     Ok(matched)
 }
 
-// TODO: test LoadableSQLiteExtensionNotAvailable
 #[derive(Debug)]
 struct LoadableSQLiteExtensionNotAvailable {}
 
@@ -276,7 +276,7 @@ impl ColumnOriginAndIsRowId {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub(crate) struct TableSchema {
+pub struct TableSchema {
     // InnerTableSchema
     pub schema: Option<String>,
     #[serde(rename = "hasRowIdColumn")]
@@ -289,7 +289,7 @@ pub(crate) struct TableSchema {
     // Optional fields
     pub name: Option<String>,
     #[serde(rename = "type")]
-    pub type_: String,
+    pub type_: TableType,
     #[serde(rename = "customQuery")]
     pub custom_query: Option<String>,
     #[serde(rename = "columnOrigins")]
@@ -297,15 +297,45 @@ pub(crate) struct TableSchema {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub(crate) struct Table {
+pub enum TableType {
+    #[serde(rename = "table")]
+    Table,
+    #[serde(rename = "view")]
+    View,
+    #[serde(rename = "shadow")]
+    Shadow,
+    #[serde(rename = "virtual")]
+    Virtual,
+
+    /// query_schema() uses this
+    #[serde(rename = "custom query")]
+    CustomQuery,
+    #[serde(rename = "other")]
+    Other,
+}
+
+impl From<&str> for TableType {
+    fn from(value: &str) -> Self {
+        match value {
+            "table" => Self::Table,
+            "view" => Self::View,
+            "virtual" => Self::Virtual,
+            "shadow" => Self::Shadow,
+            _ => Self::Other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Table {
     pub database: String,
     pub name: String,
     #[serde(rename = "type")]
-    pub type_: String,
+    pub type_: TableType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct ForeignKey {
+pub struct ForeignKey {
     pub name: String,
     pub table: String,
     pub from: String,
@@ -415,16 +445,21 @@ impl SQLite3Driver {
         Ok(Self {
             con: ManuallyDrop::new(con),
             pager: Pager::new(),
+            abort_signal: Arc::new(AtomicBool::new(false)),
         })
     }
 
+    pub fn abort_signal(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.abort_signal)
+    }
+
     #[cfg(test)]
-    pub(super) fn pager(&mut self) -> &mut Pager {
+    pub fn pager(&mut self) -> &mut Pager {
         &mut self.pager
     }
 
     /// Executes a SQL statement and returns the result as a msgpack.
-    pub(crate) fn execute(
+    pub fn execute(
         &mut self,
         query: &str,
         params: &[Literal],
@@ -505,7 +540,7 @@ impl SQLite3Driver {
     }
 
     /// Executes a SQL statement and returns the result.
-    fn select_all<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T>(
+    pub fn select_all<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T>(
         &self,
         query: &str,
         params: &[Literal],
@@ -539,7 +574,7 @@ impl SQLite3Driver {
     }
 
     /// Executes a SQL statement and returns the first row.
-    pub(super) fn select_one<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T: ToOwned<Owned = T>>(
+    pub fn select_one<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T: ToOwned<Owned = T>>(
         &self,
         query: &str,
         params: &[Literal],
@@ -555,7 +590,7 @@ impl SQLite3Driver {
         Ok(one.to_owned())
     }
 
-    pub(crate) fn database_label(&self) -> String {
+    pub fn database_label(&self) -> String {
         format!(
             "{} {}",
             if is_sqlcipher(&self.con) { "sqlcipher" } else { "sqlite" },
@@ -563,25 +598,36 @@ impl SQLite3Driver {
         )
     }
 
-    pub(crate) fn list_tables(&self) -> std::result::Result<(Vec<Table>, Vec<InvalidUTF8>), QueryError> {
+    pub fn list_tables(
+        &self,
+        include_system_tables: bool,
+    ) -> std::result::Result<(Vec<Table>, Vec<InvalidUTF8>), QueryError> {
         let mut warnings = vec![];
         self.select_all(
-            r#"SELECT schema, name, type FROM pragma_table_list WHERE NOT (name LIKE "sqlite\_%" ESCAPE "\")"#,
+            &(r#"SELECT schema, name, type FROM pragma_table_list"#.to_owned()
+                + if include_system_tables {
+                    ""
+                } else {
+                    r#" WHERE NOT (name LIKE "sqlite\_%" ESCAPE "\")"#
+                }),
             &[],
             |row| {
                 Ok(Table {
                     database: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.schema")))?,
                     name: get_string(row, 1, |err| warnings.push(err.with("pragma_table_list.name")))?,
-                    type_: get_string(row, 2, |err| {
-                        warnings.push(err.with("pragma_table_list.type (list_tables)"))
-                    })?,
+                    type_: TableType::from(
+                        get_string(row, 2, |err| {
+                            warnings.push(err.with("pragma_table_list.type (list_tables)"))
+                        })?
+                        .as_str(),
+                    ),
                 })
             },
         )
         .map(|v| (v, warnings))
     }
 
-    pub(crate) fn list_foreign_keys(&self) -> std::result::Result<(Vec<ForeignKey>, Vec<InvalidUTF8>), QueryError> {
+    pub fn list_foreign_keys(&self) -> std::result::Result<(Vec<ForeignKey>, Vec<InvalidUTF8>), QueryError> {
         let mut warnings = vec![];
         self.select_all(r#"SELECT name, f."table", f."from", f."to" FROM pragma_table_list JOIN pragma_foreign_key_list(name) f WHERE NOT (name LIKE "sqlite\_%" ESCAPE "\");"#, &[], |row| Ok(ForeignKey { name: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.name")))?, table: get_string(row, 1, |err| warnings.push(err.with("pragma_table_list.table")))?, from: get_string(row, 2, |err| warnings.push(err.with("pragma_table_list.from")))?, to: get_option_string(row, 3, |err| warnings.push(err.with("pragma_table_list.to")))? }))
         .map(|v| (v, warnings))
@@ -688,7 +734,7 @@ impl SQLite3Driver {
     }
 
     /// Collect table definitions from sqlite_schema, pragma_table_list, pragma_foreign_key_list, pragma_table_xinfo, pragma_index_list, and pragm_index_info.
-    pub(crate) fn table_schema(
+    pub fn table_schema(
         &self,
         database: &str,
         table_name: &str,
@@ -709,13 +755,14 @@ impl SQLite3Driver {
                 ))
             },
         )?;
-        let has_rowid_column = table_type == "table" && !wr;
+        let table_type = TableType::from(table_type.as_str());
+        let has_rowid_column = table_type == TableType::Table && !wr;
 
         // Select pragma_foreign_key_list
         let mut foreign_key_list_cache = HashMap::new();
         let mut foreign_keys = self.foreign_keys(database, table_name, &mut warnings, &mut foreign_key_list_cache)?;
 
-        let column_origins = if table_type == "view" {
+        let column_origins = if table_type == TableType::View {
             let column_origins = column_origin(
                 unsafe { self.con.handle() },
                 &format!("SELECT * FROM {} LIMIT 0", escape_sql_identifier(table_name)),
@@ -747,11 +794,7 @@ impl SQLite3Driver {
                     .map(|(k, v)| {
                         (
                             k,
-                            ColumnOriginAndIsRowId::new(
-                                self.is_rowid(&v, &mut warnings)
-                                    .unwrap_or(false /* TODO: error handling */),
-                                v,
-                            ),
+                            ColumnOriginAndIsRowId::new(self.is_rowid(&v, &mut warnings).unwrap_or(false), v),
                         )
                     })
                     .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
@@ -775,7 +818,7 @@ impl SQLite3Driver {
             && !self
                 .select_all(
                     &format!(
-                        "SELECT * FROM {}.sqlite_sequence WHERE name = ?",
+                        "SELECT * FROM {}.sqlite_sequence WHERE name = ? COLLATE NOCASE",
                         escape_sql_identifier(database)
                     ),
                     &[table_name.into()],
@@ -806,7 +849,7 @@ impl SQLite3Driver {
                 Ok(TableSchemaColumn {
                     cid: row.get::<_, i64>(0)?,
                     notnull: row.get::<_, i64>(3)? != 0,
-                    type_: if table_type == "view" {
+                    type_: if table_type == TableType::View {
                         // NOTE: Why does table_xinfo always return "BLOB" for views?
                         "".to_owned()
                     } else {
@@ -848,7 +891,7 @@ impl SQLite3Driver {
                     schema: get_sql_column(
                         self.select_all(
                             &format!(
-                                "SELECT sql FROM {}.sqlite_schema WHERE type = 'index' AND name = ?",
+                                "SELECT sql FROM {}.sqlite_schema WHERE type = 'index' AND name = ? COLLATE NOCASE",
                                 escape_sql_identifier(database)
                             ),
                             &[Literal::String(name.to_owned())],
@@ -881,7 +924,7 @@ impl SQLite3Driver {
         let schema = get_sql_column(
             self.select_all(
                 &format!(
-                    "SELECT sql FROM {}.sqlite_schema WHERE name = ?",
+                    "SELECT sql FROM {}.sqlite_schema WHERE name = ? COLLATE NOCASE",
                     escape_sql_identifier(database)
                 ),
                 &[table_name.into()],
@@ -923,7 +966,7 @@ impl SQLite3Driver {
         ))
     }
 
-    pub(crate) fn query_schema(&self, query: &str) -> std::result::Result<(TableSchema, Vec<InvalidUTF8>), QueryError> {
+    pub fn query_schema(&self, query: &str) -> std::result::Result<(TableSchema, Vec<InvalidUTF8>), QueryError> {
         let mut warnings = vec![];
 
         let column_origins = column_origin(
@@ -947,7 +990,7 @@ impl SQLite3Driver {
 
         Ok((
             TableSchema {
-                type_: "custom query".to_owned(),
+                type_: TableType::CustomQuery,
                 name: None,
                 indexes: vec![],
                 triggers: vec![],
@@ -988,11 +1031,7 @@ impl SQLite3Driver {
                         .map(|(k, v)| {
                             (
                                 k,
-                                ColumnOriginAndIsRowId::new(
-                                    self.is_rowid(&v, &mut warnings)
-                                        .unwrap_or(false /* TODO: error handling */),
-                                    v,
-                                ),
+                                ColumnOriginAndIsRowId::new(self.is_rowid(&v, &mut warnings).unwrap_or(false), v),
                             )
                         })
                         .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
@@ -1002,7 +1041,7 @@ impl SQLite3Driver {
         ))
     }
 
-    pub(crate) fn load_extensions(&self, extensions: &[&str]) -> std::result::Result<(), String> {
+    pub fn load_extensions(&self, extensions: &[&str]) -> std::result::Result<(), String> {
         for ext in extensions {
             unsafe {
                 self.con
@@ -1047,7 +1086,7 @@ impl SQLite3Driver {
 
         match query {
             "EDITOR_PRAGMA database_label" => write_editor_pragma(w, (self.database_label(), vec![]), start_time),
-            "EDITOR_PRAGMA list_tables" => write_editor_pragma(w, self.list_tables()?, start_time),
+            "EDITOR_PRAGMA list_tables" => write_editor_pragma(w, self.list_tables(false)?, start_time),
             "EDITOR_PRAGMA list_foreign_keys" => write_editor_pragma(w, self.list_foreign_keys()?, start_time),
             "EDITOR_PRAGMA table_schema" => {
                 let (Some(Literal::String(database)), Some(Literal::String(table_name))) =
@@ -1146,21 +1185,21 @@ impl Drop for SQLite3Driver {
     }
 }
 
-pub(crate) fn escape_sql_identifier(ident: &str) -> String {
+pub fn escape_sql_identifier(ident: &str) -> String {
     if ident.contains("\x00") {
         panic!("Failed to quote the SQL identifier {ident:?} as it contains a NULL char");
     }
     format!("\"{}\"", ident.replace("\"", "\"\""))
 }
 
-pub(crate) fn is_sqlcipher(con: &rusqlite::Connection) -> bool {
+pub fn is_sqlcipher(con: &rusqlite::Connection) -> bool {
     con.pragma_query_value(None, "cipher_version", |row| match row.get_ref(0) {
         Ok(ValueRef::Text(_)) => Ok(true),
         _ => Ok(false),
     }) == Ok(true)
 }
 
-pub(crate) fn set_sqlcipher_key(con: &rusqlite::Connection, key: &str) -> std::result::Result<(), String> {
+pub fn set_sqlcipher_key(con: &rusqlite::Connection, key: &str) -> std::result::Result<(), String> {
     if is_sqlcipher(&con) {
         con.pragma_update(None, "key", key)
             .expect("Setting `PRAGMA key` failed.");

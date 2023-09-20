@@ -5,7 +5,7 @@ use crate::{
     sqlite3_driver::{write_value_ref_into_msgpack, InvalidUTF8, QueryError},
 };
 
-pub(super) mod cache {
+pub mod cache {
     use std::{cell::RefCell, collections::HashMap, rc::Rc, time::Instant};
 
     use crate::literal::Literal;
@@ -185,8 +185,14 @@ pub struct Pager {
     data_version: Option<i64>,
     pub config: PagerConfig,
 
-    /// for testing purpose
-    cache_hit_count: i64,
+    #[cfg(test)]
+    pub cache_hit_count: usize,
+
+    #[cfg(test)]
+    pub cache_clear_count: usize,
+
+    #[cfg(test)]
+    pub dequeue_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -225,23 +231,27 @@ impl Pager {
         Self {
             cache: cache::PagerCache::new(),
             data_version: None,
-            cache_hit_count: 0,
             config: PagerConfig::default(),
+            #[cfg(test)]
+            cache_hit_count: 0,
+            #[cfg(test)]
+            cache_clear_count: 0,
+            #[cfg(test)]
+            dequeue_count: 0,
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn data_version(&self) -> Option<i64> {
+    pub fn data_version(&self) -> Option<i64> {
         self.data_version
-    }
-
-    #[cfg(test)]
-    pub(crate) fn cache_hit_count(&self) -> i64 {
-        self.cache_hit_count
     }
 
     pub fn clear_cache(&mut self) {
         self.cache.clear();
+        #[cfg(test)]
+        {
+            self.cache_clear_count += 1;
+        }
     }
 
     pub fn total_cache_size_bytes(&self) -> u64 {
@@ -267,6 +277,10 @@ impl Pager {
             // TODO: dequeue in an entry
             while self.cache.total_size_bytes() > self.config.cache_limit_bytes {
                 self.cache.dequeue();
+                #[cfg(test)]
+                {
+                    self.dequeue_count += 1;
+                }
             }
         }
 
@@ -284,7 +298,10 @@ impl Pager {
 
         // cache hit
         if let Some(records) = cache_entry.get_range(offset, limit) {
-            self.cache_hit_count += 1;
+            #[cfg(test)]
+            {
+                self.cache_hit_count += 1;
+            }
             return Ok(Some(records));
         }
 

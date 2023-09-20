@@ -1,10 +1,8 @@
-use std::collections::HashSet;
-
-use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Word};
 
+use crate::keywords::START_OF_STATEMENT_KEYWORDS_UNSUPPORTED_BY_SQLPARSER;
 use crate::parse_cte::parse_cte;
 use crate::split_statements::{get_text_range, split_sqlite_statements};
 use crate::sqlite3_driver::escape_sql_identifier;
@@ -26,18 +24,13 @@ pub struct CodeLens {
     pub stmt_executed: String,
 }
 
-lazy_static! {
-    static ref KEYWORDS_UNSUPPORTED_BY_SQLPARSER: HashSet<&'static str> =
-        HashSet::from(["VACUUM", "ATTACH", "DETACH", "PRAGMA",]);
-}
-
 /// Returns a list of code lenses for the given SQL input.
 pub fn code_lens(sql: &str) -> Vec<CodeLens> {
     let mut code_lens: Vec<CodeLens> = vec![];
     let lines = sql.lines().collect::<Vec<_>>();
 
     // For each statement
-    for stmt in split_sqlite_statements(sql).unwrap_or(vec![]) {
+    for stmt in split_sqlite_statements(sql).unwrap_or_default() {
         if stmt.real_tokens.is_empty() {
             continue;
         }
@@ -102,7 +95,9 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
                         quote_style: None,
                         value,
                         keyword: Keyword::NoKeyword,
-                    } if KEYWORDS_UNSUPPORTED_BY_SQLPARSER.contains(value.to_uppercase().as_str()) => {
+                    } if START_OF_STATEMENT_KEYWORDS_UNSUPPORTED_BY_SQLPARSER
+                        .contains(value.to_uppercase().as_str()) =>
+                    {
                         kind = Some(CodeLensKind::Other);
                         break;
                     }

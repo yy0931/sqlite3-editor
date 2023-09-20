@@ -23,13 +23,19 @@ lazy_static! {
 #[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct PossibleCause {
     pub offset: usize,
-    pub length: usize,
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+pub enum Severity {
+    Warning,
+    Error,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Diagnostic {
     pub possible_causes: Vec<PossibleCause>,
     pub message: String,
+    pub severity: Severity,
 }
 
 /// Checks the syntax of a single SQL statement using a SQLite connection.
@@ -48,8 +54,8 @@ fn check_syntax_stmt(stmt_str: &str, conn: &mut rusqlite::Connection, offset_sta
                 return Some(Diagnostic {
                     possible_causes: vec![PossibleCause {
                         offset: offset_start + loose_byte_to_code_point_index(&sql, offset as usize) - "EXPLAIN ".len(),
-                        length: 1,
                     }],
+                    severity: Severity::Error,
                     message: msg,
                 });
             }
@@ -57,9 +63,9 @@ fn check_syntax_stmt(stmt_str: &str, conn: &mut rusqlite::Connection, offset_sta
                 return Some(Diagnostic {
                     possible_causes: vec![PossibleCause {
                         offset: offset_start + stmt_str.chars().count(),
-                        length: 1,
                     }],
                     message: msg,
+                    severity: Severity::Error,
                 });
             }
             _ => None,
@@ -78,9 +84,9 @@ pub fn check_syntax(sql: &str) -> rusqlite::Result<Vec<Diagnostic>> {
             errors.push(Diagnostic {
                 possible_causes: vec![PossibleCause {
                     offset: Into::<ZeroIndexedLocation>::into(Location { line, column: col }).offset_at(sql),
-                    length: 1,
                 }],
                 message,
+                severity: Severity::Error,
             });
             return Ok(errors);
         }

@@ -1,15 +1,23 @@
 use std::{
     fs::File,
-    io::{Seek, SeekFrom, Write},
+    io::{BufRead, Read, Seek, SeekFrom, Write},
     path::PathBuf,
 };
 
+mod completion;
+#[cfg(test)]
+mod completion_test;
+mod keywords;
+#[cfg(test)]
+mod keywords_test;
+#[cfg(test)]
+mod main_test;
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 mod column_origin;
 mod export;
 mod import;
-use crate::{request_type::Request, sqlite3_driver::read_msgpack_into_json};
+use crate::{request_type::Request, sqlite3_driver::read_msgpack_into_json, tokenize::ZeroIndexedLocation};
 mod check_syntax;
 #[cfg(test)]
 mod check_syntax_test;
@@ -147,20 +155,31 @@ impl From<(String,)> for Query {
     }
 }
 
-#[test]
-fn test_parse_query() {
-    let q: Query = serde_json::from_str("[\"foo\"]").unwrap();
-    assert_eq!(
-        q,
-        Query {
-            query: "foo".to_owned()
-        }
-    );
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(from = "(String, i64, i64)")]
+struct CompletionQuery {
+    sql: String,
+    line: i64,
+    column: i64,
 }
 
-fn main() {
-    // Parse the command line arguments
-    let args = Args::parse();
+impl From<(String, i64, i64)> for CompletionQuery {
+    fn from(value: (String, i64, i64)) -> Self {
+        Self {
+            sql: value.0,
+            line: value.1,
+            column: value.2,
+        }
+    }
+}
+
+fn cli<F, I, O, E>(args: Args, stdin: F, mut stdout: &mut O, mut stderr: &mut E) -> i32
+where
+    F: Fn() -> I + std::marker::Send + 'static,
+    I: Read + BufRead,
+    O: Write,
+    E: Write,
+{
     match args.command {
         Commands::Version {} => {
             // health check
@@ -172,8 +191,9 @@ fn main() {
                     .unwrap(),
                 "ok"
             );
-            println!("db-driver-rs {}", env!("CARGO_PKG_VERSION"));
-            println!(
+            writeln!(&mut stdout, "db-driver-rs {}", env!("CARGO_PKG_VERSION")).expect("writeln! failed.");
+            writeln!(
+                &mut stdout,
                 "{} {}",
                 if sqlite3_driver::is_sqlcipher(&con) {
                     "SQLCipher"
@@ -181,11 +201,13 @@ fn main() {
                     "SQLite"
                 },
                 rusqlite::version()
-            );
+            )
+            .expect("writeln! failed.");
 
             let conn = rusqlite::Connection::open_in_memory().unwrap();
 
-            println!(
+            writeln!(
+                &mut stdout,
                 "\nCompile options:\n{}",
                 conn.prepare("PRAGMA compile_options")
                     .unwrap()
@@ -197,7 +219,8 @@ fn main() {
                     .map(|line| "- ".to_owned() + &line)
                     .collect::<Vec<_>>()
                     .join("\n")
-            );
+            )
+            .expect("writeln! failed.");
         }
         Commands::FunctionList {} => {
             let mut functions = rusqlite::Connection::open_in_memory()
@@ -209,7 +232,7 @@ fn main() {
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .unwrap();
             functions.sort();
-            println!("{}", serde_json::to_string(&functions).unwrap());
+            writeln!(&mut stdout, "{}", serde_json::to_string(&functions).unwrap()).expect("writeln! failed.");
         }
         Commands::Server {
             database_filepath,
@@ -221,14 +244,32 @@ fn main() {
             let mut server =
                 sqlite3_driver::SQLite3Driver::connect(&database_filepath, false, &sql_cipher_key).unwrap();
 
-            // Start the main loop
-            let stdin = std::io::stdin();
-            loop {
-                let mut command = String::new();
+            let (command_sender, command_receiver) = std::sync::mpsc::channel::<String>();
+            let abort_signal = server.abort_signal();
+            let _thread = std::thread::spawn(move || {
+                let mut stdin = stdin();
+                loop {
+                    let mut command = String::new();
+                    match stdin.read_line(&mut command) {
+                        Err(_) => return,
+                        Ok(0) => return,
+                        _ => {}
+                    }
+                    command = command.trim().to_owned();
+                    if command == "abort" {
+                        abort_signal.store(true, std::sync::atomic::Ordering::SeqCst);
+                        continue;
+                    }
+                    if command_sender.send(command).is_err() {
+                        return;
+                    };
+                }
+            });
 
-                // Exit the loop if reading from stdin fails
-                if let Err(_) = stdin.read_line(&mut command) {
-                    return;
+            // Start the main loop
+            loop {
+                let Ok(command) = command_receiver.recv() else {
+                    return 0;
                 };
 
                 // Open request and response files
@@ -240,16 +281,16 @@ fn main() {
                     .open(&response_body_filepath)
                     .unwrap();
 
-                fn finish<W: Write>(w: &mut W, code: usize) {
+                fn finish<T: Write, U: Write>(mut stdout: &mut T, w: &mut U, code: usize) {
                     w.flush().expect("Failed to flush the writer.");
-                    println!("{code}");
-                    std::io::stdout().flush().unwrap();
+                    writeln!(&mut stdout, "{code}").expect("writeln! failed.");
+                    stdout.flush().unwrap();
                 }
 
                 // Handle the different commands
-                match command.trim() {
+                match command.as_str() {
                     // Terminate the loop
-                    "close" => return,
+                    "close" => return 0,
 
                     // Handle the request
                     "handle" => {
@@ -270,7 +311,7 @@ fn main() {
                                     .as_bytes(),
                                 )
                                 .expect("Failed to write an error message.");
-                                finish(&mut w, 400);
+                                finish(&mut stdout, &mut w, 400);
                                 continue;
                             }
                         };
@@ -280,10 +321,10 @@ fn main() {
                                 w.truncate_all();
                                 w.write(format!("{err}").as_bytes())
                                     .expect("Failed to write an error message.");
-                                finish(&mut w, 400);
+                                finish(&mut stdout, &mut w, 400);
                             }
                             Ok(_) => {
-                                finish(&mut w, 200);
+                                finish(&mut stdout, &mut w, 200);
                             }
                         }
                     }
@@ -306,10 +347,43 @@ fn main() {
                             w.flush().unwrap();
                             w.set_len(0).unwrap();
                             w.write_fmt(format_args!("{err:?}")).unwrap();
-                            finish(&mut w, 400);
+                            finish(&mut stdout, &mut w, 400);
                         } else {
                             w.flush().unwrap();
-                            finish(&mut w, 200);
+                            finish(&mut stdout, &mut w, 200);
+                        }
+                    }
+
+                    // Completion
+                    "completion" => {
+                        // Handle the command
+                        if let Err(err) = rmp_serde::from_read(r).map(
+                            |CompletionQuery { sql, line, column }: CompletionQuery| -> anyhow::Result<()> {
+                                use rmp_serde::encode::write_named;
+                                match command.trim() {
+                                    "completion" => write_named(
+                                        &mut w,
+                                        &completion::complete(
+                                            &server,
+                                            &sql,
+                                            &ZeroIndexedLocation {
+                                                line: line as usize,
+                                                column: column as usize,
+                                            },
+                                        ),
+                                    )?,
+                                    _ => panic!("Unexpected command {:?}", command),
+                                };
+                                Ok(())
+                            },
+                        ) {
+                            w.flush().unwrap();
+                            w.set_len(0).unwrap();
+                            w.write_fmt(format_args!("{err:?}")).unwrap();
+                            finish(&mut stdout, &mut w, 400);
+                        } else {
+                            w.flush().unwrap();
+                            finish(&mut stdout, &mut w, 200);
                         }
                     }
 
@@ -334,8 +408,8 @@ fn main() {
                 &csv_delimiter,
                 output_file,
             ) {
-                eprintln!("{}", err);
-                std::process::exit(1);
+                writeln!(&mut stderr, "{}", err).expect("writeln! failed.");
+                return 1;
             }
         }
         Commands::Import {
@@ -354,10 +428,25 @@ fn main() {
                 &csv_delimiter,
                 input_file,
             ) {
-                eprintln!("{}", err);
-                std::process::exit(1);
+                writeln!(&mut stderr, "{}", err).expect("writeln! failed.");
+                return 1;
             }
         }
+    }
+
+    0
+}
+
+fn main() {
+    // Parse the command line arguments
+    let code = cli(
+        Args::parse(),
+        || std::io::stdin().lock(),
+        &mut std::io::stdout(),
+        &mut std::io::stderr(),
+    );
+    if code != 0 {
+        std::process::exit(code);
     }
 }
 

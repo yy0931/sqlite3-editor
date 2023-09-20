@@ -20,11 +20,11 @@ fn test_repeat_same_query() -> () {
 
     // Select 1
     let result1 = pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap();
-    assert_eq!(pager.cache_hit_count(), 0);
+    assert_eq!(pager.cache_hit_count, 0);
 
     // Select 2
     let result2 = pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap();
-    assert_eq!(pager.cache_hit_count(), 1);
+    assert_eq!(pager.cache_hit_count, 1);
 
     // Compare records
     assert_eq!(&result1, &result2);
@@ -58,14 +58,14 @@ fn test_backward_cache() {
         .query(&mut conn, query, &[3.into(), 3.into()], |_| {})
         .unwrap()
         .unwrap();
-    assert_eq!(pager.cache_hit_count(), 0);
+    assert_eq!(pager.cache_hit_count, 0);
 
     // Select 2
     let result2 = pager
         .query(&mut conn, query, &[3.into(), 0.into()], |_| {})
         .unwrap()
         .unwrap();
-    assert_eq!(pager.cache_hit_count(), 1);
+    assert_eq!(pager.cache_hit_count, 1);
 
     assert_eq!(
         result2,
@@ -75,6 +75,36 @@ fn test_backward_cache() {
             columns: vec!["x".into(), "y".into()],
         }
     );
+}
+
+#[test]
+fn test_cache_limit_bytes() {
+    // Setup
+    let mut conn = rusqlite::Connection::open_in_memory().unwrap();
+    conn.execute("CREATE TABLE t(x, y)", ()).unwrap();
+    for i in (0..18).step_by(2) {
+        conn.execute("INSERT INTO t VALUES (?, ?)", (i, i + 1)).unwrap();
+    }
+    let mut pager = Pager::new();
+    pager.config.slow_query_threshold = Duration::ZERO;
+    pager.config.cache_time_limit_relative_to_queried_range = f64::MAX;
+    pager.config.cache_limit_bytes = 0;
+
+    let query = "SELECT * FROM t LIMIT ? OFFSET ?";
+
+    // Select 1
+    pager
+        .query(&mut conn, query, &[3.into(), 3.into()], |_| {})
+        .unwrap()
+        .unwrap();
+    assert_eq!(pager.dequeue_count, 0);
+
+    // Select 2
+    pager
+        .query(&mut conn, query, &[3.into(), 0.into()], |_| {})
+        .unwrap()
+        .unwrap();
+    assert_eq!(pager.dequeue_count, 1);
 }
 
 #[test]

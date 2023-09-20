@@ -9,6 +9,18 @@ pub struct ZeroIndexedLocation {
     pub column: usize,
 }
 
+impl std::cmp::Ord for ZeroIndexedLocation {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.line.cmp(&other.line).then_with(|| self.column.cmp(&other.column))
+    }
+}
+
+impl std::cmp::PartialOrd for ZeroIndexedLocation {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl ZeroIndexedLocation {
     /// Calculates the character offset of a given location in a string.
     ///

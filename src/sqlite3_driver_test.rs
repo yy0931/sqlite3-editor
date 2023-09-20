@@ -4,7 +4,7 @@ use crate::{
     literal::Literal,
     request_type::QueryMode,
     sqlite3_driver::{
-        from_utf8_lossy, read_msgpack_into_json, ExecMode, ForeignKey, InvalidUTF8, SQLite3Driver, Table,
+        from_utf8_lossy, read_msgpack_into_json, ExecMode, ForeignKey, InvalidUTF8, SQLite3Driver, Table, TableType,
     },
 };
 
@@ -93,7 +93,7 @@ mod test_table_schema {
 
     use crate::sqlite3_driver::{
         ColumnOriginAndIsRowId, DfltValue, ExecMode, IndexColumn, SQLite3Driver, TableSchema, TableSchemaColumn,
-        TableSchemaColumnForeignKey, TableSchemaIndex, TableSchemaTriggers,
+        TableSchemaColumnForeignKey, TableSchemaIndex, TableSchemaTriggers, TableType,
     };
 
     #[test]
@@ -112,7 +112,7 @@ mod test_table_schema {
             db.table_schema("main", "t").unwrap().0,
             TableSchema {
                 name: Some("t".to_owned()),
-                type_: "table".to_owned(),
+                type_: TableType::Table,
                 schema: Some("CREATE TABLE t(x INTEGER PRIMARY KEY NOT NULL) STRICT".to_owned()),
                 has_rowid_column: true,
                 strict: true,
@@ -153,7 +153,7 @@ mod test_table_schema {
             db.table_schema("main", "u").unwrap().0,
             TableSchema {
                 name: Some("u".to_owned()),
-                type_: "view".to_owned(),
+                type_: TableType::View,
                 schema: Some("CREATE VIEW u AS SELECT x as y FROM t".to_owned()),
                 has_rowid_column: false,
                 strict: false,
@@ -365,7 +365,7 @@ mod test_table_schema {
             db.query_schema("SELECT 1, x FROM t").unwrap().0,
             TableSchema {
                 name: None,
-                type_: "custom query".to_owned(),
+                type_: TableType::CustomQuery,
                 schema: None,
                 has_rowid_column: false,
                 strict: false,
@@ -709,22 +709,22 @@ fn test_list_tables() {
     )
     .unwrap();
     assert_eq!(
-        db.list_tables().unwrap().0.into_iter().collect::<HashSet<Table>>(),
+        db.list_tables(false).unwrap().0.into_iter().collect::<HashSet<Table>>(),
         HashSet::from([
             Table {
                 database: "main".to_owned(),
                 name: "t1".to_owned(),
-                type_: "table".to_owned()
+                type_: TableType::Table,
             },
             Table {
                 database: "main".to_owned(),
                 name: "t2".to_owned(),
-                type_: "table".to_owned()
+                type_: TableType::Table,
             },
             Table {
                 database: "temp".to_owned(),
                 name: "t3".to_owned(),
-                type_: "table".to_owned()
+                type_: TableType::Table,
             },
         ]),
     );
@@ -1058,12 +1058,12 @@ fn test_invalid_utf8_table_name() {
     let query = unsafe { String::from_utf8_unchecked(query) };
     db.execute(&query, &[], ExecMode::ReadWrite, &mut warnings).unwrap();
     assert_eq!(
-        db.list_tables().unwrap(),
+        db.list_tables(false).unwrap(),
         (
             vec![Table {
                 database: "main".to_owned(),
                 name: "a�".to_owned(),
-                type_: "table".to_owned(),
+                type_: TableType::Table,
             }],
             vec![InvalidUTF8 {
                 text_lossy: "a�".to_owned(),
@@ -1094,4 +1094,50 @@ fn test_sqlcipher() {
         db.execute(&"SELECT * FROM t", &[], ExecMode::ReadWrite, &mut vec![])
             .unwrap();
     }
+}
+
+#[test]
+fn test_cache_clear() {
+    let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+
+    // initialize the data_version
+    db.handle(
+        &mut Cursor::new(Vec::<u8>::new()),
+        "SELECT ?",
+        &[1.into()],
+        QueryMode::ReadOnly,
+    )
+    .unwrap();
+
+    let count = db.pager().cache_clear_count;
+
+    // readonly
+    db.handle(
+        &mut Cursor::new(Vec::<u8>::new()),
+        "SELECT ?",
+        &[1.into()],
+        QueryMode::ReadOnly,
+    )
+    .unwrap();
+    assert_eq!(db.pager().cache_clear_count, count);
+
+    // readwrite
+    db.handle(
+        &mut Cursor::new(Vec::<u8>::new()),
+        "CREATE TABLE t(x)",
+        &[],
+        QueryMode::ReadWrite,
+    )
+    .unwrap();
+    assert_eq!(db.pager().cache_clear_count, count + 1);
+
+    // script
+    db.handle(
+        &mut Cursor::new(Vec::<u8>::new()),
+        "CREATE TABLE u(x)",
+        &[],
+        QueryMode::Script,
+    )
+    .unwrap();
+    assert_eq!(db.pager().cache_clear_count, count + 2);
 }
