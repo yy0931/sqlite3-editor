@@ -273,3 +273,16 @@ fn test_group() {
         ]
     );
 }
+
+#[test]
+fn test1() {
+    let mut db = setup();
+    for stmt in &[r#"CREATE TABLE t1(x);"#, r#"CREATE TABLE t2(y);"#] {
+        db.execute(stmt, &[], ExecMode::ReadWrite, &mut vec![]).unwrap();
+    }
+    let mut result = complete(&db, r#"SELECT * FROM t1 A, JOIN t2 B WHERE t1.x = t2."#, &loc(0, 46));
+    assert_eq!(result.last_tokens.pop_back().unwrap(), TokenType::Period);
+    assert_eq!(result.last_tokens.pop_back().unwrap(), TokenType::TableIdent);
+    assert_eq!(result.last_schema_period, None);
+    assert_eq!(result.last_table_period, Some("t2".to_owned()));
+}

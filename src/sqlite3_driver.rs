@@ -182,6 +182,7 @@ fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> std::result::Result
     Ok(matched)
 }
 
+// TODO: test LoadableSQLiteExtensionNotAvailable
 #[derive(Debug)]
 struct LoadableSQLiteExtensionNotAvailable {}
 
@@ -794,7 +795,11 @@ impl SQLite3Driver {
                     .map(|(k, v)| {
                         (
                             k,
-                            ColumnOriginAndIsRowId::new(self.is_rowid(&v, &mut warnings).unwrap_or(false), v),
+                            ColumnOriginAndIsRowId::new(
+                                self.is_rowid(&v, &mut warnings)
+                                    .unwrap_or(false /* TODO: error handling */),
+                                v,
+                            ),
                         )
                     })
                     .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
@@ -1031,7 +1036,11 @@ impl SQLite3Driver {
                         .map(|(k, v)| {
                             (
                                 k,
-                                ColumnOriginAndIsRowId::new(self.is_rowid(&v, &mut warnings).unwrap_or(false), v),
+                                ColumnOriginAndIsRowId::new(
+                                    self.is_rowid(&v, &mut warnings)
+                                        .unwrap_or(false /* TODO: error handling */),
+                                    v,
+                                ),
                             )
                         })
                         .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),

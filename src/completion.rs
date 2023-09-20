@@ -173,6 +173,9 @@ pub enum TokenType {
     ALTER,
     RENAME,
     COLUMN,
+    SELECT,
+    WHERE,
+    DISTINCT,
 
     // Operators
     #[serde(rename = "(")]
@@ -185,6 +188,10 @@ pub enum TokenType {
     SchemaIdent,
     #[serde(rename = "<table-name>")]
     TableIdent,
+
+    // Literals
+    #[serde(rename = "<literal>")]
+    Literal,
 
     // Group
     #[serde(rename = "(...)")]
@@ -235,7 +242,7 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
     let mut last_token_before_position: Option<usize> = None;
     let mut last_tokens = VecDeque::<TokenType>::new();
     let mut last_schema_period = None;
-    let mut last_table_period: Option<String> = None;
+    let mut last_table_period: Option<Option<String>> = None;
 
     if let Some(stmt) = stmt {
         let mut expect_followed_by_alias: Option<AliasableToken> = None;
@@ -312,20 +319,24 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
                                     last_schema_period = Some(value.to_owned());
                                     TokenType::SchemaIdent
                                 } else {
-                                    last_table_period = if let Some((_, target)) = as_clauses_lower.get(&value_lower) {
-                                        match target {
-                                            AliasableToken::Ident(ident)
-                                                if table_name_lowered_to_info.contains_key(&ident.to_lowercase()) =>
-                                            {
-                                                Some(ident.to_owned())
-                                            }
-                                            _ => None,
-                                        }
-                                    } else if cte_names.iter().any(|c| c.to_lowercase() == value_lower) {
-                                        None
-                                    } else {
-                                        Some(value.to_owned())
-                                    };
+                                    if last_table_period.is_none() {
+                                        last_table_period =
+                                            Some(if let Some((_, target)) = as_clauses_lower.get(&value_lower) {
+                                                match target {
+                                                    AliasableToken::Ident(ident)
+                                                        if table_name_lowered_to_info
+                                                            .contains_key(&ident.to_lowercase()) =>
+                                                    {
+                                                        Some(ident.to_owned())
+                                                    }
+                                                    _ => None,
+                                                }
+                                            } else if cte_names.iter().any(|c| c.to_lowercase() == value_lower) {
+                                                None
+                                            } else {
+                                                Some(value.to_owned())
+                                            });
+                                    }
                                     TokenType::TableIdent
                                 }
                             }
@@ -347,6 +358,12 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
                                 Keyword::ALTER => TokenType::ALTER,
                                 Keyword::RENAME => TokenType::RENAME,
                                 Keyword::COLUMN => TokenType::COLUMN,
+                                Keyword::SELECT => TokenType::SELECT,
+                                Keyword::WHERE => TokenType::WHERE,
+                                Keyword::DISTINCT => TokenType::DISTINCT,
+
+                                // TODO: NULL is not literal when in "column NOT NULL"
+                                Keyword::TRUE | Keyword::FALSE => TokenType::Literal,
 
                                 // TEMP is a keyword but "TEMP" in "TEMP." is a schema name
                                 Keyword::TEMP if last_tokens.back() == Some(&TokenType::Period) => {
@@ -362,6 +379,16 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
                                 TokenType::Group
                             }
                             Token::Period => TokenType::Period,
+                            Token::Number(_, _)
+                            | Token::SingleQuotedString(_)
+                            | Token::DoubleQuotedString(_)
+                            | Token::DollarQuotedString(_)
+                            | Token::SingleQuotedByteStringLiteral(_)
+                            | Token::DoubleQuotedByteStringLiteral(_)
+                            | Token::RawStringLiteral(_)
+                            | Token::NationalStringLiteral(_)
+                            | Token::EscapedStringLiteral(_)
+                            | Token::HexStringLiteral(_) => TokenType::Literal,
                             _ => TokenType::Other,
                         });
                     }
@@ -416,6 +443,6 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
             .collect::<HashSet<_>>(),
         last_tokens,
         last_schema_period,
-        last_table_period,
+        last_table_period: last_table_period.flatten(),
     }
 }
