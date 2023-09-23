@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{rc::Rc, time::Duration};
 
 use crate::{
     literal::Literal,
@@ -17,7 +17,7 @@ pub mod cache {
         pub query: String,
         pub params: Vec<Literal>,
         pub records: HashMap<i64, Vec<u8>>,
-        pub columns: Option<Vec<String>>,
+        pub columns: Option<Rc<Vec<String>>>,
         /// None means unknown
         pub num_records: Option<i64>,
         pub last_accessed: Instant,
@@ -51,7 +51,7 @@ pub mod cache {
                 query,
                 params,
                 records,
-                columns,
+                columns: columns.map(|v| Rc::new(v)),
                 num_records,
                 last_accessed: std::time::Instant::now(),
             }
@@ -96,7 +96,7 @@ pub mod cache {
             if !self.has_range(offset, limit) {
                 return None;
             }
-            let columns = self.columns.as_ref().unwrap(); // columns should be Some when has_range() == true
+            let columns = Rc::clone(self.columns.as_ref().unwrap()); // columns should be Some when has_range() == true
             let end = self.add_limit_to_offset(offset, limit);
 
             // Decode msgpack
@@ -118,7 +118,7 @@ pub mod cache {
             return Some(Records {
                 col_buf,
                 n_rows: end - offset,
-                columns: columns.clone(),
+                columns,
             });
         }
     }
@@ -223,7 +223,7 @@ fn pragma_data_version(conn: &rusqlite::Connection) -> Result<i64, QueryError> {
 pub struct Records {
     pub col_buf: Vec<Vec<u8>>,
     pub n_rows: i64,
-    pub columns: Vec<String>,
+    pub columns: Rc<Vec<String>>,
 }
 
 impl Pager {
@@ -289,9 +289,10 @@ impl Pager {
             return Ok(None);
         }
 
-        let (Literal::I64(limit), Literal::I64(offset)) = (params[len - 2].clone(), params[len - 1].clone()) else {
+        let (Literal::I64(limit), Literal::I64(offset)) = (&params[len - 2], &params[len - 1]) else {
             return Ok(None);
         };
+        let (limit, offset) = (*limit, *offset);
 
         let cache_entry = self.cache.entry(query, &params);
         let mut cache_entry = cache_entry.borrow_mut();
@@ -445,7 +446,7 @@ impl Pager {
         Ok(Some(Records {
             col_buf,
             n_rows,
-            columns,
+            columns: Rc::new(columns),
         }))
     }
 }

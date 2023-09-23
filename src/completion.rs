@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    rc::Rc,
+};
 
 use crate::{
     keywords::KEYWORDS_UNSUPPORTED_BY_SQLPARSER,
@@ -15,23 +18,23 @@ use sqlparser::{
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct TableCompletion {
-    pub schema: String,
-    pub table: String,
+    pub schema: Rc<String>,
+    pub table: Rc<String>,
     #[serde(rename = "type")]
     pub type_: TableType,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct ColumnCompletion {
-    pub schema: String,
-    pub table: String,
+    pub schema: Rc<String>,
+    pub table: Rc<String>,
     pub column: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Completions {
     pub table_names: HashSet<TableCompletion>,
-    pub schema_names: HashSet<String>,
+    pub schema_names: HashSet<Rc<String>>,
     pub columns_in_tables_that_are_referenced_in_source: HashSet<ColumnCompletion>,
     pub cte_names: HashSet<String>,
     pub as_clauses: HashSet<String>,
@@ -230,8 +233,8 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
 
     let schema_names = table_list
         .iter()
-        .map(|t| t.database.clone())
-        .collect::<HashSet<String>>();
+        .map(|t| Rc::clone(&t.database))
+        .collect::<HashSet<_>>();
     let schema_names_lowered = schema_names.iter().map(|s| s.to_lowercase()).collect::<HashSet<_>>();
 
     let mut referenced_tables = HashSet::new();
@@ -415,8 +418,8 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
                 if let Ok((table_info, _)) = conn.table_schema(&table.database, &table.name) {
                     for c in table_info.columns {
                         columns_in_tables_that_are_referenced_in_source.insert(ColumnCompletion {
-                            schema: table.database.clone(),
-                            table: table.name.clone(),
+                            schema: Rc::clone(&table.database),
+                            table: Rc::clone(&table.name),
                             column: c.name,
                         });
                     }
@@ -429,8 +432,8 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
         table_names: table_list
             .into_iter()
             .map(|t| TableCompletion {
-                schema: t.database.clone(),
-                table: t.name,
+                schema: Rc::clone(&t.database),
+                table: Rc::clone(&t.name),
                 type_: t.type_,
             })
             .collect::<HashSet<_>>(),

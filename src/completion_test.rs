@@ -1,4 +1,7 @@
-use std::collections::{HashSet, VecDeque};
+use std::{
+    collections::{HashSet, VecDeque},
+    rc::Rc,
+};
 
 use crate::{
     completion::{complete, ColumnCompletion, Completions, TableCompletion, TokenType},
@@ -37,25 +40,25 @@ fn test_simple() {
         Completions {
             table_names: HashSet::from([
                 TableCompletion {
-                    schema: "main".to_owned(),
-                    table: "sqlite_schema".to_owned(),
+                    schema: Rc::new("main".to_owned()),
+                    table: Rc::new("sqlite_schema".to_owned()),
                     type_: TableType::Table,
                 },
                 TableCompletion {
-                    schema: "temp".to_owned(),
-                    table: "sqlite_temp_schema".to_owned(),
+                    schema: Rc::new("temp".to_owned()),
+                    table: Rc::new("sqlite_temp_schema".to_owned()),
                     type_: TableType::Table,
                 },
                 TableCompletion {
-                    schema: "main".to_owned(),
-                    table: "table_name".to_owned(),
+                    schema: Rc::new("main".to_owned()),
+                    table: Rc::new("table_name".to_owned()),
                     type_: TableType::Table,
                 },
             ]),
-            schema_names: hash_set(&["main", "temp"]),
+            schema_names: HashSet::from([Rc::new("main".to_owned()), Rc::new("temp".to_owned())]),
             columns_in_tables_that_are_referenced_in_source: HashSet::from([ColumnCompletion {
-                schema: "main".to_owned(),
-                table: "table_name".to_owned(),
+                schema: Rc::new("main".to_owned()),
+                table: Rc::new("table_name".to_owned()),
                 column: "column_name".to_owned(),
             }]),
             cte_names: hash_set(&["cte_ident"]),
@@ -253,8 +256,8 @@ fn test_nocase() {
         complete(&setup(), r#"SELECT "Table_name". FROM "Table_name""#, &loc(0, 20))
             .columns_in_tables_that_are_referenced_in_source,
         HashSet::from([ColumnCompletion {
-            schema: "main".to_owned(),
-            table: "table_name".to_owned(),
+            schema: Rc::new("main".to_owned()),
+            table: Rc::new("table_name".to_owned()),
             column: "column_name".to_owned(),
         }])
     );

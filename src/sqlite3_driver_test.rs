@@ -1,4 +1,4 @@
-use std::{collections::HashSet, io::Cursor, vec};
+use std::{collections::HashSet, io::Cursor, rc::Rc, vec};
 
 use crate::{
     literal::Literal,
@@ -89,7 +89,7 @@ SELECT * FROM temp_table;
 
 #[cfg(test)]
 mod test_table_schema {
-    use std::collections::HashMap;
+    use std::{collections::HashMap, rc::Rc};
 
     use crate::sqlite3_driver::{
         ColumnOriginAndIsRowId, DfltValue, ExecMode, IndexColumn, SQLite3Driver, TableSchema, TableSchemaColumn,
@@ -124,7 +124,7 @@ mod test_table_schema {
                     type_: "INTEGER".to_owned(),
                     pk: true,
                     auto_increment: false,
-                    foreign_keys: vec![],
+                    foreign_keys: Rc::new(vec![]),
                     hidden: 0,
                 }],
                 indexes: vec![],
@@ -165,7 +165,7 @@ mod test_table_schema {
                     type_: "".to_owned(),
                     pk: false,
                     auto_increment: false,
-                    foreign_keys: vec![],
+                    foreign_keys: Rc::new(vec![]),
                     hidden: 0,
                 }],
                 indexes: vec![],
@@ -378,7 +378,7 @@ mod test_table_schema {
                         type_: "".to_owned(),
                         pk: false,
                         auto_increment: false,
-                        foreign_keys: vec![],
+                        foreign_keys: Rc::new(vec![]),
                         hidden: 0,
                     },
                     TableSchemaColumn {
@@ -389,7 +389,7 @@ mod test_table_schema {
                         type_: "".to_owned(),
                         pk: false,
                         auto_increment: false,
-                        foreign_keys: vec![],
+                        foreign_keys: Rc::new(vec![]),
                         hidden: 0,
                     }
                 ],
@@ -435,7 +435,7 @@ mod test_table_schema {
     }
 
     mod test_indirect_foreign_key {
-        use std::collections::HashMap;
+        use std::{collections::HashMap, rc::Rc};
 
         use crate::sqlite3_driver::{ColumnOriginAndIsRowId, ExecMode, SQLite3Driver, TableSchemaColumnForeignKey};
 
@@ -480,7 +480,7 @@ mod test_table_schema {
             assert_eq!(schema.columns[0].name, "z");
             assert_eq!(
                 schema.columns[0].foreign_keys,
-                vec![TableSchemaColumnForeignKey {
+                Rc::new(vec![TableSchemaColumnForeignKey {
                     id: 0,
                     seq: 0,
                     table: "t1".to_owned(),
@@ -488,7 +488,7 @@ mod test_table_schema {
                     on_update: "NO ACTION".to_owned(),
                     on_delete: "NO ACTION".to_owned(),
                     match_: "NONE".to_owned(),
-                }]
+                }])
             );
         }
 
@@ -533,7 +533,7 @@ mod test_table_schema {
             assert_eq!(schema.columns[0].name, "z");
             assert_eq!(
                 schema.columns[0].foreign_keys,
-                vec![TableSchemaColumnForeignKey {
+                Rc::new(vec![TableSchemaColumnForeignKey {
                     id: 0,
                     seq: 0,
                     table: "t1".to_owned(),
@@ -541,7 +541,7 @@ mod test_table_schema {
                     on_update: "NO ACTION".to_owned(),
                     on_delete: "NO ACTION".to_owned(),
                     match_: "NONE".to_owned(),
-                }]
+                }])
             );
         }
     }
@@ -712,18 +712,18 @@ fn test_list_tables() {
         db.list_tables(false).unwrap().0.into_iter().collect::<HashSet<Table>>(),
         HashSet::from([
             Table {
-                database: "main".to_owned(),
-                name: "t1".to_owned(),
+                database: Rc::new("main".to_owned()),
+                name: Rc::new("t1".to_owned()),
                 type_: TableType::Table,
             },
             Table {
-                database: "main".to_owned(),
-                name: "t2".to_owned(),
+                database: Rc::new("main".to_owned()),
+                name: Rc::new("t2".to_owned()),
                 type_: TableType::Table,
             },
             Table {
-                database: "temp".to_owned(),
-                name: "t3".to_owned(),
+                database: Rc::new("temp".to_owned()),
+                name: Rc::new("t3".to_owned()),
                 type_: TableType::Table,
             },
         ]),
@@ -1061,8 +1061,8 @@ fn test_invalid_utf8_table_name() {
         db.list_tables(false).unwrap(),
         (
             vec![Table {
-                database: "main".to_owned(),
-                name: "a�".to_owned(),
+                database: Rc::new("main".to_owned()),
+                name: Rc::new("a�".to_owned()),
                 type_: TableType::Table,
             }],
             vec![InvalidUTF8 {

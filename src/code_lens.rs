@@ -40,14 +40,14 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
         if let Some(cte) = cte {
             for entry in cte.entries {
                 let with_clause = get_text_range(&lines, &stmt.real_start, &cte.body_start);
+                let select_stmt = format!(
+                    "{}SELECT * FROM {}",
+                    if with_clause.ends_with(" ") { "" } else { " " },
+                    escape_sql_identifier(&get_text_range(&lines, &entry.ident_start, &entry.ident_end))
+                );
                 code_lens.push(CodeLens {
                     kind: CodeLensKind::Select,
-                    stmt_executed: with_clause.clone()
-                        + &format!(
-                            "{}SELECT * FROM {}",
-                            if with_clause.ends_with(" ") { "" } else { " " },
-                            escape_sql_identifier(&get_text_range(&lines, &entry.ident_start, &entry.ident_end))
-                        ),
+                    stmt_executed: with_clause + &select_stmt,
                     start: entry.ident_start,
                     end: entry.ident_end,
                 })

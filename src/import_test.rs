@@ -178,7 +178,7 @@ fn test_import_json() {
         FileFormat::JSON,
         "test",
         ",",
-        Some(tmp_json_file_path.clone())
+        Some(tmp_json_file_path)
     )
     .is_ok());
 
@@ -217,7 +217,7 @@ fn test_empty_json() {
         FileFormat::JSON,
         "test",
         ",",
-        Some(tmp_json_file_path.clone())
+        Some(tmp_json_file_path)
     )
     .unwrap_err()
     .to_string()
@@ -242,7 +242,7 @@ fn test_empty_csv() {
         FileFormat::CSV,
         "test",
         ",",
-        Some(tmp_csv_file_path.clone())
+        Some(tmp_csv_file_path)
     )
     .unwrap_err()
     .to_string()

@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{rc::Rc, time::Duration};
 
 use tempfile::NamedTempFile;
 
@@ -36,7 +36,7 @@ fn test_repeat_same_query() -> () {
         ]
     );
     assert_eq!(result1.n_rows, 2);
-    assert_eq!(result1.columns, vec!["x", "y"]);
+    assert_eq!(result1.columns, Rc::new(vec!["x".to_owned(), "y".to_owned()]));
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn test_backward_cache() {
         Records {
             col_buf: vec![vec![0, 2, 4], vec![1, 3, 5],],
             n_rows: 3,
-            columns: vec!["x".into(), "y".into()],
+            columns: Rc::new(vec!["x".into(), "y".into()]),
         }
     );
 }

@@ -12,6 +12,7 @@ use std::{
     collections::HashMap,
     io::Write,
     mem::ManuallyDrop,
+    rc::Rc,
     sync::{atomic::AtomicBool, Arc, Mutex},
 };
 
@@ -166,19 +167,19 @@ fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> std::result::Result
     } else {
         format!("{flags}{pattern}")
     };
-    let regex = {
-        let cache_value = REGEX_CACHE.lock().unwrap();
-        if cache_value.0 == pattern {
-            cache_value.1.clone()
-        } else {
-            match regex::Regex::new(&pattern) {
-                Ok(v) => v,
-                Err(_) => return Ok(0),
-            }
+
+    {
+        let regex_cached = REGEX_CACHE.lock().unwrap();
+        if regex_cached.0 == pattern {
+            return Ok(if regex_cached.1.is_match(&text) { 1 } else { 0 });
         }
-    }; // drop lock
-    let matched = if regex.is_match(&text) { 1 } else { 0 };
-    *REGEX_CACHE.lock().unwrap() = (pattern, regex);
+    }
+
+    let Ok(v) = regex::Regex::new(&pattern) else {
+        return Ok(0);
+    };
+    let matched = if v.is_match(&text) { 1 } else { 0 };
+    *REGEX_CACHE.lock().unwrap() = (pattern, v);
     Ok(matched)
 }
 
@@ -228,7 +229,7 @@ pub struct TableSchemaColumn {
     #[serde(rename = "autoIncrement")]
     pub auto_increment: bool,
     #[serde(rename = "foreignKeys")]
-    pub foreign_keys: Vec<TableSchemaColumnForeignKey>,
+    pub foreign_keys: Rc<Vec<TableSchemaColumnForeignKey>>,
     /** 1: columns in virtual tables, 2: dynamic generated columns, 3: stored generated columns */
     pub hidden: i64,
 }
@@ -329,8 +330,8 @@ impl From<&str> for TableType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Table {
-    pub database: String,
-    pub name: String,
+    pub database: Rc<String>,
+    pub name: Rc<String>,
     #[serde(rename = "type")]
     pub type_: TableType,
 }
@@ -368,7 +369,7 @@ pub fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUT
     Ok(())
 }
 
-type ForeignKeyList = HashMap</* column */ String, Vec<TableSchemaColumnForeignKey>>;
+type ForeignKeyList = HashMap</* column */ String, Rc<Vec<TableSchemaColumnForeignKey>>>;
 
 pub fn connect_immutable(database_filepath: &str) -> std::result::Result<rusqlite::Connection, String> {
     // Connect to the database with `?immutable=1` and the readonly flag
@@ -538,7 +539,7 @@ impl SQLite3Driver {
             }
             Records {
                 col_buf,
-                columns,
+                columns: Rc::new(columns),
                 n_rows,
             }
         };
@@ -628,8 +629,12 @@ impl SQLite3Driver {
             &[],
             |row| {
                 Ok(Table {
-                    database: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.schema")))?,
-                    name: get_string(row, 1, |err| warnings.push(err.with("pragma_table_list.name")))?,
+                    database: Rc::new(get_string(row, 0, |err| {
+                        warnings.push(err.with("pragma_table_list.schema"))
+                    })?),
+                    name: Rc::new(get_string(row, 1, |err| {
+                        warnings.push(err.with("pragma_table_list.name"))
+                    })?),
                     type_: TableType::from(
                         get_string(row, 2, |err| {
                             warnings.push(err.with("pragma_table_list.type (list_tables)"))
@@ -661,7 +666,7 @@ impl SQLite3Driver {
             return Ok(v.clone());
         }
 
-        let mut result = HashMap::new();
+        let mut result = HashMap::<String, Vec<TableSchemaColumnForeignKey>>::new();
         self.select_all(
             &format!(
                 "PRAGMA {}.foreign_key_list({})",
@@ -674,7 +679,7 @@ impl SQLite3Driver {
                 let to = get_option_string(row, 4, |err| warnings.push(err.with("foreign_key_list.to")))?;
                 result
                     .entry(from.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(TableSchemaColumnForeignKey {
                         id: row.get::<_, i64>(0)?,
                         seq: row.get::<_, i64>(1)?,
@@ -688,6 +693,10 @@ impl SQLite3Driver {
             },
         )?;
 
+        let result = result
+            .into_iter()
+            .map(|(k, v)| (k, Rc::new(v)))
+            .collect::<HashMap<_, _>>();
         cache.insert(cache_key, result.clone());
         Ok(result)
     }
@@ -775,9 +784,11 @@ impl SQLite3Driver {
 
         // Select pragma_foreign_key_list
         let mut foreign_key_list_cache = HashMap::new();
-        let mut foreign_keys = self.foreign_keys(database, table_name, &mut warnings, &mut foreign_key_list_cache)?;
 
-        let column_origins = if table_type == TableType::View {
+        let (column_origins, foreign_keys): (
+            Option<HashMap<String, ColumnOriginAndIsRowId>>,
+            HashMap<String, Rc<Vec<TableSchemaColumnForeignKey>>>,
+        ) = if table_type == TableType::View {
             let column_origins = column_origin(
                 unsafe { self.con.handle() },
                 &format!("SELECT * FROM {} LIMIT 0", escape_sql_identifier(table_name)),
@@ -792,34 +803,41 @@ impl SQLite3Driver {
             // ```
             // column_origins = {"z": ("main", "t2", "y")}
             // origin_fk = { from: "y", to: "x", table: "t1" }
+            let mut foreign_keys = HashMap::<String, Vec<TableSchemaColumnForeignKey>>::new();
             for (from, to) in &column_origins {
                 if let Some(origin_fk) = self
                     .foreign_keys(&to.database, &to.table, &mut warnings, &mut foreign_key_list_cache)?
                     .remove(&to.column)
                 {
-                    foreign_keys
-                        .entry(from.to_owned())
-                        .or_insert_with(Vec::new)
-                        .append(&mut origin_fk.clone());
+                    let vec = foreign_keys.entry(from.to_owned()).or_default();
+                    for item in origin_fk.iter() {
+                        vec.push(item.to_owned());
+                    }
                 }
             }
-            Some(
-                column_origins
-                    .into_iter()
-                    .map(|(k, v)| {
-                        (
-                            k,
-                            ColumnOriginAndIsRowId::new(
-                                self.is_rowid(&v, &mut warnings)
-                                    .unwrap_or(false /* TODO: error handling */),
-                                v,
-                            ),
-                        )
-                    })
-                    .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
+            (
+                Some(
+                    column_origins
+                        .into_iter()
+                        .map(|(k, v)| {
+                            (
+                                k,
+                                ColumnOriginAndIsRowId::new(
+                                    self.is_rowid(&v, &mut warnings)
+                                        .unwrap_or(false /* TODO: error handling */),
+                                    v,
+                                ),
+                            )
+                        })
+                        .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
+                ),
+                foreign_keys.into_iter().map(|(k, v)| (k, Rc::new(v))).collect(),
             )
         } else {
-            None
+            (
+                None,
+                self.foreign_keys(database, table_name, &mut warnings, &mut foreign_key_list_cache)?,
+            )
         };
 
         // Select sqlite_sequence
@@ -846,9 +864,9 @@ impl SQLite3Driver {
                 .is_empty();
 
         let get_sql_column = |records: Option<Vec<(Option<std::string::String>,)>>| -> Option<String> {
-            if let Some(records) = records {
+            if let Some(mut records) = records {
                 if !records.is_empty() {
-                    return records[0].0.clone();
+                    return std::mem::take(&mut records[0].0);
                 }
             }
             None
@@ -865,6 +883,7 @@ impl SQLite3Driver {
             |row| {
                 let name = get_string(row, 1, |err| warnings.push(err.with("table_xinfo.name")))?;
                 let pk = row.get::<_, i64>(5)? != 0;
+
                 Ok(TableSchemaColumn {
                     cid: row.get::<_, i64>(0)?,
                     notnull: row.get::<_, i64>(3)? != 0,
@@ -876,7 +895,7 @@ impl SQLite3Driver {
                     },
                     pk,
                     auto_increment: pk && has_table_auto_increment_column,
-                    foreign_keys: foreign_keys.get(&name).cloned().unwrap_or_default(),
+                    foreign_keys: foreign_keys.get(&name).map(|v| Rc::clone(v)).unwrap_or_default(),
                     hidden: row.get::<_, i64>(6)?,
                     dflt_value: match row.get_ref(4)? {
                         ValueRef::Null => None,
@@ -1036,8 +1055,8 @@ impl SQLite3Driver {
                                     &mut warnings,
                                     &mut foreign_key_list_cache,
                                 )
-                                .unwrap_or_default() // ignore errors
-                                .remove(&origin.column)
+                                .ok()
+                                .and_then(|mut map| map.remove(&origin.column))
                             })
                             .unwrap_or_default(),
                         hidden: 0,
