@@ -654,51 +654,51 @@ impl SQLite3Driver {
     }
 
     /// Returns foreign keys for each column.
-    fn foreign_keys(
+    fn foreign_keys<'a>(
         &self,
         database: &str,
         table_name: &str,
         warnings: &mut Vec<InvalidUTF8>,
-        cache: &mut HashMap<(String, String), ForeignKeyList>,
-    ) -> std::result::Result<ForeignKeyList, QueryError> {
+        cache: &'a mut HashMap<(String, String), ForeignKeyList>,
+    ) -> std::result::Result<&'a ForeignKeyList, QueryError> {
         let cache_key = (database.to_owned(), table_name.to_owned());
-        if let Some(v) = cache.get(&cache_key) {
-            return Ok(v.clone());
+
+        if !cache.contains_key(&cache_key) {
+            let mut result = HashMap::<String, Vec<TableSchemaColumnForeignKey>>::new();
+            self.select_all(
+                &format!(
+                    "PRAGMA {}.foreign_key_list({})",
+                    escape_sql_identifier(database),
+                    escape_sql_identifier(table_name)
+                ),
+                &[],
+                |row| {
+                    let from = get_string(row, 3, |err| warnings.push(err.with("foreign_key_list.from")))?;
+                    let to = get_option_string(row, 4, |err| warnings.push(err.with("foreign_key_list.to")))?;
+                    result
+                        .entry(from.clone())
+                        .or_default()
+                        .push(TableSchemaColumnForeignKey {
+                            id: row.get::<_, i64>(0)?,
+                            seq: row.get::<_, i64>(1)?,
+                            table: get_string(row, 2, |err| warnings.push(err.with("foreign_key_list.table")))?,
+                            to: to.unwrap_or(from),
+                            on_update: get_string(row, 5, |err| warnings.push(err.with("foreign_key_list.on_update")))?,
+                            on_delete: get_string(row, 6, |err| warnings.push(err.with("foreign_key_list.on_delete")))?,
+                            match_: get_string(row, 7, |err| warnings.push(err.with("foreign_key_list.match")))?,
+                        });
+                    Ok(())
+                },
+            )?;
+
+            let result = result
+                .into_iter()
+                .map(|(k, v)| (k, Rc::new(v)))
+                .collect::<HashMap<_, _>>();
+            cache.insert(cache_key.clone(), result);
         }
 
-        let mut result = HashMap::<String, Vec<TableSchemaColumnForeignKey>>::new();
-        self.select_all(
-            &format!(
-                "PRAGMA {}.foreign_key_list({})",
-                escape_sql_identifier(database),
-                escape_sql_identifier(table_name)
-            ),
-            &[],
-            |row| {
-                let from = get_string(row, 3, |err| warnings.push(err.with("foreign_key_list.from")))?;
-                let to = get_option_string(row, 4, |err| warnings.push(err.with("foreign_key_list.to")))?;
-                result
-                    .entry(from.clone())
-                    .or_default()
-                    .push(TableSchemaColumnForeignKey {
-                        id: row.get::<_, i64>(0)?,
-                        seq: row.get::<_, i64>(1)?,
-                        table: get_string(row, 2, |err| warnings.push(err.with("foreign_key_list.table")))?,
-                        to: to.unwrap_or(from),
-                        on_update: get_string(row, 5, |err| warnings.push(err.with("foreign_key_list.on_update")))?,
-                        on_delete: get_string(row, 6, |err| warnings.push(err.with("foreign_key_list.on_delete")))?,
-                        match_: get_string(row, 7, |err| warnings.push(err.with("foreign_key_list.match")))?,
-                    });
-                Ok(())
-            },
-        )?;
-
-        let result = result
-            .into_iter()
-            .map(|(k, v)| (k, Rc::new(v)))
-            .collect::<HashMap<_, _>>();
-        cache.insert(cache_key, result.clone());
-        Ok(result)
+        Ok(cache.get(&cache_key).unwrap())
     }
 
     pub fn is_rowid(
@@ -807,7 +807,7 @@ impl SQLite3Driver {
             for (from, to) in &column_origins {
                 if let Some(origin_fk) = self
                     .foreign_keys(&to.database, &to.table, &mut warnings, &mut foreign_key_list_cache)?
-                    .remove(&to.column)
+                    .get(&to.column)
                 {
                     let vec = foreign_keys.entry(from.to_owned()).or_default();
                     for item in origin_fk.iter() {
@@ -836,7 +836,8 @@ impl SQLite3Driver {
         } else {
             (
                 None,
-                self.foreign_keys(database, table_name, &mut warnings, &mut foreign_key_list_cache)?,
+                self.foreign_keys(database, table_name, &mut warnings, &mut foreign_key_list_cache)?
+                    .clone(),
             )
         };
 
@@ -1056,7 +1057,7 @@ impl SQLite3Driver {
                                     &mut foreign_key_list_cache,
                                 )
                                 .ok()
-                                .and_then(|mut map| map.remove(&origin.column))
+                                .and_then(|map| map.get(&origin.column).cloned())
                             })
                             .unwrap_or_default(),
                         hidden: 0,

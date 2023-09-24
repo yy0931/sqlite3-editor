@@ -1,6 +1,6 @@
 [package]
 name = "db-driver-rs"
-version = "1.0.126"
+version = "1.0.130"
 edition = "2021"
 
 [features]
