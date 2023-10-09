@@ -15,7 +15,7 @@ fn test() {
     for step in backup {
         let step = step.unwrap();
         if let Some(locked_or_busy) = step.locked_or_busy {
-            eprintln!("{}", locked_or_busy);
+            eprintln!("{locked_or_busy}");
         }
         eprintln!("{}/{}", step.pagecount - step.remaining, step.pagecount);
     }

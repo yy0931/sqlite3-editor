@@ -93,7 +93,7 @@ mod test_table_schema {
 
     use crate::sqlite3_driver::{
         ColumnOriginAndIsRowId, DfltValue, ExecMode, IndexColumn, SQLite3Driver, TableSchema, TableSchemaColumn,
-        TableSchemaColumnForeignKey, TableSchemaIndex, TableSchemaTriggers, TableType,
+        TableSchemaColumnForeignKey, TableSchemaIndex, TableSchemaTrigger, TableType,
     };
 
     #[test]
@@ -315,11 +315,11 @@ mod test_table_schema {
                     unique: 0,
                     origin: "c".to_owned(),
                     partial: 0,
-                    columns: Some(vec![IndexColumn {
+                    columns: vec![IndexColumn {
                         seqno: 0,
                         cid: 0,
                         name: Some("x".to_owned()),
-                    }]),
+                    }],
                     schema: Some("CREATE INDEX idx1 ON t(x)".to_owned()),
                 },
                 TableSchemaIndex {
@@ -328,11 +328,11 @@ mod test_table_schema {
                     unique: 1,
                     origin: "u".to_owned(),
                     partial: 0,
-                    columns: Some(vec![IndexColumn {
+                    columns: vec![IndexColumn {
                         seqno: 0,
                         cid: 0,
                         name: Some("x".to_owned()),
-                    }]),
+                    }],
                     schema: None,
                 },
             ]
@@ -348,7 +348,7 @@ mod test_table_schema {
         db.execute(sql, &[], ExecMode::ReadWrite, &mut vec![]).unwrap();
         assert_eq!(
             db.table_schema("main", "t").unwrap().0.triggers,
-            vec![TableSchemaTriggers {
+            vec![TableSchemaTrigger {
                 name: "trigger_insert".to_owned(),
                 sql: sql.to_owned(),
             },]
@@ -765,7 +765,7 @@ fn test_query_error() {
             )
             .unwrap_err()
         ),
-        "no such table: non_existent\nQuery: SELECT * FROM non_existent\nParams: []",
+        "no such table: non_existent\nQuery: SELECT * FROM non_existent\nParameters: []",
     );
 }
 
@@ -812,7 +812,7 @@ COMMIT;"#,
         Ok(_) => panic!(),
         Err(err) => {
             if !err.to_string().contains("no such table") {
-                panic!("{}", err);
+                panic!("{err}");
             }
         }
     }
@@ -831,7 +831,7 @@ COMMIT;"#,
         Ok(_) => panic!(),
         Err(err) => {
             if !err.to_string().contains("no such table") {
-                panic!("{}", err);
+                panic!("{err}");
             }
         }
     }

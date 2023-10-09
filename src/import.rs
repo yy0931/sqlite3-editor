@@ -1,11 +1,11 @@
-use anyhow::bail;
-use std::collections::HashMap;
-use std::io::Read;
-
 use crate::{
+    error::Error,
+    literal::Literal,
     sqlite3_driver::{escape_sql_identifier, set_sqlcipher_key},
     FileFormat,
 };
+use std::collections::HashMap;
+use std::io::Read;
 
 pub fn import(
     database_filepath: &str,
@@ -14,18 +14,25 @@ pub fn import(
     table_name: &str,
     mut csv_delimiter: &str,
     input_file: Option<String>,
-) -> anyhow::Result<()> {
+) -> std::result::Result<(), Error> {
     // Connect to the database
-    let mut con = rusqlite::Connection::open(database_filepath)
-        .or_else(|err| bail!("Failed to open the database {database_filepath:?}: {err}"))?;
+    let mut con = rusqlite::Connection::open(database_filepath).or_else(|err| {
+        Error::new_other_error(
+            format!("Failed to open the database {database_filepath:?}: {err}"),
+            None,
+            None,
+        )
+    })?;
 
     // Set the SQLite Cipher key if given
     if let Some(key) = sql_cipher_key {
-        set_sqlcipher_key(&con, key.as_ref()).or_else(|err| bail!(err))?;
+        set_sqlcipher_key(&con, key.as_ref())?;
     }
 
     let input: Box<dyn Read> = if let Some(input_file) = input_file {
-        Box::new(std::fs::File::open(input_file)?)
+        Box::new(std::fs::File::open(&input_file).or_else(|err| {
+            Error::new_other_error(format!("Failed to open the database {input_file:?}: {err}"), None, None)
+        })?)
     } else {
         // expected `File`, found `Stdin`
         Box::new(std::io::stdin())
@@ -41,38 +48,56 @@ pub fn import(
                 .delimiter(csv_delimiter.as_bytes()[0])
                 .from_reader(input);
 
-            let columns = r.headers()?.into_iter().map(|v| v.to_owned()).collect::<Vec<_>>();
+            let columns = r
+                .headers()
+                .or_else(|err| Error::new_other_error(format!("Failed read CSV headers: {err}"), None, None))?
+                .into_iter()
+                .map(|v| v.to_owned())
+                .collect::<Vec<_>>();
             if columns.is_empty() {
-                bail!("No column headers present.");
+                Error::new_other_error("No column headers present.", None, None)?;
             }
 
-            let tx = con.transaction()?;
-            tx.execute(
-                &format!(
-                    "CREATE TABLE {}({})",
-                    escape_sql_identifier(table_name),
-                    columns
-                        .iter()
-                        .map(|v| format!("{} TEXT", escape_sql_identifier(v)))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-                [],
-            )?;
+            let tx = con
+                .transaction()
+                .or_else(|err| Error::new_query_error(err, "BEGIN;", &[]))?;
+            let stmt = format!(
+                "CREATE TABLE {}({})",
+                escape_sql_identifier(table_name),
+                columns
+                    .iter()
+                    .map(|v| format!("{} TEXT", escape_sql_identifier(v)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            tx.execute(&stmt, [])
+                .or_else(|err| Error::new_query_error(err, stmt, &[]))?;
             {
-                let mut insert = tx.prepare(&format!(
+                let stmt = format!(
                     "INSERT INTO {} VALUES ({})",
                     escape_sql_identifier(table_name),
                     columns.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
-                ))?;
+                );
+                let mut insert = tx
+                    .prepare(&stmt)
+                    .or_else(|err| Error::new_query_error(err, &stmt, &[]))?;
                 for record in r.records() {
-                    for (i, value) in record?.iter().enumerate() {
-                        insert.raw_bind_parameter(i + 1, value)?;
+                    let values = record?.iter().map(|v| v.to_owned()).collect::<Vec<_>>();
+                    for (i, value) in values.iter().enumerate() {
+                        insert.raw_bind_parameter(i + 1, value).or_else(|err| {
+                            Error::new_query_error(
+                                err,
+                                &stmt,
+                                &values.iter().map(|v| v.into()).collect::<Vec<Literal>>(),
+                            )
+                        })?;
                     }
-                    insert.raw_execute()?;
+                    insert.raw_execute().or_else(|err| {
+                        Error::new_query_error(err, &stmt, &values.iter().map(|v| v.into()).collect::<Vec<Literal>>())
+                    })?;
                 }
             }
-            tx.commit()?;
+            tx.commit().or_else(|err| Error::new_query_error(err, "COMMIT;", &[]))?;
         }
         FileFormat::JSON => {
             use serde_json::Value;
@@ -98,7 +123,7 @@ pub fn import(
                     .collect();
 
             if parsed.is_empty() {
-                bail!("No data present.");
+                Error::new_other_error("No data present.", None, None)?;
             }
 
             let columns = parsed
@@ -110,24 +135,25 @@ pub fn import(
                 .collect::<Vec<_>>();
 
             if columns.is_empty() {
-                bail!("No column headers present.");
+                Error::new_other_error("No column headers present.", None, None)?;
             }
 
-            let tx = con.transaction()?;
-            tx.execute(
-                &format!(
-                    "CREATE TABLE {}({})",
-                    escape_sql_identifier(&table_name),
-                    columns
-                        .iter()
-                        .map(|v| format!("{} TEXT", escape_sql_identifier(v)))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-                [],
-            )?;
+            let tx = con
+                .transaction()
+                .or_else(|err| Error::new_query_error(err, "BEGIN;", &[]))?;
+            let stmt = format!(
+                "CREATE TABLE {}({})",
+                escape_sql_identifier(&table_name),
+                columns
+                    .iter()
+                    .map(|v| format!("{} TEXT", escape_sql_identifier(v)))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            tx.execute(&stmt, [])
+                .or_else(|err| Error::new_query_error(err, stmt, &[]))?;
             {
-                let mut insert = tx.prepare(&format!(
+                let stmt = format!(
                     "INSERT INTO {} ({}) VALUES ({})",
                     escape_sql_identifier(&table_name),
                     columns
@@ -136,15 +162,31 @@ pub fn import(
                         .collect::<Vec<_>>()
                         .join(", "),
                     columns.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
-                ))?;
+                );
+                let mut insert = tx
+                    .prepare(&stmt)
+                    .or_else(|err| Error::new_query_error(err, &stmt, &[]))?;
                 for record in &parsed {
-                    for (i, column) in columns.iter().enumerate() {
-                        insert.raw_bind_parameter(i + 1, record.get(column))?;
+                    let values = columns.iter().map(|column| record.get(column)).collect::<Vec<_>>();
+                    for (i, value) in values.iter().enumerate() {
+                        insert.raw_bind_parameter(i + 1, value).or_else(|err| {
+                            Error::new_query_error(
+                                err,
+                                &stmt,
+                                &values.iter().map(|v| (*v).into()).collect::<Vec<Literal>>(),
+                            )
+                        })?;
                     }
-                    insert.raw_execute()?;
+                    insert.raw_execute().or_else(|err| {
+                        Error::new_query_error(
+                            err,
+                            &stmt,
+                            &values.iter().map(|v| (*v).into()).collect::<Vec<Literal>>(),
+                        )
+                    })?;
                 }
             }
-            tx.commit()?;
+            tx.commit().or_else(|err| Error::new_query_error(err, "COMMIT;", &[]))?;
         }
     }
 

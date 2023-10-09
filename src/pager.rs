@@ -1,8 +1,9 @@
 use std::{rc::Rc, time::Duration};
 
 use crate::{
+    error::Error,
     literal::Literal,
-    sqlite3_driver::{write_value_ref_into_msgpack, InvalidUTF8, QueryError},
+    sqlite3_driver::{write_value_ref_into_msgpack, InvalidUTF8},
 };
 
 pub mod cache {
@@ -214,9 +215,9 @@ impl Default for PagerConfig {
     }
 }
 
-fn pragma_data_version(conn: &rusqlite::Connection) -> Result<i64, QueryError> {
+fn pragma_data_version(conn: &rusqlite::Connection) -> Result<i64, Error> {
     conn.pragma_query_value(None, "data_version", |row| row.get::<_, i64>(0))
-        .or_else(|err| QueryError::new(err, "PRAGMA data_version", &[]))
+        .or_else(|err| Error::new_query_error(err, "PRAGMA data_version", &[]))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -264,10 +265,12 @@ impl Pager {
         query: &str,
         params: &[Literal],
         mut on_invalid_utf8: F,
-    ) -> std::result::Result<Option<Records>, QueryError> {
+    ) -> std::result::Result<Option<Records>, Error> {
         let mut params = params.to_vec();
 
-        let tx = conn.transaction().or_else(|err| QueryError::new(err, "BEGIN;", &[]))?;
+        let tx = conn
+            .transaction()
+            .or_else(|err| Error::new_query_error(err, "BEGIN;", &[]))?;
         let data_version = Some(pragma_data_version(&tx)?);
         if self.data_version != data_version {
             self.clear_cache();
@@ -324,7 +327,7 @@ impl Pager {
             // Bind parameters
             for (i, param) in params.iter().enumerate() {
                 stmt.raw_bind_parameter(i + 1, param)
-                    .or_else(|err| QueryError::new(err, &query, &params))?;
+                    .or_else(|err| Error::new_query_error(err, query, &params))?;
             }
 
             // List columns
@@ -336,7 +339,7 @@ impl Pager {
             col_buf = vec![vec![]; columns.len()];
 
             let cache_size_start = cache_entry.total_size_bytes();
-            cache_entry.set_columns_if_not_set_yet(columns.as_ref());
+            cache_entry.set_columns_if_not_set_yet::<&[String]>(&columns);
 
             // Fetch records
             let mut current_offset = offset_with_margin;
@@ -394,7 +397,7 @@ impl Pager {
                         }
                         break;
                     }
-                    Err(err) => QueryError::new(err, &query, &params)?,
+                    Err(err) => Error::new_query_error(err, query, &params)?,
                 }
             }
         }
@@ -414,7 +417,7 @@ impl Pager {
                 // Bind parameters
                 for (i, param) in params.iter().enumerate() {
                     stmt.raw_bind_parameter(i + 1, param)
-                        .or_else(|err| QueryError::new(err, &query, &params))?;
+                        .or_else(|err| Error::new_query_error(err, query, &params))?;
                 }
 
                 // Fetch records
@@ -437,7 +440,7 @@ impl Pager {
                         Ok(None) => {
                             break;
                         }
-                        Err(err) => QueryError::new(err, &query, &params)?,
+                        Err(err) => Error::new_query_error(err, query, &params)?,
                     }
                 }
             }

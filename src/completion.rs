@@ -16,7 +16,8 @@ use sqlparser::{
     tokenizer::{Token, Word},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[ts(export)]
 pub struct TableCompletion {
     pub schema: Rc<String>,
     pub table: Rc<String>,
@@ -24,7 +25,8 @@ pub struct TableCompletion {
     pub type_: TableType,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[ts(export)]
 pub struct ColumnCompletion {
     pub schema: Rc<String>,
     pub table: Rc<String>,
@@ -41,6 +43,24 @@ pub struct Completions {
     pub last_tokens: VecDeque<TokenType>,
     pub last_schema_period: Option<String>,
     pub last_table_period: Option<String>,
+}
+
+mod completions_ts {
+    use super::{ColumnCompletion, TableCompletion, TokenType};
+
+    #[derive(ts_rs::TS)]
+    #[ts(export)]
+    #[allow(unused)]
+    struct Completions {
+        pub table_names: Vec<TableCompletion>,
+        pub schema_names: Vec<String>,
+        pub columns_in_tables_that_are_referenced_in_source: Vec<ColumnCompletion>,
+        pub cte_names: Vec<String>,
+        pub as_clauses: Vec<String>,
+        pub last_tokens: Vec<TokenType>,
+        pub last_schema_period: Option<String>,
+        pub last_table_period: Option<String>,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -155,7 +175,8 @@ fn is_token_before_cursor(token: &TokenWithRangeLocation, position: &ZeroIndexed
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[ts(export)]
 pub enum TokenType {
     // Keywords
     JOIN,

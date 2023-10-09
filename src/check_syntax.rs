@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlparser::tokenizer::{Location, TokenizerError};
 
 use crate::{
+    error::Error,
     split_statements::{split_sqlite_statements, SplittedStatement},
     tokenize::ZeroIndexedLocation,
 };
@@ -20,18 +21,22 @@ lazy_static! {
         regex::Regex::new(r#"(?i)(?s)^(?:unknown table option)"#).unwrap();
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(ts_rs::TS, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[ts(export)]
 pub struct PossibleCause {
+    #[ts(type = "bigint")]
     pub offset: usize,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(ts_rs::TS, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[ts(export)]
 pub enum Severity {
     Warning,
     Error,
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(ts_rs::TS, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[ts(export)]
 pub struct Diagnostic {
     pub possible_causes: Vec<PossibleCause>,
     pub message: String,
@@ -76,7 +81,7 @@ fn check_syntax_stmt(stmt_str: &str, conn: &mut rusqlite::Connection, offset_sta
 }
 
 /// Checks the syntax of a string containing SQL statements.
-pub fn check_syntax(sql: &str) -> rusqlite::Result<Vec<Diagnostic>> {
+pub fn check_syntax(sql: &str) -> std::result::Result<Vec<Diagnostic>, Error> {
     let mut errors: Vec<Diagnostic> = vec![];
     let statements = match split_sqlite_statements(sql) {
         Ok(statements) => statements,
@@ -91,7 +96,8 @@ pub fn check_syntax(sql: &str) -> rusqlite::Result<Vec<Diagnostic>> {
             return Ok(errors);
         }
     };
-    let mut conn = rusqlite::Connection::open_in_memory()?;
+    let mut conn = rusqlite::Connection::open_in_memory()
+        .or_else(|err| Error::new_ffi_error(err, "sqlite3_open_v2", &[":memory:".into()]))?;
     for SplittedStatement {
         real_text: stmt_str,
         real_start,

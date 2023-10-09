@@ -56,7 +56,8 @@ impl Into<(String, Vec<Literal>, QueryMode)> for Request {
 }
 
 /// "read_only" | "read_write" | "script"
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
+#[derive(ts_rs::TS, Debug, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
+#[ts(export)]
 pub enum QueryMode {
     #[serde(rename = "read_only")]
     ReadOnly,

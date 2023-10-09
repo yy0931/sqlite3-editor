@@ -9,14 +9,16 @@ use crate::sqlite3_driver::escape_sql_identifier;
 use crate::tokenize::ZeroIndexedLocation;
 
 /// Represents the kind of code lens.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[ts(export)]
 pub enum CodeLensKind {
     Select,
     Explain,
     Other,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[ts(export)]
 pub struct CodeLens {
     pub kind: CodeLensKind,
     pub start: ZeroIndexedLocation,

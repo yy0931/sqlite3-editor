@@ -3,9 +3,12 @@ use sqlparser::dialect::Dialect;
 use sqlparser::tokenizer::{Location, Token, TokenWithLocation, Tokenizer, TokenizerError, Whitespace};
 
 /// A struct representing a location within text, using zero-indexing for both line and column.
-#[derive(Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(ts_rs::TS, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[ts(export)]
 pub struct ZeroIndexedLocation {
+    #[ts(type = "bigint")]
     pub line: usize,
+    #[ts(type = "bigint")]
     pub column: usize,
 }
 

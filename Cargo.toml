@@ -1,6 +1,6 @@
 [package]
 name = "db-driver-rs"
-version = "1.0.130"
+version = "1.0.133"
 edition = "2021"
 
 [features]
@@ -8,7 +8,6 @@ sqlite = ["rusqlite/bundled"]
 sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [dependencies]
-anyhow = { version = "1.0.75", features = ["backtrace"] }
 clap = { version = "4.4.3", features = ["derive"] }
 lazy_static = "1.4.0"
 percent-encoding = "2.3.0"
@@ -22,6 +21,7 @@ sqlparser = "0.37.0"
 csv = "1.2.2"
 base64 = "0.21.4"
 hex = "0.4.3"
+ts-rs = "7.0.0"
 
 [dependencies.rusqlite]
 git = "https://github.com/yy0931/rusqlite.git"

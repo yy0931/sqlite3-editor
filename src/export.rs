@@ -1,5 +1,4 @@
-use crate::{sqlite3_driver::set_sqlcipher_key, FileFormat};
-use anyhow::bail;
+use crate::{error::Error, sqlite3_driver::set_sqlcipher_key, FileFormat};
 use rusqlite::types::ValueRef;
 use std::io::Write;
 
@@ -10,20 +9,27 @@ pub fn export(
     format: FileFormat,
     mut csv_delimiter: &str,
     output_file: Option<String>,
-) -> anyhow::Result<()> {
+) -> std::result::Result<(), Error> {
     // Connect to the database
-    let con = rusqlite::Connection::open(database_filepath)
-        .or_else(|err| bail!("Failed to open the database {database_filepath:?}: {err}"))?;
+    let con = rusqlite::Connection::open(database_filepath).or_else(|err| {
+        Error::new_other_error(
+            format!("Failed to open the database {database_filepath:?}: {err}"),
+            None,
+            None,
+        )
+    })?;
 
     // Set the SQLite Cipher key if given
     if let Some(key) = sql_cipher_key {
-        set_sqlcipher_key(&con, key).or_else(|err| bail!(err))?;
+        set_sqlcipher_key(&con, key)?;
     }
 
     // Query
-    let mut stmt = con.prepare(query)?;
+    let mut stmt = con
+        .prepare(query)
+        .or_else(|err| Error::new_query_error(err, query, &[]))?;
     if csv_delimiter.as_bytes().len() != 1 {
-        bail!("csv_delimiter needs to be a single character.");
+        Error::new_other_error("csv_delimiter needs to be a single character.", None, None)?;
     }
 
     let column_count = stmt.column_count();
@@ -63,14 +69,14 @@ pub fn export(
             }
             w.write_record(None::<&[u8]>)?;
 
-            let mut rows = stmt.query([])?;
-            while let Some(row) = rows.next()? {
+            let mut rows = stmt.query([]).or_else(|err| Error::new_query_error(err, query, &[]))?;
+            while let Some(row) = rows.next().or_else(|err| Error::new_query_error(err, query, &[]))? {
                 for i in 0..column_count {
                     match row.get_ref_unwrap(i) {
                         ValueRef::Null => w.write_field("")?,
-                        ValueRef::Real(v) => w.write_field(format!("{}", v))?,
+                        ValueRef::Real(v) => w.write_field(format!("{v}"))?,
                         ValueRef::Blob(v) => w.write_field(general_purpose::STANDARD.encode(v))?,
-                        ValueRef::Integer(v) => w.write_field(format!("{}", v))?,
+                        ValueRef::Integer(v) => w.write_field(format!("{v}"))?,
                         ValueRef::Text(v) => w.write_field(v)?,
                     };
                 }
@@ -79,9 +85,9 @@ pub fn export(
         }
         FileFormat::JSON => {
             out.write(b"[")?;
-            let mut rows = stmt.query([])?;
+            let mut rows = stmt.query([]).or_else(|err| Error::new_query_error(err, query, &[]))?;
             let mut first_entry = true;
-            while let Some(row) = rows.next()? {
+            while let Some(row) = rows.next().or_else(|err| Error::new_query_error(err, query, &[]))? {
                 if !first_entry {
                     out.write(b",")?;
                 }

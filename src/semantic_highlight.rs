@@ -11,7 +11,8 @@ use crate::{
 };
 
 /// Represents the kind of token highlighting.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(ts_rs::TS, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[ts(export)]
 pub enum SemanticTokenKind {
     Keyword,
     Number,
@@ -23,7 +24,8 @@ pub enum SemanticTokenKind {
     Other,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(ts_rs::TS, Debug, Clone, Serialize, Deserialize)]
+#[ts(export)]
 pub struct SemanticHighlight {
     pub kind: SemanticTokenKind,
     pub start: ZeroIndexedLocation,

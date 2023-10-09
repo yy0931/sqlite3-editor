@@ -74,6 +74,12 @@ impl From<String> for Literal {
     }
 }
 
+impl From<&String> for Literal {
+    fn from(value: &String) -> Self {
+        Literal::String(value.to_owned())
+    }
+}
+
 impl From<&str> for Literal {
     fn from(value: &str) -> Self {
         Literal::String(value.to_owned())

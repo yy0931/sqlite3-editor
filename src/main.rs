@@ -1,10 +1,9 @@
+use rmp_serde::encode::write_named;
 use std::{
     fs::File,
     io::{BufRead, Read, Seek, SeekFrom, Write},
     path::PathBuf,
 };
-
-use rmp_serde::encode::write_named;
 mod completion;
 #[cfg(test)]
 mod completion_test;
@@ -27,6 +26,7 @@ mod code_lens;
 mod code_lens_test;
 #[cfg(test)]
 mod column_origin_test;
+mod error;
 #[cfg(test)]
 mod export_test;
 #[cfg(test)]
@@ -243,9 +243,14 @@ where
         } => {
             const READ_ONLY: bool = false;
 
-            // Create a server with the specified driver
-            let mut db =
-                sqlite3_driver::SQLite3Driver::connect(&database_filepath, READ_ONLY, &sql_cipher_key).unwrap();
+            // Create a server
+            let mut db = match sqlite3_driver::SQLite3Driver::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
+                Ok(db) => db,
+                Err(err) => {
+                    writeln!(&mut stderr, "{err}").expect("writeln! failed.");
+                    return 1;
+                }
+            };
 
             let (command_sender, command_receiver) = std::sync::mpsc::channel::<String>();
             let abort_signal = db.abort_signal();
@@ -284,9 +289,9 @@ where
                     .open(&response_body_filepath)
                     .unwrap();
 
-                fn finish<T: Write, U: Write>(mut stdout: &mut T, w: &mut U, code: usize) {
+                fn finish<T: Write, U: Write>(mut stdout: &mut T, w: &mut U, code: error::ErrorCode) {
                     w.flush().expect("Failed to flush the writer.");
-                    writeln!(&mut stdout, "{code}").expect("writeln! failed.");
+                    writeln!(&mut stdout, "{code:?}").expect("writeln! failed.");
                     stdout.flush().unwrap();
                 }
 
@@ -305,12 +310,12 @@ where
                             Ok(new_db) => {
                                 db = new_db;
                                 write_named(&mut w, &None::<&i64>).expect("Failed to write the result.");
-                                finish(&mut stdout, &mut w, 200);
+                                finish(&mut stdout, &mut w, error::ErrorCode::Success);
                             }
                             Err(err) => {
                                 w.truncate_all();
                                 write!(w, "{err}").expect("Failed to write an error message.");
-                                finish(&mut stdout, &mut w, 400);
+                                finish(&mut stdout, &mut w, err.code());
                             }
                         }
                     }
@@ -332,19 +337,19 @@ where
                                     r.metadata().unwrap().len()
                                 )
                                 .expect("Failed to write an error message.");
-                                finish(&mut stdout, &mut w, 400);
+                                finish(&mut stdout, &mut w, error::ErrorCode::OtherError);
                                 continue;
                             }
                         };
 
                         match db.handle(&mut w, &req.query, &req.params, req.mode) {
                             Ok(_) => {
-                                finish(&mut stdout, &mut w, 200);
+                                finish(&mut stdout, &mut w, error::ErrorCode::Success);
                             }
                             Err(err) => {
                                 w.truncate_all();
                                 write!(w, "{err}").expect("Failed to write an error message.");
-                                finish(&mut stdout, &mut w, 400);
+                                finish(&mut stdout, &mut w, err.code());
                             }
                         }
                     }
@@ -352,32 +357,34 @@ where
                     // Tokenize, get code lenses, or check syntax
                     "semantic_highlight" | "code_lens" | "check_syntax" => {
                         // Handle the command
-                        if let Err(err) = rmp_serde::from_read(r).map(|Query { query }: Query| -> anyhow::Result<()> {
-                            match command.trim() {
-                                "semantic_highlight" => {
-                                    write_named(&mut w, &semantic_highlight::semantic_highlight(&query))?
-                                }
-                                "code_lens" => write_named(&mut w, &code_lens::code_lens(&query))?,
-                                "check_syntax" => write_named(&mut w, &check_syntax::check_syntax(&query)?)?,
-                                _ => panic!("Unexpected command {:?}", command),
-                            };
-                            Ok(())
-                        }) {
+                        if let Err(err) = rmp_serde::from_read(r).map(
+                            |Query { query }: Query| -> std::result::Result<(), error::Error> {
+                                match command.trim() {
+                                    "semantic_highlight" => {
+                                        write_named(&mut w, &semantic_highlight::semantic_highlight(&query))?
+                                    }
+                                    "code_lens" => write_named(&mut w, &code_lens::code_lens(&query))?,
+                                    "check_syntax" => write_named(&mut w, &check_syntax::check_syntax(&query)?)?,
+                                    _ => panic!("Unexpected command {:?}", command),
+                                };
+                                Ok(())
+                            },
+                        ) {
                             w.flush().unwrap();
                             w.truncate_all();
                             write!(w, "{err:?}").unwrap();
-                            finish(&mut stdout, &mut w, 400);
+                            finish(&mut stdout, &mut w, error::ErrorCode::OtherError);
                         } else {
                             w.flush().unwrap();
-                            finish(&mut stdout, &mut w, 200);
+                            finish(&mut stdout, &mut w, error::ErrorCode::Success);
                         }
                     }
 
                     // Completion
                     "completion" => {
                         // Handle the command
-                        if let Err(err) = rmp_serde::from_read(r).map(
-                            |CompletionQuery { sql, line, column }: CompletionQuery| -> anyhow::Result<()> {
+                        if let Err(err) =
+                            rmp_serde::from_read(r).map(|CompletionQuery { sql, line, column }: CompletionQuery| -> std::result::Result<(), error::Error> {
                                 write_named(
                                     &mut w,
                                     &completion::complete(
@@ -390,15 +397,15 @@ where
                                     ),
                                 )?;
                                 Ok(())
-                            },
-                        ) {
+                            })
+                        {
                             w.flush().unwrap();
                             w.truncate_all();
                             write!(w, "{err:?}").unwrap();
-                            finish(&mut stdout, &mut w, 400);
+                            finish(&mut stdout, &mut w, error::ErrorCode::OtherError);
                         } else {
                             w.flush().unwrap();
-                            finish(&mut stdout, &mut w, 200);
+                            finish(&mut stdout, &mut w, error::ErrorCode::Success);
                         }
                     }
 
@@ -423,7 +430,7 @@ where
                 &csv_delimiter,
                 output_file,
             ) {
-                writeln!(&mut stderr, "{}", err).expect("writeln! failed.");
+                writeln!(&mut stderr, "{err}").expect("writeln! failed.");
                 return 1;
             }
         }
@@ -443,7 +450,7 @@ where
                 &csv_delimiter,
                 input_file,
             ) {
-                writeln!(&mut stderr, "{}", err).expect("writeln! failed.");
+                writeln!(&mut stderr, "{err}").expect("writeln! failed.");
                 return 1;
             }
         }
