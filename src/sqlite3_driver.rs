@@ -1,7 +1,7 @@
 use crate::{
+    cache::{Pager, Records},
     column_origin::{column_origin, ColumnOrigin},
     literal::Literal,
-    pager::{Pager, Records},
     request_type::QueryMode,
 };
 use lazy_static::lazy_static;
@@ -46,11 +46,11 @@ impl InvalidUTF8 {
     }
 }
 
-pub fn from_utf8_lossy<F: FnMut(InvalidUTF8) -> ()>(t: &[u8], mut on_invalid_utf8: F) -> String {
+pub fn from_utf8_lossy<F: FnMut(InvalidUTF8)>(t: &[u8], mut on_invalid_utf8: F) -> String {
     match String::from_utf8(t.to_vec()) {
         Ok(s) => s,
         Err(_) => {
-            let text_lossy = String::from_utf8_lossy(&t).to_string();
+            let text_lossy = String::from_utf8_lossy(t).to_string();
             on_invalid_utf8(InvalidUTF8 {
                 text_lossy: text_lossy.clone(),
                 bytes: hex::encode(t),
@@ -61,7 +61,7 @@ pub fn from_utf8_lossy<F: FnMut(InvalidUTF8) -> ()>(t: &[u8], mut on_invalid_utf
     }
 }
 
-pub fn get_string<F: FnMut(InvalidUTF8) -> ()>(row: &Row, idx: usize, on_invalid_utf8: F) -> rusqlite::Result<String> {
+pub fn get_string<F: FnMut(InvalidUTF8)>(row: &Row, idx: usize, on_invalid_utf8: F) -> rusqlite::Result<String> {
     let value = row.get_ref(idx)?;
     match value {
         ValueRef::Text(t) => Ok(from_utf8_lossy(t, on_invalid_utf8)),
@@ -73,7 +73,7 @@ pub fn get_string<F: FnMut(InvalidUTF8) -> ()>(row: &Row, idx: usize, on_invalid
     }
 }
 
-pub fn get_option_string<F: FnMut(InvalidUTF8) -> ()>(
+pub fn get_option_string<F: FnMut(InvalidUTF8)>(
     row: &Row,
     idx: usize,
     on_invalid_utf8: F,
@@ -90,7 +90,6 @@ pub fn get_option_string<F: FnMut(InvalidUTF8) -> ()>(
     }
 }
 
-#[derive(Debug)]
 pub struct SQLite3Driver {
     con: ManuallyDrop<rusqlite::Connection>,
     pager: Pager,
@@ -106,17 +105,45 @@ lazy_static! {
         regex::Regex::new(r"(?i)^\s*(INSERT|DELETE|UPDATE|CREATE|DROP|ALTER\s+TABLE)\b").unwrap();
 }
 
-/// Text matching implementation for the find widget.
-/// Returns 0 on error.
-fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> i64 {
-    // Receive arguments
-    let text = match ctx.get_raw(0) {
+fn get_find_widget_input(ctx: &rusqlite::functions::Context) -> String {
+    match ctx.get_raw(0) {
         ValueRef::Null => "NULL".to_owned(),
         ValueRef::Integer(v) => format!("{v}"),
         ValueRef::Real(v) => format!("{v}"),
         ValueRef::Text(v) => String::from_utf8_lossy(v).to_string(),
         ValueRef::Blob(_v) => "".to_owned(), // hex won't match against anything
-    };
+    }
+}
+
+/// whole_word = true, case_sensitive = true
+fn find_widget_compare_w_c(ctx: &rusqlite::functions::Context) -> i64 {
+    let l = get_find_widget_input(ctx);
+    ctx.get::<String>(1).is_ok_and(|r| l == r) as i64
+}
+
+/// whole_word = true, case_sensitive = false
+fn find_widget_compare_w(ctx: &rusqlite::functions::Context) -> i64 {
+    let l = get_find_widget_input(ctx).to_lowercase();
+    ctx.get::<String>(1).is_ok_and(|r| l == r.to_lowercase()) as i64
+}
+
+/// whole_word = false, case_sensitive = true
+fn find_widget_compare_c(ctx: &rusqlite::functions::Context) -> i64 {
+    let l = get_find_widget_input(ctx);
+    ctx.get::<String>(1).is_ok_and(|r| l.contains(&r)) as i64
+}
+
+/// whole_word = false, case_sensitive = false
+fn find_widget_compare(ctx: &rusqlite::functions::Context) -> i64 {
+    let l = get_find_widget_input(ctx).to_lowercase();
+    ctx.get::<String>(1).is_ok_and(|r| l.contains(&r.to_lowercase())) as i64
+}
+
+/// Text matching implementation for the find widget.
+/// Returns 0 on error.
+fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> i64 {
+    // Receive arguments
+    let text = get_find_widget_input(ctx);
     let Ok(pattern) = ctx.get::<String>(1) else {
         return 0;
     };
@@ -126,7 +153,7 @@ fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> i64 {
     let Ok(case_sensitive) = ctx.get::<i64>(3) else {
         return 0;
     };
-    if whole_word != 0 && pattern == "" {
+    if whole_word != 0 && pattern.is_empty() {
         return 0;
     }
 
@@ -332,7 +359,7 @@ pub struct ForeignKey {
     pub to: Option<String>,
 }
 
-pub fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUTF8) -> ()>(
+pub fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUTF8)>(
     wr: &mut W,
     value: ValueRef,
     on_invalid_utf8: F,
@@ -362,20 +389,20 @@ type ForeignKeyList = HashMap</* column */ String, Rc<Vec<TableSchemaColumnForei
 pub fn connect_immutable(database_filepath: &str) -> std::result::Result<rusqlite::Connection, Error> {
     // Connect to the database with `?immutable=1` and the readonly flag
     const ASCII_SET: percent_encoding::AsciiSet = percent_encoding::NON_ALPHANUMERIC.remove(b'/');
-    Ok(rusqlite::Connection::open_with_flags(
+    rusqlite::Connection::open_with_flags(
         format!(
             "file:{}?immutable=1",
             percent_encoding::utf8_percent_encode(database_filepath, &ASCII_SET)
         ),
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
     )
-    .or_else(|err| Error::new_ffi_error(err, "sqlite3_open_v2 (immutable=1)", &[database_filepath.into()]))?)
+    .or_else(|err| Error::new_ffi_error(err, "sqlite3_open_v2 (immutable=1)", &[database_filepath.into()]))
 }
 
 fn assert_readonly_query(query: &str) -> std::result::Result<(), Error> {
     if NON_READONLY_SQL_PATTERN.is_match(query) {
         Error::new_other_error(
-            format!("This query is not allowed in the read-only mode."),
+            "This query is not allowed in the read-only mode.",
             Some(query.to_owned()),
             None,
         )
@@ -402,7 +429,7 @@ impl SQLite3Driver {
     /// Connects to the database, set busy_timeout to 500, register the find_widget_regexp function, enable loading extensions, and fetch the version number of SQLite.
     /// * `read_only` - If true, connects to the database with immutable=1 and the readonly flag. Use this argument to read a database that is under an EXCLUSIVE lock.
     /// * `sql_cipher_key` - The encryption key for SQLCipher.
-    pub fn connect<'a>(
+    pub fn connect(
         database_filepath: &str,
         read_only: bool,
         sql_cipher_key: &Option<impl AsRef<str>>,
@@ -415,7 +442,7 @@ impl SQLite3Driver {
         )
     }
 
-    pub fn connect_with_abort_signal<'a>(
+    pub fn connect_with_abort_signal(
         database_filepath: &str,
         read_only: bool,
         sql_cipher_key: &Option<impl AsRef<str>>,
@@ -437,6 +464,39 @@ impl SQLite3Driver {
         // Set busy_timeout to 500
         con.pragma_update(None, "busy_timeout", 500)
             .expect("Could not update the busy_timeout value");
+
+        // Register functions
+        con.create_scalar_function(
+            "find_widget_compare_w_c",
+            2,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            move |ctx| Ok(find_widget_compare_w_c(ctx)),
+        )
+        .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_w_c".into()]))?;
+
+        con.create_scalar_function(
+            "find_widget_compare_w",
+            2,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            move |ctx| Ok(find_widget_compare_w(ctx)),
+        )
+        .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_w".into()]))?;
+
+        con.create_scalar_function(
+            "find_widget_compare_c",
+            2,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            move |ctx| Ok(find_widget_compare_c(ctx)),
+        )
+        .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_c".into()]))?;
+
+        con.create_scalar_function(
+            "find_widget_compare",
+            2,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            move |ctx| Ok(find_widget_compare(ctx)),
+        )
+        .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare".into()]))?;
 
         // Register the function "find_widget_regexp"
         con.create_scalar_function(
@@ -484,11 +544,7 @@ impl SQLite3Driver {
             self.pager.clear_cache();
         }
 
-        let Records {
-            col_buf,
-            columns,
-            n_rows,
-        } = if let Some(records) = self
+        let records = if let Some(records) = self
             .pager
             .query(&mut self.con, query, params, |err| warnings.push(err.with(query)))?
         {
@@ -503,7 +559,7 @@ impl SQLite3Driver {
             // Bind parameters
             for (i, param) in params.iter().enumerate() {
                 stmt.raw_bind_parameter(i + 1, param)
-                    .or_else(|err| Error::new_query_error(err, query, &params))?;
+                    .or_else(|err| Error::new_query_error(err, query, params))?;
             }
 
             // List columns
@@ -521,8 +577,8 @@ impl SQLite3Driver {
             loop {
                 match rows.next() {
                     Ok(Some(row)) => {
-                        for i in 0..columns.len() {
-                            write_value_ref_into_msgpack(&mut col_buf[i], row.get_ref_unwrap(i), |err| {
+                        for (i, col_buf_i) in col_buf.iter_mut().enumerate() {
+                            write_value_ref_into_msgpack(col_buf_i, row.get_ref_unwrap(i), |err| {
                                 warnings.push(err.with(query))
                             })
                             .expect("Failed to write msgpack");
@@ -533,20 +589,16 @@ impl SQLite3Driver {
                     Err(err) => Error::new_query_error(err, query, params)?,
                 }
             }
-            Records {
-                col_buf,
-                columns: Rc::new(columns),
-                n_rows,
-            }
+            Records::new(col_buf, n_rows, Rc::new(columns))
         };
 
         // Pack the result into a msgpack
         let mut buf = vec![];
-        rmp::encode::write_map_len(&mut buf, columns.len() as u32).expect("Failed to write msgpack");
-        for (i, column_name) in columns.iter().enumerate() {
+        rmp::encode::write_map_len(&mut buf, records.columns().len() as u32).expect("Failed to write msgpack");
+        for (i, column_name) in records.columns().iter().enumerate() {
             rmp::encode::write_str(&mut buf, column_name).expect("Failed to write msgpack");
-            rmp::encode::write_array_len(&mut buf, n_rows as u32).expect("Failed to write msgpack");
-            buf.extend(&col_buf[i]);
+            rmp::encode::write_array_len(&mut buf, records.n_rows() as u32).expect("Failed to write msgpack");
+            buf.extend(&records.col_buf()[i]);
         }
         Ok(buf)
     }
@@ -595,7 +647,7 @@ impl SQLite3Driver {
         assert_readonly_query(query)?;
 
         let select_all = self.select_all(query, params, map)?;
-        let get = select_all.get(0);
+        let get = select_all.first();
         let Some(one) = get else {
             return Error::new_query_error(rusqlite::Error::QueryReturnedNoRows, query.to_owned(), params);
         };
@@ -717,8 +769,8 @@ impl SQLite3Driver {
             &[],
             |row| {
                 Ok(Column {
-                    name: get_string(&row, 1, |err| warnings.push(err.with("is_rowid.table_xinfo.name")))?,
-                    type_: get_string(&row, 2, |err| warnings.push(err.with("is_rowid.table_xinfo.type")))?,
+                    name: get_string(row, 1, |err| warnings.push(err.with("is_rowid.table_xinfo.name")))?,
+                    type_: get_string(row, 2, |err| warnings.push(err.with("is_rowid.table_xinfo.type")))?,
                     pk: row.get::<_, i64>(5)?,
                 })
             },
@@ -750,7 +802,7 @@ impl SQLite3Driver {
             return Ok(true);
         }
 
-        return Ok(false);
+        Ok(false)
     }
 
     /// Collect table definitions from sqlite_schema, pragma_table_list, pragma_foreign_key_list, pragma_table_xinfo, pragma_index_list, and pragm_index_info.
@@ -781,6 +833,7 @@ impl SQLite3Driver {
         // Select pragma_foreign_key_list
         let mut foreign_key_list_cache = HashMap::new();
 
+        #[allow(clippy::type_complexity)]
         let (column_origins, foreign_keys): (
             Option<HashMap<String, ColumnOriginAndIsRowId>>,
             HashMap<String, Rc<Vec<TableSchemaColumnForeignKey>>>,
@@ -892,7 +945,7 @@ impl SQLite3Driver {
                     },
                     pk,
                     auto_increment: pk && has_table_auto_increment_column,
-                    foreign_keys: foreign_keys.get(&name).map(|v| Rc::clone(v)).unwrap_or_default(),
+                    foreign_keys: foreign_keys.get(&name).map(Rc::clone).unwrap_or_default(),
                     hidden: row.get::<_, i64>(6)?,
                     dflt_value: match row.get_ref(4)? {
                         ValueRef::Null => None,
@@ -1108,7 +1161,7 @@ impl SQLite3Driver {
             w: &mut (impl Write + ?Sized),
             data: (T, Vec<InvalidUTF8>),
             start_time: std::time::Instant,
-        ) -> () {
+        ) {
             w.write_all(
                 &rmp_serde::to_vec_named(&EditorPragmaResponse {
                     data: data.0,
@@ -1126,7 +1179,7 @@ impl SQLite3Driver {
             "EDITOR_PRAGMA list_foreign_keys" => write_editor_pragma(w, self.list_foreign_keys()?, start_time),
             "EDITOR_PRAGMA table_schema" => {
                 let (Some(Literal::String(database)), Some(Literal::String(table_name))) =
-                    (params.get(0), params.get(1))
+                    (params.first(), params.get(1))
                 else {
                     return Error::new_other_error(
                         "invalid arguments for `EDITOR_PRAGMA table_schema`",
@@ -1137,7 +1190,7 @@ impl SQLite3Driver {
                 write_editor_pragma(w, self.table_schema(database, table_name)?, start_time)
             }
             "EDITOR_PRAGMA query_schema" => {
-                let Some(Literal::String(query)) = params.get(0) else {
+                let Some(Literal::String(query)) = params.first() else {
                     return Error::new_other_error(
                         "invalid argument for `EDITOR_PRAGMA query_schema`",
                         Some(query.to_owned()),
@@ -1231,10 +1284,10 @@ impl Drop for SQLite3Driver {
 }
 
 pub fn escape_sql_identifier(ident: &str) -> String {
-    if ident.contains("\x00") {
+    if ident.contains('\x00') {
         panic!("Failed to quote the SQL identifier {ident:?} as it contains a NULL char");
     }
-    format!("\"{}\"", ident.replace("\"", "\"\""))
+    format!("\"{}\"", ident.replace('"', "\"\""))
 }
 
 pub fn is_sqlcipher(con: &rusqlite::Connection) -> bool {
@@ -1245,7 +1298,7 @@ pub fn is_sqlcipher(con: &rusqlite::Connection) -> bool {
 }
 
 pub fn set_sqlcipher_key(con: &rusqlite::Connection, key: &str) -> std::result::Result<(), Error> {
-    if is_sqlcipher(&con) {
+    if is_sqlcipher(con) {
         con.pragma_update(None, "key", key)
             .expect("Setting `PRAGMA key` failed.");
         Ok(())

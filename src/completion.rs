@@ -177,6 +177,7 @@ fn is_token_before_cursor(token: &TokenWithRangeLocation, position: &ZeroIndexed
 
 #[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 #[ts(export)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum TokenType {
     // Keywords
     JOIN,
@@ -284,7 +285,7 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
 
                     if let Some(t) = table_name_lowered_to_info
                         .get(&value.to_lowercase())
-                        .and_then(|v| v.get(0))
+                        .and_then(|v| v.first())
                     {
                         referenced_tables.insert(&t.name);
                     }
@@ -294,7 +295,7 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
 
             expect_followed_by_alias = can_alias_follow(&token.token, expect_followed_by_alias);
 
-            if is_token_before_cursor(&token, &position) {
+            if is_token_before_cursor(token, position) {
                 last_token_before_position = Some(i);
             }
         }

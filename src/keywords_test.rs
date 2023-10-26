@@ -44,3 +44,13 @@ fn test_keywords() {
 
     assert!(missing.is_empty(), "{missing:?} is missing.");
 }
+
+#[test]
+fn test_unsupported_keywords() {
+    for keyword in KEYWORDS_UNSUPPORTED_BY_SQLPARSER.iter() {
+        assert!(
+            !sqlparser::keywords::ALL_KEYWORDS.contains(&keyword),
+            "{keyword:?} exists in sqlparser::keywords."
+        );
+    }
+}

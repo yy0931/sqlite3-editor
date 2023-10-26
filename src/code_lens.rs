@@ -44,7 +44,7 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
                 let with_clause = get_text_range(&lines, &stmt.real_start, &cte.body_start);
                 let select_stmt = format!(
                     "{}SELECT * FROM {}",
-                    if with_clause.ends_with(" ") { "" } else { " " },
+                    if with_clause.ends_with(' ') { "" } else { " " },
                     escape_sql_identifier(&get_text_range(&lines, &entry.ident_start, &entry.ident_end))
                 );
                 code_lens.push(CodeLens {
@@ -58,8 +58,8 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
 
         let mut kind: Option<CodeLensKind> = None;
         for token in stmt.real_tokens {
-            match token.token {
-                Token::Word(w) => match w {
+            if let Token::Word(w) = token.token {
+                match w {
                     Word {
                         keyword: Keyword::SELECT | Keyword::VALUES,
                         ..
@@ -86,7 +86,8 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
                             | Keyword::ALTER
                             | Keyword::PROGRAM
                             | Keyword::ANALYZE
-                            | Keyword::BEGIN,
+                            | Keyword::BEGIN
+                            | Keyword::VACUUM,
                         ..
                     } => {
                         kind = Some(CodeLensKind::Other);
@@ -104,8 +105,7 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
                         break;
                     }
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
 

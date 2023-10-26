@@ -47,43 +47,39 @@ impl SplittedStatement {
         start: ZeroIndexedLocation,
         end: ZeroIndexedLocation,
     ) -> Self {
-        let real_start_i = tokens.iter().position(|token| match token.token {
-            Token::Whitespace(_) => false,
-            _ => true,
-        });
+        let real_start_i = tokens
+            .iter()
+            .position(|token| !matches!(token.token, Token::Whitespace(_)));
         let real_end_i = tokens
             .iter()
             .rev()
-            .position(|token| match token.token {
-                Token::Whitespace(_) => false,
-                _ => true,
-            })
+            .position(|token| !matches!(token.token, Token::Whitespace(_)))
             .map(|i| tokens.len() - 1 - i);
 
         if let (Some(real_start_i), Some(real_end_i)) = (real_start_i, real_end_i) {
             let real_start = tokens[real_start_i].start.to_owned();
             let real_end = tokens[real_end_i].end.to_owned();
             Self {
-                text: get_text_range(&lines, &start, &end),
-                real_text: get_text_range(&lines, &real_start, &real_end),
+                text: get_text_range(lines, &start, &end),
+                real_text: get_text_range(lines, &real_start, &real_end),
                 start,
                 end,
                 real_start: real_start.to_owned(),
                 real_end: real_end.to_owned(),
                 real_tokens: tokens[real_start_i..(real_end_i + 1)]
-                    .into_iter()
+                    .iter()
                     .map(|&t| t.to_owned())
                     .collect::<Vec<_>>(),
             }
         } else {
             Self {
-                text: get_text_range(&lines, &start, &end),
-                real_text: get_text_range(&lines, &start, &end),
+                text: get_text_range(lines, &start, &end),
+                real_text: get_text_range(lines, &start, &end),
                 start: start.clone(),
                 end: end.clone(),
                 real_start: start,
                 real_end: end,
-                real_tokens: tokens.into_iter().map(|&t| t.to_owned()).collect::<Vec<_>>(),
+                real_tokens: tokens.iter().map(|&t| t.to_owned()).collect::<Vec<_>>(),
             }
         }
     }
@@ -110,12 +106,10 @@ pub fn split_sqlite_statements(sql: &str) -> Result<Vec<SplittedStatement>, Toke
             }) => {
                 begin_end_block_depth += 1;
             }
-            Token::Word(Word { keyword, .. })
-                if match keyword {
-                    Keyword::END | Keyword::COMMIT | Keyword::ROLLBACK => true,
-                    _ => false,
-                } =>
-            {
+            Token::Word(Word {
+                keyword: Keyword::END | Keyword::COMMIT | Keyword::ROLLBACK,
+                ..
+            }) => {
                 begin_end_block_depth -= 1;
                 if begin_end_block_depth < 0 {
                     begin_end_block_depth = 0;
@@ -150,16 +144,16 @@ pub fn split_sqlite_statements(sql: &str) -> Result<Vec<SplittedStatement>, Toke
 /// * `lines` - A slice of string slices representing lines of text.
 /// * `start` - The start location represented as ZeroIndexedLocation.
 /// * `end` - The end location represented as ZeroIndexedLocation.
-pub fn get_text_range<'a>(lines: &[&'a str], start: &ZeroIndexedLocation, end: &ZeroIndexedLocation) -> String {
+pub fn get_text_range(lines: &[&str], start: &ZeroIndexedLocation, end: &ZeroIndexedLocation) -> String {
     if start.line == end.line {
         // If start and end are on the same line
-        slice_unicode_str(&lines[start.line], Some(start.column), Some(end.column))
+        slice_unicode_str(lines[start.line], Some(start.column), Some(end.column))
     } else {
         // If start and end are on different lines
         let mut result: Vec<Cow<str>> = vec![];
         // Add the rest of the first line
         result.push(Cow::Owned(slice_unicode_str(
-            &lines[start.line],
+            lines[start.line],
             Some(start.column),
             None,
         )));
@@ -168,7 +162,7 @@ pub fn get_text_range<'a>(lines: &[&'a str], start: &ZeroIndexedLocation, end: &
             result.push(Cow::Borrowed(line));
         }
         // Add the part of the last line
-        result.push(Cow::Owned(slice_unicode_str(&lines[end.line], None, Some(end.column))));
+        result.push(Cow::Owned(slice_unicode_str(lines[end.line], None, Some(end.column))));
         result.join("\n")
     }
 }

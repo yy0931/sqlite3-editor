@@ -26,6 +26,5 @@ lazy_static! {
         "RAISE",
         "REGEXP",
         "REINDEX",
-        "VACUUM",
     ]);
 }

@@ -49,9 +49,9 @@ impl From<(String, Vec<Literal>, QueryMode)> for Request {
     }
 }
 
-impl Into<(String, Vec<Literal>, QueryMode)> for Request {
-    fn into(self) -> (String, Vec<Literal>, QueryMode) {
-        (self.query, self.params, self.mode)
+impl From<Request> for (String, Vec<Literal>, QueryMode) {
+    fn from(val: Request) -> Self {
+        (val.query, val.params, val.mode)
     }
 }
 

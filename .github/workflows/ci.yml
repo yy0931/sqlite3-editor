@@ -23,7 +23,6 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build-win32:
-    needs: test
     runs-on: windows-latest
     strategy:
       matrix:
@@ -46,17 +45,13 @@ jobs:
           rustup target add ${{ matrix.target }}
           cargo build --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/db-driver-rs.exe db-driver-${{ matrix.vsce_target }}.exe
-      - uses: softprops/action-gh-release@v1
+      - uses: actions/upload-artifact@v3
         with:
-          files: 'db-driver-*'
-          name: ${{ needs.test.outputs.version }}
-          tag_name: ${{ needs.test.outputs.version }}
-          draft: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: artifact-${{ matrix.vsce_target }}.exe
+          path: db-driver-${{ matrix.vsce_target }}.exe
+          retention-days: 1
 
   build-linux:
-    needs: test
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -89,17 +84,13 @@ jobs:
           cross build --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/db-driver-rs db-driver-${{ matrix.vsce_target }}
         shell: bash
-      - uses: softprops/action-gh-release@v1
+      - uses: actions/upload-artifact@v3
         with:
-          files: 'db-driver-*'
-          name: ${{ needs.test.outputs.version }}
-          tag_name: ${{ needs.test.outputs.version }}
-          draft: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: artifact-${{ matrix.vsce_target }}
+          path: db-driver-${{ matrix.vsce_target }}
+          retention-days: 1
 
   build-darwin:
-    needs: test
     runs-on: macos-latest
     strategy:
       matrix:
@@ -120,9 +111,29 @@ jobs:
           cargo build --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/db-driver-rs db-driver-${{ matrix.vsce_target }}
         shell: bash
+      - uses: actions/upload-artifact@v3
+        with:
+          name: artifact-${{ matrix.vsce_target }}
+          path: db-driver-${{ matrix.vsce_target }}
+          retention-days: 1
+
+  release:
+    needs:
+      - build-win32
+      - build-linux
+      - build-darwin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+      - run: |
+          for i in ./artifact-*/*
+            do cp -r "$i" .
+          done
+          chmod a+x ./db-driver-*
+          tar -cvf db-drivers.tar ./db-driver-*
       - uses: softprops/action-gh-release@v1
         with:
-          files: 'db-driver-*'
+          files: 'db-drivers.tar'
           name: ${{ needs.test.outputs.version }}
           tag_name: ${{ needs.test.outputs.version }}
           draft: true

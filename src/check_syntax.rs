@@ -49,29 +49,29 @@ fn check_syntax_stmt(stmt_str: &str, conn: &mut rusqlite::Connection, offset_sta
         return None;
     }
 
-    if !PRAGMA.is_match(&stmt_str) && !QUERY.is_match(&stmt_str) && !EXPLAIN.is_match(&stmt_str) {
+    if !PRAGMA.is_match(stmt_str) && !QUERY.is_match(stmt_str) && !EXPLAIN.is_match(stmt_str) {
         let explain = format!("EXPLAIN {stmt_str}");
         let prepare = conn.prepare(&explain);
         match prepare {
             Err(rusqlite::Error::SqlInputError { sql, offset, msg, .. })
                 if SQL_INPUT_ERROR_SYNTAX_ERROR.is_match(&msg) =>
             {
-                return Some(Diagnostic {
+                Some(Diagnostic {
                     possible_causes: vec![PossibleCause {
                         offset: offset_start + loose_byte_to_code_point_index(&sql, offset as usize) - "EXPLAIN ".len(),
                     }],
                     severity: Severity::Error,
                     message: msg,
-                });
+                })
             }
             Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if SQLITE_FAILURE_SYNTAX_ERROR.is_match(&msg) => {
-                return Some(Diagnostic {
+                Some(Diagnostic {
                     possible_causes: vec![PossibleCause {
                         offset: offset_start + stmt_str.chars().count(),
                     }],
                     message: msg,
                     severity: Severity::Error,
-                });
+                })
             }
             _ => None,
         }
@@ -104,7 +104,7 @@ pub fn check_syntax(sql: &str) -> std::result::Result<Vec<Diagnostic>, Error> {
         ..
     } in statements
     {
-        if let Some(err) = check_syntax_stmt(&stmt_str, &mut conn, real_start.offset_at(&sql)) {
+        if let Some(err) = check_syntax_stmt(&stmt_str, &mut conn, real_start.offset_at(sql)) {
             errors.push(err);
         }
     }

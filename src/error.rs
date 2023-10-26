@@ -18,19 +18,20 @@ pub enum ErrorCode {
 
 #[cfg_attr(test, derive(Debug))]
 #[derive(Clone, PartialEq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Error {
-    QueryError {
+    Query {
         message: String,
         query: String,
         params: Vec<Literal>,
         code: ErrorCode,
     },
-    FFIError {
+    FFI {
         message: String,
         function_name: String,
         params: Vec<Literal>,
     },
-    OtherError {
+    Other {
         message: String,
         query: Option<String>,
         params: Option<Vec<Literal>>,
@@ -43,10 +44,10 @@ impl Error {
         query: U,
         params: &[Literal],
     ) -> std::result::Result<T, Self> {
-        Err(Self::QueryError {
+        Err(Self::Query {
             message: format!("{err}"),
             query: query.into(),
-            params: params.iter().cloned().collect(),
+            params: params.to_vec(),
             code: match err {
                 rusqlite::Error::SqliteFailure(rusqlite::ffi::Error { code, .. }, ..) => match code {
                     rusqlite::ffi::ErrorCode::PermissionDenied => ErrorCode::PermissionDenied,
@@ -69,10 +70,10 @@ impl Error {
         function_name: U,
         params: &[Literal],
     ) -> std::result::Result<T, Self> {
-        Err(Self::FFIError {
+        Err(Self::FFI {
             message: format!("{err}"),
             function_name: function_name.into(),
-            params: params.iter().cloned().collect(),
+            params: params.to_vec(),
         })
     }
 
@@ -81,7 +82,7 @@ impl Error {
         query: Option<String>,
         params: Option<&[Literal]>,
     ) -> std::result::Result<T, Self> {
-        Err(Self::OtherError {
+        Err(Self::Other {
             message: msg.into(),
             query,
             params: params.map(|v| v.into()),
@@ -89,8 +90,8 @@ impl Error {
     }
 
     fn format_query(query: &str) -> String {
-        if query.starts_with("EDITOR_PRAGMA ") {
-            format!("Method: {}", &query["EDITOR_PRAGMA ".len()..])
+        if let Some(query_stripped) = query.strip_prefix("EDITOR_PRAGMA ") {
+            format!("Method: {}", query_stripped)
         } else {
             format!("Query: {}", query)
         }
@@ -102,7 +103,7 @@ impl Error {
 
     pub fn code(&self) -> ErrorCode {
         match self {
-            Self::QueryError { code, .. } => code.to_owned(),
+            Self::Query { code, .. } => code.to_owned(),
             _ => ErrorCode::OtherError,
         }
     }
@@ -111,7 +112,7 @@ impl Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::QueryError {
+            Self::Query {
                 message, query, params, ..
             } => {
                 write!(
@@ -122,7 +123,7 @@ impl std::fmt::Display for Error {
                     Self::format_params(params)
                 )
             }
-            Self::FFIError {
+            Self::FFI {
                 message,
                 function_name,
                 params,
@@ -135,14 +136,14 @@ impl std::fmt::Display for Error {
                     Self::format_params(params)
                 )
             }
-            Self::OtherError { message, query, params } => {
+            Self::Other { message, query, params } => {
                 write!(
                     f,
                     "{}{}{}",
                     message,
                     query
                         .as_ref()
-                        .map(|query| Self::format_query(&query))
+                        .map(|query| Self::format_query(query))
                         .unwrap_or_default(),
                     params
                         .as_ref()
@@ -156,7 +157,7 @@ impl std::fmt::Display for Error {
 
 impl From<csv::Error> for Error {
     fn from(value: csv::Error) -> Self {
-        Self::OtherError {
+        Self::Other {
             message: format!("{value}"),
             query: None,
             params: None,
@@ -166,7 +167,7 @@ impl From<csv::Error> for Error {
 
 impl From<std::io::Error> for Error {
     fn from(value: std::io::Error) -> Self {
-        Self::OtherError {
+        Self::Other {
             message: format!("{value}"),
             query: None,
             params: None,
@@ -176,7 +177,7 @@ impl From<std::io::Error> for Error {
 
 impl From<serde_json::Error> for Error {
     fn from(value: serde_json::Error) -> Self {
-        Self::OtherError {
+        Self::Other {
             message: format!("{value}"),
             query: None,
             params: None,
@@ -186,7 +187,17 @@ impl From<serde_json::Error> for Error {
 
 impl From<rmp_serde::encode::Error> for Error {
     fn from(value: rmp_serde::encode::Error) -> Self {
-        Self::OtherError {
+        Self::Other {
+            message: format!("{value}"),
+            query: None,
+            params: None,
+        }
+    }
+}
+
+impl From<rust_xlsxwriter::XlsxError> for Error {
+    fn from(value: rust_xlsxwriter::XlsxError) -> Self {
+        Self::Other {
             message: format!("{value}"),
             query: None,
             params: None,

@@ -18,6 +18,7 @@ mod column_origin;
 mod export;
 mod import;
 use crate::{request_type::Request, sqlite3_driver::read_msgpack_into_json, tokenize::ZeroIndexedLocation};
+mod cache;
 mod check_syntax;
 #[cfg(test)]
 mod check_syntax_test;
@@ -37,9 +38,6 @@ mod literal_test;
 mod online_backup;
 #[cfg(test)]
 mod online_backup_test;
-mod pager;
-#[cfg(test)]
-mod pager_test;
 mod parse_cte;
 #[cfg(test)]
 mod parse_cte_test;
@@ -77,13 +75,25 @@ struct Args {
 }
 
 #[derive(clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
-pub enum FileFormat {
+pub enum ImportFormat {
     #[clap(name = "csv")]
     CSV,
     #[clap(name = "tsv")]
     TSV,
     #[clap(name = "json")]
     JSON,
+}
+
+#[derive(clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
+pub enum ExportFormat {
+    #[clap(name = "csv")]
+    CSV,
+    #[clap(name = "tsv")]
+    TSV,
+    #[clap(name = "json")]
+    JSON,
+    #[clap(name = "xlsx")]
+    XLSX,
 }
 
 #[derive(Subcommand)]
@@ -99,7 +109,7 @@ enum Commands {
         sql_cipher_key: Option<String>,
 
         #[arg(long, required = true)]
-        format: FileFormat,
+        format: ImportFormat,
         #[arg(long, required = true)]
         table_name: String,
         #[arg(long, default_value = ",")]
@@ -116,7 +126,7 @@ enum Commands {
         sql_cipher_key: Option<String>,
 
         #[arg(long, required = true)]
-        format: FileFormat,
+        format: ExportFormat,
         #[arg(long)]
         query: String,
         #[arg(long, default_value = ",")]
@@ -186,7 +196,7 @@ where
             // health check
             let con = rusqlite::Connection::open_in_memory().unwrap();
             con.execute("CREATE TABLE t(v)", ()).unwrap();
-            con.execute("INSERT INTO t VALUES (?)", &["ok"]).unwrap();
+            con.execute("INSERT INTO t VALUES (?)", ["ok"]).unwrap();
             assert_eq!(
                 con.query_row("SELECT v FROM t", [], |row| row.get::<_, String>(0))
                     .unwrap(),
@@ -422,14 +432,21 @@ where
             csv_delimiter,
             output_file,
         } => {
-            if let Err(err) = export::export(
-                &database_filepath,
-                &sql_cipher_key,
-                &query,
-                format,
-                &csv_delimiter,
-                output_file,
-            ) {
+            if let Err(err) = match format {
+                ExportFormat::CSV => {
+                    export::export_csv(&database_filepath, &sql_cipher_key, &query, &csv_delimiter, output_file)
+                }
+                ExportFormat::TSV => export::export_csv(&database_filepath, &sql_cipher_key, &query, "\t", output_file),
+                ExportFormat::JSON => export::export_json(&database_filepath, &sql_cipher_key, &query, output_file),
+                ExportFormat::XLSX => {
+                    let Some(output_file) = output_file else {
+                        writeln!(&mut stderr, "`--format xlsx` requires `--output-file <file-name>`.")
+                            .expect("writeln! failed.");
+                        return 1;
+                    };
+                    export::export_xlsx(&database_filepath, &sql_cipher_key, &query, &output_file)
+                }
+            } {
                 writeln!(&mut stderr, "{err}").expect("writeln! failed.");
                 return 1;
             }
@@ -442,14 +459,19 @@ where
             csv_delimiter,
             input_file,
         } => {
-            if let Err(err) = import::import(
-                &database_filepath,
-                &sql_cipher_key,
-                format,
-                &table_name,
-                &csv_delimiter,
-                input_file,
-            ) {
+            if let Err(err) = match format {
+                ImportFormat::CSV => import::import_csv(
+                    &database_filepath,
+                    &sql_cipher_key,
+                    &table_name,
+                    &csv_delimiter,
+                    input_file,
+                ),
+                ImportFormat::TSV => {
+                    import::import_csv(&database_filepath, &sql_cipher_key, &table_name, "\t", input_file)
+                }
+                ImportFormat::JSON => import::import_json(&database_filepath, &sql_cipher_key, &table_name, input_file),
+            } {
                 writeln!(&mut stderr, "{err}").expect("writeln! failed.");
                 return 1;
             }
@@ -473,18 +495,18 @@ fn main() {
 }
 
 pub trait TruncateAll {
-    fn truncate_all(&mut self) -> ();
+    fn truncate_all(&mut self);
 }
 
 impl TruncateAll for std::fs::File {
-    fn truncate_all(&mut self) -> () {
+    fn truncate_all(&mut self) {
         self.set_len(0).expect("Failed to truncate the file.");
         self.seek(SeekFrom::Start(0)).expect("Failed to seek the file.");
     }
 }
 
 impl TruncateAll for std::io::Cursor<Vec<u8>> {
-    fn truncate_all(&mut self) -> () {
+    fn truncate_all(&mut self) {
         self.get_mut().truncate(0);
         self.seek(SeekFrom::Start(0)).expect("Failed to seek the cursor.");
     }

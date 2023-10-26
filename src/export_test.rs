@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use crate::{export::export, FileFormat};
+use crate::export;
 
 fn setup_test_db(tmp_db_filepath: &str) {
     let connection = rusqlite::Connection::open(tmp_db_filepath).unwrap();
@@ -37,44 +37,11 @@ fn test_export_csv() {
 
     setup_test_db(&tmp_db_filepath);
 
-    export(
-        &tmp_db_filepath,
-        &None,
-        "SELECT * FROM test",
-        FileFormat::CSV,
-        ",",
-        Some(tmp_out_path),
-    )
-    .unwrap();
+    export::export_csv(&tmp_db_filepath, &None, "SELECT * FROM test", ",", Some(tmp_out_path)).unwrap();
 
     let mut buf = String::new();
     tmp_out.read_to_string(&mut buf).unwrap();
     assert_eq!(buf, "t,i,n,r,b\nAlice,20,,1.2,AQID\nAlice,25,,2.4,BAUG\n");
-}
-
-#[test]
-fn test_export_csv_delimiter() {
-    let tmp_db_file = tempfile::NamedTempFile::new().unwrap();
-    let tmp_db_filepath = tmp_db_file.path().to_str().unwrap().to_owned();
-
-    let mut tmp_out = tempfile::NamedTempFile::new().unwrap();
-    let tmp_out_path = tmp_out.path().to_str().unwrap().to_owned();
-
-    setup_test_db(&tmp_db_filepath);
-
-    export(
-        &tmp_db_filepath,
-        &None,
-        "SELECT * FROM test",
-        FileFormat::CSV,
-        ";",
-        Some(tmp_out_path),
-    )
-    .unwrap();
-
-    let mut buf = String::new();
-    tmp_out.read_to_string(&mut buf).unwrap();
-    assert_eq!(buf, "t;i;n;r;b\nAlice;20;;1.2;AQID\nAlice;25;;2.4;BAUG\n");
 }
 
 #[test]
@@ -87,15 +54,7 @@ fn test_export_tsv() {
 
     setup_test_db(&tmp_db_filepath);
 
-    export(
-        &tmp_db_filepath,
-        &None,
-        "SELECT * FROM test",
-        FileFormat::TSV,
-        ",",
-        Some(tmp_out_path),
-    )
-    .unwrap();
+    export::export_csv(&tmp_db_filepath, &None, "SELECT * FROM test", "\t", Some(tmp_out_path)).unwrap();
 
     let mut buf = String::new();
     tmp_out.read_to_string(&mut buf).unwrap();
@@ -112,15 +71,7 @@ fn test_export_json() {
 
     setup_test_db(&tmp_db_filepath);
 
-    export(
-        &tmp_db_filepath,
-        &None,
-        "SELECT * FROM test",
-        FileFormat::JSON,
-        ",",
-        Some(tmp_out_path),
-    )
-    .unwrap();
+    export::export_json(&tmp_db_filepath, &None, "SELECT * FROM test", Some(tmp_out_path)).unwrap();
 
     let mut buf = String::new();
     tmp_out.read_to_string(&mut buf).unwrap();
@@ -140,15 +91,25 @@ fn test_invalid_delimiter() {
 
     setup_test_db(&tmp_db_filepath);
 
-    assert!(export(
-        &tmp_db_filepath,
-        &None,
-        "SELECT * FROM test",
-        FileFormat::JSON,
-        ",,",
-        Some(tmp_out_path),
-    )
-    .unwrap_err()
-    .to_string()
-    .contains("csv_delimiter needs to be a single character."));
+    assert!(
+        export::export_csv(&tmp_db_filepath, &None, "SELECT * FROM test", ",,", Some(tmp_out_path),)
+            .unwrap_err()
+            .to_string()
+            .contains("csv_delimiter needs to be a single character.")
+    );
+}
+
+#[test]
+fn test_export_xlsx() {
+    let tmp_db_file = tempfile::NamedTempFile::new().unwrap();
+    let tmp_db_filepath = tmp_db_file.path().to_str().unwrap().to_owned();
+
+    let tmp_out = tempfile::NamedTempFile::new().unwrap();
+    let tmp_out_path = tmp_out.path().to_str().unwrap().to_owned();
+
+    setup_test_db(&tmp_db_filepath);
+
+    export::export_xlsx(&tmp_db_filepath, &None, "SELECT * FROM test", &tmp_out_path).unwrap();
+
+    dbg!(tmp_out.as_file().metadata().unwrap().len());
 }

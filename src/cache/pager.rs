@@ -6,195 +6,7 @@ use crate::{
     sqlite3_driver::{write_value_ref_into_msgpack, InvalidUTF8},
 };
 
-pub mod cache {
-    use std::{cell::RefCell, collections::HashMap, rc::Rc, time::Instant};
-
-    use crate::literal::Literal;
-
-    use super::Records;
-
-    #[derive(Debug)]
-    pub struct PagerCacheEntry {
-        pub query: String,
-        pub params: Vec<Literal>,
-        pub records: HashMap<i64, Vec<u8>>,
-        pub columns: Option<Rc<Vec<String>>>,
-        /// None means unknown
-        pub num_records: Option<i64>,
-        pub last_accessed: Instant,
-
-        // The approximate size (stack size + heap size) of this struct in bytes.
-        total_size_bytes: u64,
-    }
-
-    impl PagerCacheEntry {
-        pub fn new(
-            query: String,
-            params: Vec<Literal>,
-            records: HashMap<i64, Vec<u8>>,
-            columns: Option<Vec<String>>,
-            num_records: Option<i64>,
-        ) -> Self {
-            Self {
-                total_size_bytes: std::mem::size_of::<Self>() as u64
-                    + query.capacity() as u64
-                    + params
-                        .iter()
-                        .map(|p| {
-                            std::mem::size_of_val(p) as u64
-                                + match p {
-                                    Literal::Bool(_) | Literal::F64(_) | Literal::I64(_) | Literal::Nil => 0,
-                                    Literal::Blob(b) => std::mem::size_of_val(b) + b.0.capacity(),
-                                    Literal::String(s) => s.capacity(),
-                                } as u64
-                        })
-                        .sum::<u64>(),
-                query,
-                params,
-                records,
-                columns: columns.map(|v| Rc::new(v)),
-                num_records,
-                last_accessed: std::time::Instant::now(),
-            }
-        }
-
-        pub fn total_size_bytes(&self) -> u64 {
-            self.total_size_bytes
-        }
-
-        pub fn set_columns_if_not_set_yet<T: Into<Vec<String>>>(&mut self, columns: T) {
-            if self.columns.is_none() {
-                let columns: Vec<String> = columns.into();
-                self.total_size_bytes += columns.iter().map(|c| c.capacity() as u64).sum::<u64>();
-                self.columns = Some(columns.into());
-            }
-        }
-
-        pub fn insert(&mut self, offset: i64, record: &[Vec<u8>]) {
-            let buf = rmp_serde::encode::to_vec(&record).expect("Failed to encode a cache into a msgpack.");
-            self.total_size_bytes += std::mem::size_of::<Vec<u8>>() as u64 + buf.capacity() as u64;
-            self.records.insert(offset, buf);
-        }
-
-        fn add_limit_to_offset(&self, offset: i64, limit: i64) -> i64 {
-            if let Some(num_records) = self.num_records {
-                // Clip `LIMIT ? OFFSET ?` at `num_records` if the number of records is known.
-                (offset + limit).min(num_records)
-            } else {
-                offset + limit
-            }
-        }
-
-        pub fn has_range(&self, offset: i64, limit: i64) -> bool {
-            if self.columns.is_none() {
-                return false; // this check is needed to unwrap() columns in get_range()
-            }
-            let end = self.add_limit_to_offset(offset, limit);
-            return (offset..end).all(|row| self.records.contains_key(&row));
-        }
-
-        pub fn get_range(&self, offset: i64, limit: i64) -> Option<Records> {
-            if !self.has_range(offset, limit) {
-                return None;
-            }
-            let columns = Rc::clone(self.columns.as_ref().unwrap()); // columns should be Some when has_range() == true
-            let end = self.add_limit_to_offset(offset, limit);
-
-            // Decode msgpack
-            let records_unpacked: Vec<Vec<Vec<u8>>> = (offset..end)
-                .into_iter()
-                .map(|row| {
-                    rmp_serde::decode::from_slice(&self.records[&row]).expect("Failed to decode a cached msgpack")
-                })
-                .collect::<Vec<_>>();
-
-            // Transpose
-            let mut col_buf = vec![vec![]; columns.len()];
-            for col in 0..columns.len() {
-                for (row, _) in (offset..end).enumerate() {
-                    col_buf[col].extend(&records_unpacked[row][col]);
-                }
-            }
-
-            return Some(Records {
-                col_buf,
-                n_rows: end - offset,
-                columns,
-            });
-        }
-    }
-
-    #[derive(Debug)]
-    pub struct PagerCache {
-        cache: Vec<Rc<RefCell<PagerCacheEntry>>>,
-    }
-
-    impl PagerCache {
-        pub fn new() -> Self {
-            Self { cache: vec![] }
-        }
-
-        /// Returns the cache entry that is bound to (query, params).
-        /// Inserts an entry if it does not exist.
-        pub fn entry(&mut self, query: &str, params: &[Literal]) -> Rc<RefCell<PagerCacheEntry>> {
-            let params = &params[0..(params.len() - 2)];
-            for entry in &self.cache {
-                {
-                    let entry = entry.borrow();
-                    if entry.query != query || entry.params != params {
-                        continue;
-                    }
-                }
-                entry.borrow_mut().last_accessed = std::time::Instant::now();
-                return Rc::clone(entry);
-            }
-            self.cache.push(Rc::new(RefCell::new(PagerCacheEntry::new(
-                query.to_owned(),
-                params.to_owned(),
-                HashMap::new(),
-                None,
-                None,
-            ))));
-            Rc::clone(self.cache.last().unwrap())
-        }
-
-        pub fn total_size_bytes(&self) -> u64 {
-            self.cache.iter().map(|e| e.borrow().total_size_bytes).sum::<u64>()
-        }
-
-        pub fn clear(&mut self) {
-            self.cache.clear();
-        }
-
-        pub fn dequeue(&mut self) {
-            if let Some((index, _)) = self
-                .cache
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, e)| e.borrow().last_accessed)
-            {
-                self.cache.remove(index);
-            }
-        }
-    }
-}
-
-/// Given a query that ends with "LIMIT ? OFFSET ?",
-#[derive(Debug)]
-pub struct Pager {
-    cache: cache::PagerCache,
-    data_version: Option<i64>,
-    pub config: PagerConfig,
-
-    #[cfg(test)]
-    pub cache_hit_count: usize,
-
-    #[cfg(test)]
-    pub cache_clear_count: usize,
-
-    #[cfg(test)]
-    pub dequeue_count: usize,
-}
+use super::{cache_entry::Records, pager_cache::PagerCache};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PagerConfig {
@@ -208,29 +20,33 @@ impl Default for PagerConfig {
     fn default() -> Self {
         Self {
             slow_query_threshold: Duration::from_millis(500),
-            per_query_cache_limit_bytes: /* 1MB */ 1024 * 1024,
+            per_query_cache_limit_bytes: /* 8MB */ 8 * 1024 * 1024,
             cache_time_limit_relative_to_queried_range: 0.2,
             cache_limit_bytes: /* 64MB */ 64 * 1024 * 1024,
         }
     }
 }
 
-fn pragma_data_version(conn: &rusqlite::Connection) -> Result<i64, Error> {
-    conn.pragma_query_value(None, "data_version", |row| row.get::<_, i64>(0))
-        .or_else(|err| Error::new_query_error(err, "PRAGMA data_version", &[]))
-}
+/// Given a query that ends with "LIMIT ? OFFSET ?",
+pub struct Pager {
+    cache: PagerCache,
+    data_version: Option<i64>,
+    pub config: PagerConfig,
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Records {
-    pub col_buf: Vec<Vec<u8>>,
-    pub n_rows: i64,
-    pub columns: Rc<Vec<String>>,
+    #[cfg(test)]
+    pub cache_hit_count: usize,
+
+    #[cfg(test)]
+    pub cache_clear_count: usize,
+
+    #[cfg(test)]
+    pub dequeue_count: usize,
 }
 
 impl Pager {
     pub fn new() -> Self {
         Self {
-            cache: cache::PagerCache::new(),
+            cache: PagerCache::new(),
             data_version: None,
             config: PagerConfig::default(),
             #[cfg(test)]
@@ -259,7 +75,7 @@ impl Pager {
         self.cache.total_size_bytes()
     }
 
-    pub fn query<F: FnMut(InvalidUTF8) -> ()>(
+    pub fn query<F: FnMut(InvalidUTF8)>(
         &mut self,
         conn: &mut rusqlite::Connection,
         query: &str,
@@ -276,8 +92,6 @@ impl Pager {
             self.clear_cache();
             self.data_version = data_version;
         } else {
-            // TODO: use disk
-            // TODO: dequeue in an entry
             while self.cache.total_size_bytes() > self.config.cache_limit_bytes {
                 self.cache.dequeue();
                 #[cfg(test)]
@@ -312,7 +126,8 @@ impl Pager {
         // Add margins before and after the queried area
         let limit_with_margin = limit + 100000;
         params[len - 2] = Literal::I64(limit_with_margin);
-        let offset_with_margin = (offset - /* disabled */0).max(0);
+        const MARGIN_START: i64 = 0; // disabled
+        let offset_with_margin = (offset - MARGIN_START).max(0);
         params[len - 1] = Literal::I64(offset_with_margin);
 
         // Forward run: Fetch the queried area and cache records after that
@@ -339,7 +154,7 @@ impl Pager {
             col_buf = vec![vec![]; columns.len()];
 
             let cache_size_start = cache_entry.total_size_bytes();
-            cache_entry.set_columns_if_not_set_yet::<&[String]>(&columns);
+            cache_entry.set_columns_if_not_set_yet(columns.clone());
 
             // Fetch records
             let mut current_offset = offset_with_margin;
@@ -374,12 +189,12 @@ impl Pager {
                         }
 
                         let mut cache_record = vec![];
-                        for i in 0..columns.len() {
+                        for (i, col_buf_i) in col_buf.iter_mut().enumerate() {
                             let mut w = vec![];
                             write_value_ref_into_msgpack(&mut w, row.get_ref_unwrap(i), &mut on_invalid_utf8)
                                 .expect("Failed to write msgpack");
                             if !is_margin {
-                                col_buf[i].extend(&w);
+                                col_buf_i.extend(&w);
                             }
 
                             cache_record.push(w);
@@ -393,7 +208,7 @@ impl Pager {
                     }
                     Ok(None) => {
                         if current_offset < offset_with_margin + limit_with_margin {
-                            cache_entry.num_records = Some(current_offset);
+                            cache_entry.set_num_records(current_offset);
                         }
                         break;
                     }
@@ -446,10 +261,11 @@ impl Pager {
             }
         }
 
-        Ok(Some(Records {
-            col_buf,
-            n_rows,
-            columns: Rc::new(columns),
-        }))
+        Ok(Some(Records::new(col_buf, n_rows, Rc::new(columns))))
     }
+}
+
+fn pragma_data_version(conn: &rusqlite::Connection) -> Result<i64, Error> {
+    conn.pragma_query_value(None, "data_version", |row| row.get::<_, i64>(0))
+        .or_else(|err| Error::new_query_error(err, "PRAGMA data_version", &[]))
 }

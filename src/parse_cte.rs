@@ -15,7 +15,7 @@ pub struct CTEEntry {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CTE {
+pub struct CommonTableExpression {
     pub entries: Vec<CTEEntry>,
     pub body_start: ZeroIndexedLocation,
     pub body_end: ZeroIndexedLocation,
@@ -23,13 +23,16 @@ pub struct CTE {
 
 /// Parses the CTE in the given SQL statement.
 /// Returns None if the statement does not have a CTE.
-pub fn parse_cte(stmt: &SplittedStatement) -> Option<CTE> {
+pub fn parse_cte(stmt: &SplittedStatement) -> Option<CommonTableExpression> {
     // Return None if the first token is not "WITH"
-    if !stmt.real_tokens.first().is_some_and(|t| match t.token {
-        Token::Word(Word {
-            keyword: Keyword::WITH, ..
-        }) => true,
-        _ => false,
+    if !stmt.real_tokens.first().is_some_and(|t| {
+        matches!(
+            t.token,
+            Token::Word(Word {
+                keyword: Keyword::WITH,
+                ..
+            })
+        )
     }) {
         return None;
     }
@@ -112,7 +115,7 @@ pub fn parse_cte(stmt: &SplittedStatement) -> Option<CTE> {
                     | Keyword::CREATE
                     | Keyword::ALTER
                     | Keyword::DROP => {
-                        return Some(CTE {
+                        return Some(CommonTableExpression {
                             entries,
                             body_start: token.start.clone(),
                             body_end: stmt.real_end.clone(),

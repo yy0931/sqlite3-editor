@@ -38,13 +38,13 @@ impl ZeroIndexedLocation {
     pub fn offset_at(&self, s: &str) -> usize {
         let ZeroIndexedLocation { line, column } = self;
         let mut offset = 0;
-        for (i, line_str) in s.split("\n").enumerate() {
-            if i >= *line as usize {
+        for (i, line_str) in s.split('\n').enumerate() {
+            if i >= *line {
                 break;
             }
             offset += line_str.chars().count() + 1;
         }
-        return offset + column;
+        offset + column
     }
 }
 

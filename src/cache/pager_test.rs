@@ -2,7 +2,7 @@ use std::{rc::Rc, time::Duration};
 
 use tempfile::NamedTempFile;
 
-use crate::pager::{Pager, Records};
+use crate::cache::{cache_entry::Records, pager::Pager};
 
 #[test]
 fn test_repeat_same_query() -> () {
@@ -29,14 +29,14 @@ fn test_repeat_same_query() -> () {
     // Compare records
     assert_eq!(&result1, &result2);
     assert_eq!(
-        &result1.col_buf,
+        &result1.col_buf(),
         &[
             vec![0xa1, 'a' as u8, 0xa1, 'c' as u8],
             vec![0xa1, 'b' as u8, 0xa1, 'd' as u8],
         ]
     );
-    assert_eq!(result1.n_rows, 2);
-    assert_eq!(result1.columns, Rc::new(vec!["x".to_owned(), "y".to_owned()]));
+    assert_eq!(result1.n_rows(), 2);
+    assert_eq!(result1.columns(), Rc::new(vec!["x".to_owned(), "y".to_owned()]));
 }
 
 #[test]
@@ -69,11 +69,11 @@ fn test_backward_cache() {
 
     assert_eq!(
         result2,
-        Records {
-            col_buf: vec![vec![0, 2, 4], vec![1, 3, 5],],
-            n_rows: 3,
-            columns: Rc::new(vec!["x".into(), "y".into()]),
-        }
+        Records::new(
+            vec![vec![0, 2, 4], vec![1, 3, 5]],
+            3,
+            Rc::new(vec!["x".into(), "y".into()])
+        )
     );
 }
 

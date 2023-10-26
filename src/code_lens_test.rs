@@ -102,3 +102,16 @@ fn test_pragma() {
         }]
     );
 }
+
+#[test]
+fn test_vacuum() {
+    assert_eq!(
+        code_lens("VACUUM;"),
+        [CodeLens {
+            kind: CodeLensKind::Other,
+            start: ZeroIndexedLocation::new(0, 0),
+            end: ZeroIndexedLocation::new(0, 7),
+            stmt_executed: "VACUUM;".to_owned(),
+        }]
+    );
+}

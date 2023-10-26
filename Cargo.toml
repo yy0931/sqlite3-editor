@@ -1,6 +1,6 @@
 [package]
 name = "db-driver-rs"
-version = "1.0.133"
+version = "1.0.137"
 edition = "2021"
 
 [features]
@@ -22,6 +22,7 @@ csv = "1.2.2"
 base64 = "0.21.4"
 hex = "0.4.3"
 ts-rs = "7.0.0"
+rust_xlsxwriter = "0.52.0"
 
 [dependencies.rusqlite]
 git = "https://github.com/yy0931/rusqlite.git"
