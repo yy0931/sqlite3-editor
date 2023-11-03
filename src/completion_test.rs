@@ -66,6 +66,7 @@ fn test_simple() {
             last_tokens: VecDeque::from([TokenType::StartOfStatement, TokenType::Other]),
             last_schema_period: None,
             last_table_period: None,
+            last_create_trigger_table: None,
         }
     );
 }
@@ -288,4 +289,15 @@ fn test1() {
     assert_eq!(result.last_tokens.pop_back().unwrap(), TokenType::TableIdent);
     assert_eq!(result.last_schema_period, None);
     assert_eq!(result.last_table_period, Some("t2".to_owned()));
+}
+
+#[test]
+fn test_last_create_trigger_table() {
+    let db = setup();
+    let result = complete(
+        &db,
+        r#"CREATE TRIGGER trigger1 BEFORE INSERT ON "table1" BEGIN"#,
+        &loc(0, 46),
+    );
+    assert_eq!(result.last_create_trigger_table, Some("table1".to_owned()));
 }

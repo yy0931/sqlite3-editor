@@ -9,9 +9,9 @@ use crate::{
 };
 
 lazy_static! {
-    static ref PRAGMA: regex::Regex = regex::Regex::new(r#"(?i)(?s).*\bPRAGMA[^_a-zA-Z0-9]"#).unwrap();
-    static ref QUERY: regex::Regex = regex::Regex::new(r#"(?i)(?s).*\bQUERY[^_a-zA-Z0-9]"#).unwrap();
-    static ref EXPLAIN: regex::Regex = regex::Regex::new(r#"(?i)(?s).*\bEXPLAIN[^_a-zA-Z0-9]"#).unwrap();
+    static ref PRAGMA: regex::Regex = regex::Regex::new(r"(?i)(?s).*\bPRAGMA[^_a-zA-Z0-9]").unwrap();
+    static ref QUERY: regex::Regex = regex::Regex::new(r"(?i)(?s).*\bQUERY[^_a-zA-Z0-9]").unwrap();
+    static ref EXPLAIN: regex::Regex = regex::Regex::new(r"(?i)(?s).*\bEXPLAIN[^_a-zA-Z0-9]").unwrap();
 }
 
 lazy_static! {

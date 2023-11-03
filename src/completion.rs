@@ -43,6 +43,7 @@ pub struct Completions {
     pub last_tokens: VecDeque<TokenType>,
     pub last_schema_period: Option<String>,
     pub last_table_period: Option<String>,
+    pub last_create_trigger_table: Option<String>,
 }
 
 mod completions_ts {
@@ -60,6 +61,7 @@ mod completions_ts {
         pub last_tokens: Vec<TokenType>,
         pub last_schema_period: Option<String>,
         pub last_table_period: Option<String>,
+        pub last_create_trigger_table: Option<String>,
     }
 }
 
@@ -201,6 +203,8 @@ pub enum TokenType {
     SELECT,
     WHERE,
     DISTINCT,
+    NEW,
+    OLD,
 
     // Operators
     #[serde(rename = "(")]
@@ -268,35 +272,71 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
     let mut last_tokens = VecDeque::<TokenType>::new();
     let mut last_schema_period = None;
     let mut last_table_period: Option<Option<String>> = None;
+    let mut last_create_trigger_table: Option<String> = None;
 
     if let Some(stmt) = stmt {
         let mut expect_followed_by_alias: Option<AliasableToken> = None;
+        let mut create_trigger = 0;
+
         for (i, token) in stmt.real_tokens.iter().enumerate() {
+            // Update as_clauses_lower and referenced_tables
+            {
+                match &token.token {
+                    Token::Word(Word {
+                        keyword: Keyword::NoKeyword,
+                        value,
+                        ..
+                    }) if !KEYWORDS_UNSUPPORTED_BY_SQLPARSER.contains(&value.to_uppercase().as_str()) => {
+                        if let Some(target) = expect_followed_by_alias {
+                            as_clauses_lower.insert(value.to_lowercase(), (value.clone(), target));
+                            expect_followed_by_alias = None;
+                        }
+
+                        if let Some(t) = table_name_lowered_to_info
+                            .get(&value.to_lowercase())
+                            .and_then(|v| v.first())
+                        {
+                            referenced_tables.insert(&t.name);
+                        }
+                    }
+                    _ => {}
+                }
+
+                expect_followed_by_alias = can_alias_follow(&token.token, expect_followed_by_alias);
+            }
+
+            // Update last_token_before_position
+            if is_token_before_cursor(token, position) {
+                last_token_before_position = Some(i);
+            }
+
+            // Update last_create_trigger_table
+            // CREATE TRIGGER ... ON <table>
             match &token.token {
+                Token::Word(Word {
+                    keyword: Keyword::CREATE,
+                    ..
+                }) => create_trigger = 1,
+                Token::Word(Word {
+                    keyword: Keyword::TRIGGER,
+                    ..
+                }) if create_trigger == 1 => create_trigger = 2,
+                Token::Word(Word {
+                    keyword: Keyword::ON, ..
+                }) if create_trigger == 2 => create_trigger = 3,
                 Token::Word(Word {
                     keyword: Keyword::NoKeyword,
                     value,
                     ..
-                }) if !KEYWORDS_UNSUPPORTED_BY_SQLPARSER.contains(&value.to_uppercase().as_str()) => {
-                    if let Some(target) = expect_followed_by_alias {
-                        as_clauses_lower.insert(value.to_lowercase(), (value.clone(), target));
-                        expect_followed_by_alias = None;
-                    }
-
-                    if let Some(t) = table_name_lowered_to_info
-                        .get(&value.to_lowercase())
-                        .and_then(|v| v.first())
-                    {
-                        referenced_tables.insert(&t.name);
-                    }
+                }) if create_trigger == 3
+                    && !KEYWORDS_UNSUPPORTED_BY_SQLPARSER.contains(&value.to_uppercase().as_str()) =>
+                {
+                    create_trigger = 0;
+                    last_create_trigger_table = Some(value.to_owned());
                 }
+                Token::Whitespace(_) => {}
+                _ if create_trigger == 1 => create_trigger = 0,
                 _ => {}
-            }
-
-            expect_followed_by_alias = can_alias_follow(&token.token, expect_followed_by_alias);
-
-            if is_token_before_cursor(token, position) {
-                last_token_before_position = Some(i);
             }
         }
 
@@ -386,6 +426,8 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
                                 Keyword::SELECT => TokenType::SELECT,
                                 Keyword::WHERE => TokenType::WHERE,
                                 Keyword::DISTINCT => TokenType::DISTINCT,
+                                Keyword::NEW => TokenType::NEW,
+                                Keyword::OLD => TokenType::OLD,
 
                                 // TODO: NULL is not literal when in "column NOT NULL"
                                 Keyword::TRUE | Keyword::FALSE => TokenType::Literal,
@@ -469,5 +511,6 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
         last_tokens,
         last_schema_period,
         last_table_period: last_table_period.flatten(),
+        last_create_trigger_table,
     }
 }
