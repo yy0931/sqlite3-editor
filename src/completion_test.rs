@@ -10,7 +10,7 @@ use crate::{
 };
 
 fn hash_set(values: &[&str]) -> HashSet<String> {
-    values.into_iter().map(|v| v.to_string()).collect()
+    values.iter().map(|v| v.to_string()).collect()
 }
 
 fn loc(line: usize, column: usize) -> ZeroIndexedLocation {

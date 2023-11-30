@@ -258,7 +258,7 @@ mod test_table_schema {
         .unwrap();
         db.execute("INSERT INTO t DEFAULT VALUES", &[], ExecMode::ReadWrite, &mut vec![])
             .unwrap();
-        assert_eq!(db.table_schema("main", "t").unwrap().0.columns[0].auto_increment, true);
+        assert!(db.table_schema("main", "t").unwrap().0.columns[0].auto_increment);
     }
 
     #[test]
@@ -273,7 +273,7 @@ mod test_table_schema {
         .unwrap();
         db.execute("INSERT INTO t DEFAULT VALUES", &[], ExecMode::ReadWrite, &mut vec![])
             .unwrap();
-        assert_eq!(db.table_schema("main", "t").unwrap().0.columns[0].auto_increment, false);
+        assert!(!db.table_schema("main", "t").unwrap().0.columns[0].auto_increment);
     }
 
     #[test]
@@ -564,8 +564,8 @@ mod test_table_schema {
             );
         }
 
-        fn check_is_alias_to_rowid(mut db: &mut SQLite3Driver, table: &str, column: &str, yes: bool) {
-            execute(&mut db, &format!("INSERT INTO {table} DEFAULT VALUES"));
+        fn check_is_alias_to_rowid(db: &mut SQLite3Driver, table: &str, column: &str, yes: bool) {
+            execute(db, &format!("INSERT INTO {table} DEFAULT VALUES"));
             assert_eq!(
                 db.select_one(
                     &format!(
@@ -715,16 +715,19 @@ fn test_list_tables() {
                 database: Rc::new("main".to_owned()),
                 name: Rc::new("t1".to_owned()),
                 type_: TableType::Table,
+                column_names: vec!["x".to_owned()],
             },
             Table {
                 database: Rc::new("main".to_owned()),
                 name: Rc::new("t2".to_owned()),
                 type_: TableType::Table,
+                column_names: vec!["x".to_owned()],
             },
             Table {
                 database: Rc::new("temp".to_owned()),
                 name: Rc::new("t3".to_owned()),
                 type_: TableType::Table,
+                column_names: vec![],
             },
         ]),
     );
@@ -887,76 +890,76 @@ fn test_from_utf8_lossy() {
     );
 }
 
-fn select_regex<T, P, W, C>(db: &SQLite3Driver, text: T, pattern: P, whole_word: W, case_sensitive: C) -> i64
+fn select_regex<T, P>(db: &SQLite3Driver, text: T, pattern: P, whole_word: bool, case_sensitive: bool) -> i64
 where
     T: Into<Literal>,
     P: Into<Literal>,
-    W: Into<Literal>,
-    C: Into<Literal>,
 {
     db.select_one(
-        r#"SELECT find_widget_regexp(?, ?, ?, ?);"#,
-        &[text.into(), pattern.into(), whole_word.into(), case_sensitive.into()],
+        &format!(
+            r#"SELECT find_widget_compare_r{}{}(?, ?);"#,
+            if whole_word { "_w" } else { "" },
+            if case_sensitive { "_c" } else { "" }
+        ),
+        &[text.into(), pattern.into()],
         |row| row.get::<_, i64>(0),
     )
     .unwrap()
 }
 
 #[test]
-fn test_find_widget_regexp() {
+fn test_find_widget_compare_r() {
     let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
 
     // Default
-    assert_eq!(select_regex(&db, "abcd", "BC", 0, 0), 1);
-    assert_eq!(select_regex(&db, "abcd", "BB", 0, 0), 0);
+    assert_eq!(select_regex(&db, "abcd", "BC", false, false), 1);
+    assert_eq!(select_regex(&db, "abcd", "BB", false, false), 0);
 
     // Whole word
-    assert_eq!(select_regex(&db, "abc d", "ABC", 1, 0), 1);
-    assert_eq!(select_regex(&db, "a bc d", "BC", 1, 0), 1);
-    assert_eq!(select_regex(&db, "a bcd", "BCD", 1, 0), 1);
-    assert_eq!(select_regex(&db, "abcd", "ABCD", 1, 0), 1);
-    assert_eq!(select_regex(&db, "abcd", "ABC", 1, 0), 0);
-    assert_eq!(select_regex(&db, "abcd", "", 1, 0), 0);
+    assert_eq!(select_regex(&db, "abc d", "ABC", true, false), 1);
+    assert_eq!(select_regex(&db, "a bc d", "BC", true, false), 1);
+    assert_eq!(select_regex(&db, "a bcd", "BCD", true, false), 1);
+    assert_eq!(select_regex(&db, "abcd", "ABCD", true, false), 1);
+    assert_eq!(select_regex(&db, "abcd", "ABC", true, false), 0);
+    assert_eq!(select_regex(&db, "abcd", "", true, false), 0);
 
     // Case-sensitive
-    assert_eq!(select_regex(&db, "abcd", "bc", 0, 1), 1);
-    assert_eq!(select_regex(&db, "abcd", "BC", 0, 1), 0);
+    assert_eq!(select_regex(&db, "abcd", "bc", false, true), 1);
+    assert_eq!(select_regex(&db, "abcd", "BC", false, true), 0);
 
     // Whole word & case-sensitive
-    assert_eq!(select_regex(&db, "a bc d", "bc", 1, 1), 1);
-    assert_eq!(select_regex(&db, "abcd", "ABC", 1, 1), 0);
-    assert_eq!(select_regex(&db, "abcd", "abc", 1, 1), 0);
+    assert_eq!(select_regex(&db, "a bc d", "bc", true, true), 1);
+    assert_eq!(select_regex(&db, "abcd", "ABC", true, true), 0);
+    assert_eq!(select_regex(&db, "abcd", "abc", true, true), 0);
 
     // Escape sequences, case-insensitive
-    assert_eq!(select_regex(&db, "abcd", "\\w+", 0, 0), 1);
-    assert_eq!(select_regex(&db, "abcd", "\\W+", 0, 0), 0);
-    assert_eq!(select_regex(&db, "....", "\\w+", 0, 0), 0);
-    assert_eq!(select_regex(&db, "....", "\\W+", 0, 0), 1);
+    assert_eq!(select_regex(&db, "abcd", "\\w+", false, false), 1);
+    assert_eq!(select_regex(&db, "abcd", "\\W+", false, false), 0);
+    assert_eq!(select_regex(&db, "....", "\\w+", false, false), 0);
+    assert_eq!(select_regex(&db, "....", "\\W+", false, false), 1);
 
     // Escape sequences, case-sensitive
-    assert_eq!(select_regex(&db, "abcd", "\\w+", 0, 1), 1);
-    assert_eq!(select_regex(&db, "abcd", "\\W+", 0, 1), 0);
-    assert_eq!(select_regex(&db, "....", "\\w+", 0, 1), 0);
-    assert_eq!(select_regex(&db, "....", "\\W+", 0, 1), 1);
+    assert_eq!(select_regex(&db, "abcd", "\\w+", false, true), 1);
+    assert_eq!(select_regex(&db, "abcd", "\\W+", false, true), 0);
+    assert_eq!(select_regex(&db, "....", "\\w+", false, true), 0);
+    assert_eq!(select_regex(&db, "....", "\\W+", false, true), 1);
 
     // Regex, number
-    assert_eq!(select_regex(&db, 123, "123", 0, 1), 1);
-    assert_eq!(select_regex(&db, 123, "\\d+", 0, 1), 1);
-    assert_eq!(select_regex(&db, 123, "\\d+1", 0, 1), 0);
+    assert_eq!(select_regex(&db, 123, "123", false, true), 1);
+    assert_eq!(select_regex(&db, 123, "\\d+", false, true), 1);
+    assert_eq!(select_regex(&db, 123, "\\d+1", false, true), 0);
 
     // NULL
-    assert_eq!(select_regex(&db, None::<i64>, "NULL", 1, 1), 1);
-    assert_eq!(select_regex(&db, None::<i64>, "null", 1, 0), 1);
+    assert_eq!(select_regex(&db, None::<i64>, "NULL", true, true), 1);
+    assert_eq!(select_regex(&db, None::<i64>, "null", true, false), 1);
 
     // REAL
-    assert_eq!(select_regex(&db, 1.23, "1.23", 1, 1), 1);
-    assert_eq!(select_regex(&db, 1.23, "1.23", 1, 0), 1);
-    assert_eq!(select_regex(&db, 1.23, "1.24", 1, 0), 0);
+    assert_eq!(select_regex(&db, 1.23, "1.23", true, true), 1);
+    assert_eq!(select_regex(&db, 1.23, "1.23", true, false), 1);
+    assert_eq!(select_regex(&db, 1.23, "1.24", true, false), 0);
 
     // Invalid parameter types
-    assert_eq!(select_regex(&db, "abcd", "abcd", "a", 0), 0);
-    assert_eq!(select_regex(&db, "abcd", "abcd", 0, "a"), 0);
-    assert_eq!(select_regex(&db, "abcd", 0, 0, 0), 0);
+    assert_eq!(select_regex(&db, "abcd", 0, false, false), 0);
 }
 
 fn handle(db: &mut SQLite3Driver, query: &str, params: &[Literal], mode: QueryMode) -> String {
@@ -1064,12 +1067,20 @@ fn test_invalid_utf8_table_name() {
                 database: Rc::new("main".to_owned()),
                 name: Rc::new("a�".to_owned()),
                 type_: TableType::Table,
+                column_names: vec!["x".to_owned()],
             }],
-            vec![InvalidUTF8 {
-                text_lossy: "a�".to_owned(),
-                bytes: "61ff".to_owned(),
-                context: Some("pragma_table_list.name".to_owned()),
-            }],
+            vec![
+                InvalidUTF8 {
+                    text_lossy: "a�".to_owned(),
+                    bytes: "61ff".to_owned(),
+                    context: Some("pragma_table_list.name".to_owned()),
+                },
+                InvalidUTF8 {
+                    text_lossy: "a�".to_owned(),
+                    bytes: "61ff".to_owned(),
+                    context: Some("list_columns.table_name".to_owned())
+                },
+            ],
         )
     );
 }

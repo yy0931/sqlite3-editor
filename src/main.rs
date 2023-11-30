@@ -30,6 +30,7 @@ mod column_origin_test;
 mod error;
 #[cfg(test)]
 mod export_test;
+mod find;
 #[cfg(test)]
 mod import_test;
 mod literal;

@@ -1,6 +1,10 @@
 use crate::{
     cache::{Pager, Records},
     column_origin::{column_origin, ColumnOrigin},
+    find::{
+        find_widget_compare, find_widget_compare_c, find_widget_compare_r, find_widget_compare_r_c,
+        find_widget_compare_r_w, find_widget_compare_r_w_c, find_widget_compare_w, find_widget_compare_w_c,
+    },
     literal::Literal,
     request_type::QueryMode,
 };
@@ -14,7 +18,7 @@ use std::{
     io::Write,
     mem::ManuallyDrop,
     rc::Rc,
-    sync::{atomic::AtomicBool, Arc, Mutex},
+    sync::{atomic::AtomicBool, Arc},
     time::Duration,
 };
 
@@ -97,87 +101,8 @@ pub struct SQLite3Driver {
 }
 
 lazy_static! {
-    static ref REGEX_CACHE: Arc<Mutex<(String, regex::Regex)>> = Arc::new(Mutex::<(String, regex::Regex)>::new((
-        "".to_owned(),
-        regex::Regex::new("").unwrap(),
-    )));
     static ref NON_READONLY_SQL_PATTERN: regex::Regex =
         regex::Regex::new(r"(?i)^\s*(INSERT|DELETE|UPDATE|CREATE|DROP|ALTER\s+TABLE)\b").unwrap();
-}
-
-fn get_find_widget_input(ctx: &rusqlite::functions::Context) -> String {
-    match ctx.get_raw(0) {
-        ValueRef::Null => "NULL".to_owned(),
-        ValueRef::Integer(v) => format!("{v}"),
-        ValueRef::Real(v) => format!("{v}"),
-        ValueRef::Text(v) => String::from_utf8_lossy(v).to_string(),
-        ValueRef::Blob(_v) => "".to_owned(), // hex won't match against anything
-    }
-}
-
-/// whole_word = true, case_sensitive = true
-fn find_widget_compare_w_c(ctx: &rusqlite::functions::Context) -> i64 {
-    let l = get_find_widget_input(ctx);
-    ctx.get::<String>(1).is_ok_and(|r| l == r) as i64
-}
-
-/// whole_word = true, case_sensitive = false
-fn find_widget_compare_w(ctx: &rusqlite::functions::Context) -> i64 {
-    let l = get_find_widget_input(ctx).to_lowercase();
-    ctx.get::<String>(1).is_ok_and(|r| l == r.to_lowercase()) as i64
-}
-
-/// whole_word = false, case_sensitive = true
-fn find_widget_compare_c(ctx: &rusqlite::functions::Context) -> i64 {
-    let l = get_find_widget_input(ctx);
-    ctx.get::<String>(1).is_ok_and(|r| l.contains(&r)) as i64
-}
-
-/// whole_word = false, case_sensitive = false
-fn find_widget_compare(ctx: &rusqlite::functions::Context) -> i64 {
-    let l = get_find_widget_input(ctx).to_lowercase();
-    ctx.get::<String>(1).is_ok_and(|r| l.contains(&r.to_lowercase())) as i64
-}
-
-/// Text matching implementation for the find widget.
-/// Returns 0 on error.
-fn find_widget_regexp(ctx: &rusqlite::functions::Context) -> i64 {
-    // Receive arguments
-    let text = get_find_widget_input(ctx);
-    let Ok(pattern) = ctx.get::<String>(1) else {
-        return 0;
-    };
-    let Ok(whole_word) = ctx.get::<i64>(2) else {
-        return 0;
-    };
-    let Ok(case_sensitive) = ctx.get::<i64>(3) else {
-        return 0;
-    };
-    if whole_word != 0 && pattern.is_empty() {
-        return 0;
-    }
-
-    // Match
-    let flags = if case_sensitive != 0 { "" } else { "(?i)" };
-    let pattern = if whole_word != 0 {
-        format!("{flags}(?s)\\b(?:{pattern})\\b")
-    } else {
-        format!("{flags}{pattern}")
-    };
-
-    {
-        let regex_cached = REGEX_CACHE.lock().unwrap();
-        if regex_cached.0 == pattern {
-            return if regex_cached.1.is_match(&text) { 1 } else { 0 };
-        }
-    }
-
-    let Ok(v) = regex::Regex::new(&pattern) else {
-        return 0;
-    };
-    let matched = if v.is_match(&text) { 1 } else { 0 };
-    *REGEX_CACHE.lock().unwrap() = (pattern, v);
-    matched
 }
 
 // TODO: test LoadableSQLiteExtensionNotAvailable
@@ -349,6 +274,7 @@ pub struct Table {
     pub name: Rc<String>,
     #[serde(rename = "type")]
     pub type_: TableType,
+    pub column_names: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -426,7 +352,7 @@ struct EditorPragmaResponse<T: Serialize> {
 }
 
 impl SQLite3Driver {
-    /// Connects to the database, set busy_timeout to 500, register the find_widget_regexp function, enable loading extensions, and fetch the version number of SQLite.
+    /// Connects to the database, set busy_timeout to 500, register the find_widget_compare_r function, enable loading extensions, and fetch the version number of SQLite.
     /// * `read_only` - If true, connects to the database with immutable=1 and the readonly flag. Use this argument to read a database that is under an EXCLUSIVE lock.
     /// * `sql_cipher_key` - The encryption key for SQLCipher.
     pub fn connect(
@@ -498,14 +424,39 @@ impl SQLite3Driver {
         )
         .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare".into()]))?;
 
-        // Register the function "find_widget_regexp"
         con.create_scalar_function(
-            "find_widget_regexp",
-            4,
+            "find_widget_compare_r_w_c",
+            2,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
-            move |ctx| Ok(find_widget_regexp(ctx)),
+            move |ctx| Ok(find_widget_compare_r_w_c(ctx)),
         )
-        .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_regexp".into()]))?;
+        .or_else(|err| {
+            Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_r_w_c".into()])
+        })?;
+
+        con.create_scalar_function(
+            "find_widget_compare_r_w",
+            2,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            move |ctx| Ok(find_widget_compare_r_w(ctx)),
+        )
+        .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_r_w".into()]))?;
+
+        con.create_scalar_function(
+            "find_widget_compare_r_c",
+            2,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            move |ctx| Ok(find_widget_compare_r_c(ctx)),
+        )
+        .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_r_c".into()]))?;
+
+        con.create_scalar_function(
+            "find_widget_compare_r",
+            2,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            move |ctx| Ok(find_widget_compare_r(ctx)),
+        )
+        .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_r".into()]))?;
 
         // Allow loading extensions
         unsafe {
@@ -667,7 +618,7 @@ impl SQLite3Driver {
         include_system_tables: bool,
     ) -> std::result::Result<(Vec<Table>, Vec<InvalidUTF8>), Error> {
         let mut warnings = vec![];
-        self.select_all(
+        let mut tables = self.select_all(
             &(r#"SELECT schema, name, type FROM pragma_table_list"#.to_owned()
                 + if include_system_tables {
                     ""
@@ -689,10 +640,44 @@ impl SQLite3Driver {
                         })?
                         .as_str(),
                     ),
+                    column_names: vec![],
                 })
             },
-        )
-        .map(|v| (v, warnings))
+        )?;
+
+        let mut column_names_map = HashMap::<String, Vec<String>>::new();
+        self.select_all(
+            r#"
+WITH tables AS (
+    SELECT DISTINCT name AS "table_name"
+    FROM pragma_table_list()
+    WHERE schema = 'main')
+SELECT table_name, p.name
+FROM tables
+JOIN main.pragma_table_info("table_name") p"#,
+            &[],
+            |row| {
+                column_names_map
+                    .entry(get_string(row, 0, |err| {
+                        warnings.push(err.with("list_columns.table_name"))
+                    })?)
+                    .or_default()
+                    .push(get_string(row, 1, |err| {
+                        warnings.push(err.with("list_columns.column_name"))
+                    })?);
+                Ok(0)
+            },
+        )?;
+
+        for table in &mut tables {
+            if let Some(columns) = column_names_map.remove(table.name.as_ref()) {
+                for column in columns {
+                    table.column_names.push(column);
+                }
+            }
+        }
+
+        Ok((tables, warnings))
     }
 
     pub fn list_foreign_keys(&self) -> std::result::Result<(Vec<ForeignKey>, Vec<InvalidUTF8>), Error> {

@@ -5,7 +5,7 @@ use tempfile::NamedTempFile;
 use crate::cache::{cache_entry::Records, pager::Pager};
 
 #[test]
-fn test_repeat_same_query() -> () {
+fn test_repeat_same_query() {
     // Setup
     let mut conn = rusqlite::Connection::open_in_memory().unwrap();
     conn.execute("CREATE TABLE t(x, y)", ()).unwrap();
@@ -30,10 +30,7 @@ fn test_repeat_same_query() -> () {
     assert_eq!(&result1, &result2);
     assert_eq!(
         &result1.col_buf(),
-        &[
-            vec![0xa1, 'a' as u8, 0xa1, 'c' as u8],
-            vec![0xa1, 'b' as u8, 0xa1, 'd' as u8],
-        ]
+        &[vec![0xa1, b'a', 0xa1, b'c'], vec![0xa1, b'b', 0xa1, b'd'],]
     );
     assert_eq!(result1.n_rows(), 2);
     assert_eq!(result1.columns(), Rc::new(vec!["x".to_owned(), "y".to_owned()]));

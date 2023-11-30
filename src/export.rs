@@ -38,6 +38,8 @@ fn open_writer(output_file: Option<String>) -> std::io::Result<Box<dyn Write>> {
     })
 }
 
+/// - NULL is encoded as an empty string.
+/// - BLOB values are encoded as BASE64 strings.
 pub fn export_csv(
     database_filepath: &str,
     sql_cipher_key: &Option<String>,
@@ -88,6 +90,7 @@ pub fn export_csv(
     Ok(())
 }
 
+/// - BLOB values are encoded as BASE64 strings.
 pub fn export_json(
     database_filepath: &str,
     sql_cipher_key: &Option<String>,
@@ -147,6 +150,9 @@ pub fn export_json(
     Ok(())
 }
 
+/// - Integer values between i32::MIN and i32::MAX are encoded as i32. Values outside this range are rounded to the nearest f64 values because Excel does not support 64-bit integers.
+/// - NULL is encoded as an empty string.
+/// - BLOB values are encoded as BASE64 strings.
 pub fn export_xlsx(
     database_filepath: &str,
     sql_cipher_key: &Option<String>,
@@ -172,8 +178,8 @@ pub fn export_xlsx(
     let mut row_id = 0u32;
     for (col_id, name) in column_names.iter().enumerate() {
         worksheet.write(row_id, col_id as u16, name)?;
-        row_id += 1;
     }
+    row_id += 1;
 
     let mut rows = stmt.query([]).or_else(|err| Error::new_query_error(err, query, &[]))?;
     while let Some(row) = rows.next().or_else(|err| Error::new_query_error(err, query, &[]))? {
@@ -185,11 +191,11 @@ pub fn export_xlsx(
                 ValueRef::Integer(v) if i32::MIN as i64 <= v && v <= i32::MAX as i64 => {
                     worksheet.write(row_id, col_id as u16, v as i32)?
                 }
-                ValueRef::Integer(v) => worksheet.write(row_id, col_id as u16, format!("{v}"))?,
+                ValueRef::Integer(v) => worksheet.write(row_id, col_id as u16, v as f64)?,
                 ValueRef::Text(v) => worksheet.write(row_id, col_id as u16, String::from_utf8_lossy(v))?,
             };
-            row_id += 1;
         }
+        row_id += 1;
     }
     workbook.save(output_file)?;
 
