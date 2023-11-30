@@ -646,7 +646,9 @@ impl SQLite3Driver {
         )?;
 
         let mut column_names_map = HashMap::<String, Vec<String>>::new();
-        self.select_all(
+
+        // Ignore broken tables
+        let _ = self.select_all(
             r#"
 WITH tables AS (
     SELECT DISTINCT name AS "table_name"
@@ -667,7 +669,7 @@ JOIN main.pragma_table_info("table_name") p"#,
                     })?);
                 Ok(0)
             },
-        )?;
+        );
 
         for table in &mut tables {
             if let Some(columns) = column_names_map.remove(table.name.as_ref()) {
