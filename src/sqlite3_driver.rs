@@ -277,12 +277,13 @@ pub struct Table {
     pub column_names: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ForeignKey {
-    pub name: String,
-    pub table: String,
-    pub from: String,
-    pub to: Option<String>,
+#[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[ts(export)]
+pub struct EntityRelationship {
+    pub source: String,
+    pub target: String,
+    pub source_column: String,
+    pub target_column: String,
 }
 
 pub fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUTF8)>(
@@ -682,10 +683,52 @@ JOIN main.pragma_table_info("table_name") p"#,
         Ok((tables, warnings))
     }
 
-    pub fn list_foreign_keys(&self) -> std::result::Result<(Vec<ForeignKey>, Vec<InvalidUTF8>), Error> {
+    pub fn list_entity_relationships(&self) -> std::result::Result<(Vec<EntityRelationship>, Vec<InvalidUTF8>), Error> {
         let mut warnings = vec![];
-        self.select_all(r#"SELECT name, f."table", f."from", f."to" FROM pragma_table_list JOIN pragma_foreign_key_list(name) f WHERE NOT (name LIKE "sqlite\_%" ESCAPE "\");"#, &[], |row| Ok(ForeignKey { name: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.name")))?, table: get_string(row, 1, |err| warnings.push(err.with("pragma_table_list.table")))?, from: get_string(row, 2, |err| warnings.push(err.with("pragma_table_list.from")))?, to: get_option_string(row, 3, |err| warnings.push(err.with("pragma_table_list.to")))? }))
-        .map(|v| (v, warnings))
+
+        // foreign keys
+        let mut result = self.select_all(
+            r#"SELECT t.name, f."table", f."from", f."to" FROM pragma_table_list t INNER JOIN pragma_foreign_key_list(name) f WHERE t.schema == 'main' AND NOT (t.name LIKE "sqlite\_%" ESCAPE "\");"#,
+            &[],
+            |row| {
+                let source_column = get_string(row, 2, |err| warnings.push(err.with("pragma_table_list.from")))?;
+                Ok(EntityRelationship {
+                    source: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.name")))?,
+                    target: get_string(row, 1, |err| warnings.push(err.with("pragma_table_list.table")))?,
+                    target_column: get_option_string(row, 3, |err| warnings.push(err.with("pragma_table_list.to")))?.unwrap_or_else(|| source_column.clone()),
+                    source_column,
+                })
+            },
+        )?;
+
+        // views
+        if let Ok(views) = self.select_all(
+            "SELECT name FROM pragma_table_list WHERE schema = 'main' AND type = 'view'",
+            &[],
+            |row| get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.name"))),
+        ) {
+            for view_name in views {
+                let Ok(column_origins) = column_origin(
+                    unsafe { self.con.handle() },
+                    &format!("SELECT * FROM {} LIMIT 0", escape_sql_identifier(&view_name)),
+                ) else {
+                    continue;
+                };
+                for (column, origin) in column_origins {
+                    if origin.database.to_lowercase() != "main" {
+                        continue;
+                    }
+                    result.push(EntityRelationship {
+                        source: view_name.clone(),
+                        target: origin.table,
+                        source_column: column,
+                        target_column: origin.column,
+                    })
+                }
+            }
+        }
+
+        Ok((result, warnings))
     }
 
     /// Returns foreign keys for each column.
@@ -1163,7 +1206,9 @@ JOIN main.pragma_table_info("table_name") p"#,
         match query {
             "EDITOR_PRAGMA database_label" => write_editor_pragma(w, (self.database_label(), vec![]), start_time),
             "EDITOR_PRAGMA list_tables" => write_editor_pragma(w, self.list_tables(false)?, start_time),
-            "EDITOR_PRAGMA list_foreign_keys" => write_editor_pragma(w, self.list_foreign_keys()?, start_time),
+            "EDITOR_PRAGMA list_entity_relationships" => {
+                write_editor_pragma(w, self.list_entity_relationships()?, start_time)
+            }
             "EDITOR_PRAGMA table_schema" => {
                 let (Some(Literal::String(database)), Some(Literal::String(table_name))) =
                     (params.first(), params.get(1))

@@ -48,7 +48,6 @@ pub fn column_origin(db: *mut sqlite3, query: &str) -> Result<HashMap<String, Co
         return Err(msg);
     }
 
-    // Get the data sources and concatenate them using \0 as delimiters
     let mut result = HashMap::<String, ColumnOrigin>::new();
 
     let column_count = unsafe { sqlite3_column_count(stmt) as usize };
@@ -63,6 +62,9 @@ pub fn column_origin(db: *mut sqlite3, query: &str) -> Result<HashMap<String, Co
         ) else {
             continue;
         };
+        if table.to_lowercase().starts_with("pragma_") {
+            continue;
+        }
         result.insert(
             column_name,
             ColumnOrigin {

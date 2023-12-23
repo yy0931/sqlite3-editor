@@ -4,7 +4,8 @@ use crate::{
     literal::Literal,
     request_type::QueryMode,
     sqlite3_driver::{
-        from_utf8_lossy, read_msgpack_into_json, ExecMode, ForeignKey, InvalidUTF8, SQLite3Driver, Table, TableType,
+        from_utf8_lossy, read_msgpack_into_json, EntityRelationship, ExecMode, InvalidUTF8, SQLite3Driver, Table,
+        TableType,
     },
 };
 
@@ -657,7 +658,7 @@ mod test_table_schema {
 }
 
 #[test]
-fn test_list_foreign_keys() {
+fn test_list_entity_relationships() {
     let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
     db.execute(
         "CREATE TABLE t(x INTEGER PRIMARY KEY NOT NULL) STRICT",
@@ -674,12 +675,12 @@ fn test_list_foreign_keys() {
     )
     .unwrap();
     assert_eq!(
-        db.list_foreign_keys().unwrap().0,
-        vec![ForeignKey {
-            name: "v".to_owned(),
-            table: "t".to_owned(),
-            from: "x".to_owned(),
-            to: None,
+        db.list_entity_relationships().unwrap().0,
+        vec![EntityRelationship {
+            source: "v".to_owned(),
+            target: "t".to_owned(),
+            source_column: "x".to_owned(),
+            target_column: "x".to_owned(),
         }],
     );
 }
