@@ -25,7 +25,7 @@ fn test_select_params() {
 
     let params: Vec<Literal> = vec![Literal::Nil, "a".into(), 123.into(), 1.23.into(), vec![1, 2, 3].into()];
     assert_eq!(
-        db.select_one("SELECT ?, ?, ?, ?, ?", &params, |v| {
+        db.select_all("SELECT ?, ?, ?, ?, ?", &params, |v| {
             Ok((
                 Literal::from(v.get_ref_unwrap(0)),
                 Literal::from(v.get_ref_unwrap(1)),
@@ -33,9 +33,11 @@ fn test_select_params() {
                 Literal::from(v.get_ref_unwrap(3)),
                 Literal::from(v.get_ref_unwrap(4)),
             ))
-        },)
-            .unwrap(),
-        (
+        })
+        .unwrap()
+        .first()
+        .unwrap(),
+        &(
             params[0].to_owned(),
             params[1].to_owned(),
             params[2].to_owned(),
@@ -110,7 +112,7 @@ mod test_table_schema {
         .unwrap();
 
         assert_eq!(
-            db.table_schema("main", "t").unwrap().0,
+            db.table_schema("main", "t").unwrap().0.unwrap(),
             TableSchema {
                 name: Some("t".to_owned()),
                 type_: TableType::Table,
@@ -151,7 +153,7 @@ mod test_table_schema {
         .unwrap();
 
         assert_eq!(
-            db.table_schema("main", "u").unwrap().0,
+            db.table_schema("main", "u").unwrap().0.unwrap(),
             TableSchema {
                 name: Some("u".to_owned()),
                 type_: TableType::View,
@@ -203,7 +205,7 @@ mod test_table_schema {
         )
         .unwrap();
         assert_eq!(
-            db.table_schema("main", "u").unwrap().0.columns[0].foreign_keys[0],
+            db.table_schema("main", "u").unwrap().0.unwrap().columns[0].foreign_keys[0],
             TableSchemaColumnForeignKey {
                 id: 0,
                 seq: 0,
@@ -234,7 +236,7 @@ mod test_table_schema {
         )
         .unwrap();
         assert_eq!(
-            db.table_schema("main", "v").unwrap().0.columns[0].foreign_keys[0],
+            db.table_schema("main", "v").unwrap().0.unwrap().columns[0].foreign_keys[0],
             TableSchemaColumnForeignKey {
                 id: 0,
                 seq: 0,
@@ -259,7 +261,7 @@ mod test_table_schema {
         .unwrap();
         db.execute("INSERT INTO t DEFAULT VALUES", &[], ExecMode::ReadWrite, &mut vec![])
             .unwrap();
-        assert!(db.table_schema("main", "t").unwrap().0.columns[0].auto_increment);
+        assert!(db.table_schema("main", "t").unwrap().0.unwrap().columns[0].auto_increment);
     }
 
     #[test]
@@ -274,7 +276,7 @@ mod test_table_schema {
         .unwrap();
         db.execute("INSERT INTO t DEFAULT VALUES", &[], ExecMode::ReadWrite, &mut vec![])
             .unwrap();
-        assert!(!db.table_schema("main", "t").unwrap().0.columns[0].auto_increment);
+        assert!(!db.table_schema("main", "t").unwrap().0.unwrap().columns[0].auto_increment);
     }
 
     #[test]
@@ -285,6 +287,7 @@ mod test_table_schema {
             db.table_schema("main", "t")
                 .unwrap()
                 .0
+                .unwrap()
                 .columns
                 .into_iter()
                 .map(|v| v.dflt_value)
@@ -308,7 +311,7 @@ mod test_table_schema {
         db.execute("CREATE INDEX idx1 ON t(x)", &[], ExecMode::ReadWrite, &mut vec![])
             .unwrap();
         assert_eq!(
-            db.table_schema("main", "t").unwrap().0.indexes,
+            db.table_schema("main", "t").unwrap().0.unwrap().indexes,
             vec![
                 TableSchemaIndex {
                     seq: 0,
@@ -348,7 +351,7 @@ mod test_table_schema {
         let sql = "CREATE TRIGGER trigger_insert AFTER INSERT ON t BEGIN SELECT 1; END";
         db.execute(sql, &[], ExecMode::ReadWrite, &mut vec![]).unwrap();
         assert_eq!(
-            db.table_schema("main", "t").unwrap().0.triggers,
+            db.table_schema("main", "t").unwrap().0.unwrap().triggers,
             vec![TableSchemaTrigger {
                 name: "trigger_insert".to_owned(),
                 sql: sql.to_owned(),
@@ -422,15 +425,15 @@ mod test_table_schema {
             .unwrap();
 
         assert_eq!(
-            db.table_schema("main", "t").unwrap().0.schema.unwrap(),
+            db.table_schema("main", "t").unwrap().0.unwrap().schema.unwrap(),
             "CREATE TABLE t(x)"
         );
         assert_eq!(
-            db.table_schema("temp", "t").unwrap().0.schema.unwrap(),
+            db.table_schema("temp", "t").unwrap().0.unwrap().schema.unwrap(),
             "CREATE TABLE t(y)"
         );
         assert_eq!(
-            db.table_schema("temp", "u").unwrap().0.schema.unwrap(),
+            db.table_schema("temp", "u").unwrap().0.unwrap().schema.unwrap(),
             "CREATE TABLE u(y)"
         );
     }
@@ -465,7 +468,7 @@ mod test_table_schema {
                 &mut vec![],
             )
             .unwrap();
-            let schema = db.table_schema("main", "table_name").unwrap().0;
+            let schema = db.table_schema("main", "table_name").unwrap().0.unwrap();
             assert_eq!(
                 schema.column_origins,
                 Some(HashMap::from([(
@@ -568,7 +571,7 @@ mod test_table_schema {
         fn check_is_alias_to_rowid(db: &mut SQLite3Driver, table: &str, column: &str, yes: bool) {
             execute(db, &format!("INSERT INTO {table} DEFAULT VALUES"));
             assert_eq!(
-                db.select_one(
+                db.select_all(
                     &format!(
                         "SELECT typeof({}) FROM {}",
                         escape_sql_identifier(column),
@@ -577,6 +580,8 @@ mod test_table_schema {
                     &[],
                     |row| { get_string(row, 0, |_| {}) }
                 )
+                .unwrap()
+                .first()
                 .unwrap(),
                 if yes { "integer" } else { "null" }
             );
@@ -738,13 +743,15 @@ fn test_list_tables() {
 fn test_json() {
     let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
     assert_eq!(
-        db.select_one(
+        db.select_all(
             r#"select json_extract('{"foo": {"bar": 123}}', '$.foo.bar');"#,
             &[],
             |row| row.get::<_, i64>(0)
         )
+        .unwrap()
+        .first()
         .unwrap(),
-        123
+        &123
     );
 }
 
@@ -789,9 +796,11 @@ COMMIT;"#,
     .unwrap();
 
     assert_eq!(
-        db.select_one("SELECT * FROM t", &[], |row| row.get::<_, i64>(0))
+        db.select_all("SELECT * FROM t", &[], |row| row.get::<_, i64>(0))
+            .unwrap()
+            .first()
             .unwrap(),
-        1
+        &1
     );
 }
 
@@ -841,9 +850,11 @@ COMMIT;"#,
     }
 
     assert_eq!(
-        db.select_one("SELECT count(*) FROM t", &[], |row| row.get::<_, i64>(0))
+        db.select_all("SELECT count(*) FROM t", &[], |row| row.get::<_, i64>(0))
+            .unwrap()
+            .first()
             .unwrap(),
-        0
+        &0
     );
 }
 
@@ -871,9 +882,11 @@ INSERT INTO t VALUES (1);
     .unwrap();
 
     assert_eq!(
-        db.select_one("SELECT count(*) FROM t", &[], |row| row.get::<_, i64>(0))
+        db.select_all("SELECT count(*) FROM t", &[], |row| row.get::<_, i64>(0))
+            .unwrap()
+            .first()
             .unwrap(),
-        0
+        &0
     );
 }
 
@@ -896,7 +909,7 @@ where
     T: Into<Literal>,
     P: Into<Literal>,
 {
-    db.select_one(
+    *db.select_all(
         &format!(
             r#"SELECT find_widget_compare_r{}{}(?, ?);"#,
             if whole_word { "_w" } else { "" },
@@ -905,6 +918,8 @@ where
         &[text.into(), pattern.into()],
         |row| row.get::<_, i64>(0),
     )
+    .unwrap()
+    .first()
     .unwrap()
 }
 

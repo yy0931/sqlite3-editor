@@ -479,7 +479,7 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
     for table in referenced_tables {
         if let Some(tables) = table_name_lowered_to_info.get(&table.to_lowercase()) {
             for table in tables {
-                if let Ok((table_info, _)) = conn.table_schema(&table.database, &table.name) {
+                if let Ok((Some(table_info), _)) = conn.table_schema(&table.database, &table.name) {
                     for c in table_info.columns {
                         columns_in_tables_that_are_referenced_in_source.insert(ColumnCompletion {
                             schema: Rc::clone(&table.database),

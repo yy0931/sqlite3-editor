@@ -589,23 +589,6 @@ impl SQLite3Driver {
         Ok(records)
     }
 
-    /// Executes a SQL statement and returns the first row.
-    pub fn select_one<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T: ToOwned<Owned = T>>(
-        &self,
-        query: &str,
-        params: &[Literal],
-        map: F,
-    ) -> std::result::Result<T, Error> {
-        assert_readonly_query(query)?;
-
-        let select_all = self.select_all(query, params, map)?;
-        let get = select_all.first();
-        let Some(one) = get else {
-            return Error::new_query_error(rusqlite::Error::QueryReturnedNoRows, query.to_owned(), params);
-        };
-        Ok(one.to_owned())
-    }
-
     pub fn database_label(&self) -> String {
         format!(
             "{} {}",
@@ -840,23 +823,30 @@ JOIN main.pragma_table_info("table_name") p"#,
         &self,
         database: &str,
         table_name: &str,
-    ) -> std::result::Result<(TableSchema, Vec<InvalidUTF8>), Error> {
+    ) -> std::result::Result<(Option<TableSchema>, Vec<InvalidUTF8>), Error> {
         let mut warnings = vec![];
 
         // Select pragma_table_list
-        let (table_type, wr, strict) = self.select_one(
-            "SELECT type, wr, strict FROM pragma_table_list WHERE schema = ? COLLATE NOCASE AND name = ? COLLATE NOCASE",
-            &[database.into(), table_name.into()],
-            |row| {
-                Ok((
-                    get_string(row, 0, |err| {
-                        warnings.push(err.with("pragma_table_list.type (table_schema)"))
-                    })?,
-                    row.get::<_, i64>(1)? != 0,
-                    row.get::<_, i64>(2)? != 0,
-                ))
-            },
-        )?;
+        let (table_type, wr, strict) = {
+            let all = self.select_all(
+                "SELECT type, wr, strict FROM pragma_table_list WHERE schema = ? COLLATE NOCASE AND name = ? COLLATE NOCASE",
+                &[database.into(), table_name.into()],
+                |row| {
+                    Ok((
+                        get_string(row, 0, |err| {
+                            warnings.push(err.with("pragma_table_list.type (table_schema)"))
+                        })?,
+                        row.get::<_, i64>(1)? != 0,
+                        row.get::<_, i64>(2)? != 0,
+                    ))
+                },
+            )?;
+            let Some(one) = all.first() else {
+                return Ok((None, warnings));
+            };
+            one.to_owned()
+        };
+
         let table_type = TableType::from(table_type.as_str());
         let has_rowid_column = table_type == TableType::Table && !wr;
 
@@ -1068,7 +1058,7 @@ JOIN main.pragma_table_info("table_name") p"#,
         )?;
 
         Ok((
-            TableSchema {
+            Some(TableSchema {
                 name: Some(table_name.to_string()),
                 schema: Some(schema),
                 has_rowid_column,
@@ -1079,7 +1069,7 @@ JOIN main.pragma_table_info("table_name") p"#,
                 custom_query: None,
                 column_origins,
                 type_: table_type,
-            },
+            }),
             warnings,
         ))
     }
