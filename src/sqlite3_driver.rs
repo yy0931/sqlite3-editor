@@ -98,6 +98,7 @@ pub struct SQLite3Driver {
     con: ManuallyDrop<rusqlite::Connection>,
     pager: Pager,
     abort_signal: Arc<AtomicBool>,
+    pub database_label: String,
 }
 
 lazy_static! {
@@ -465,11 +466,18 @@ impl SQLite3Driver {
                 .expect("Failed to enable loading run-time loadable extensions.");
         }
 
+        let database_label = format!(
+            "{} {}",
+            if is_sqlcipher(&con) { "sqlcipher" } else { "sqlite" },
+            rusqlite::version()
+        );
+
         // Get the SQLite version as a string
         Ok(Self {
             con: ManuallyDrop::new(con),
             pager: Pager::new(),
             abort_signal,
+            database_label,
         })
     }
 
@@ -587,14 +595,6 @@ impl SQLite3Driver {
             .or_else(|err| Error::new_query_error(err, query, params))?;
 
         Ok(records)
-    }
-
-    pub fn database_label(&self) -> String {
-        format!(
-            "{} {}",
-            if is_sqlcipher(&self.con) { "sqlcipher" } else { "sqlite" },
-            rusqlite::version()
-        )
     }
 
     pub fn list_tables(
@@ -1194,7 +1194,7 @@ JOIN main.pragma_table_info("table_name") p"#,
         }
 
         match query {
-            "EDITOR_PRAGMA database_label" => write_editor_pragma(w, (self.database_label(), vec![]), start_time),
+            "EDITOR_PRAGMA database_label" => write_editor_pragma(w, (self.database_label.clone(), vec![]), start_time),
             "EDITOR_PRAGMA list_tables" => write_editor_pragma(w, self.list_tables(false)?, start_time),
             "EDITOR_PRAGMA list_entity_relationships" => {
                 write_editor_pragma(w, self.list_entity_relationships()?, start_time)

@@ -758,7 +758,7 @@ fn test_json() {
 #[test]
 fn test_database_label() {
     let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
-    assert_ne!(db.database_label(), "");
+    assert_ne!(db.database_label, "");
 }
 
 #[test]
