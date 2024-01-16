@@ -115,3 +115,24 @@ fn test_vacuum() {
         }]
     );
 }
+
+#[test]
+fn test_with_update() {
+    assert_eq!(
+        code_lens("WITH x AS (SELECT 1) UPDATE t SET a = 1;"),
+        [
+            CodeLens {
+                kind: CodeLensKind::Select,
+                start: ZeroIndexedLocation::new(0, 5),
+                end: ZeroIndexedLocation::new(0, 6),
+                stmt_executed: "WITH x AS (SELECT 1) SELECT * FROM \"x\"".to_owned(),
+            },
+            CodeLens {
+                kind: CodeLensKind::Other,
+                start: ZeroIndexedLocation::new(0, 0),
+                end: ZeroIndexedLocation::new(0, 40),
+                stmt_executed: "WITH x AS (SELECT 1) UPDATE t SET a = 1;".to_owned(),
+            }
+        ]
+    );
+}

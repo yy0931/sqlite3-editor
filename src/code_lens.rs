@@ -39,6 +39,7 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
 
         // Parse CTE
         let cte = parse_cte(&stmt);
+        let mut cte_end = ZeroIndexedLocation::new(0, 0);
         if let Some(cte) = cte {
             for entry in cte.entries {
                 let with_clause = get_text_range(&lines, &stmt.real_start, &cte.body_start);
@@ -54,10 +55,14 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
                     end: entry.ident_end,
                 })
             }
+            cte_end = cte.body_start;
         }
 
         let mut kind: Option<CodeLensKind> = None;
         for token in stmt.real_tokens {
+            if token.start < cte_end {
+                continue;
+            }
             if let Token::Word(w) = token.token {
                 match w {
                     Word {
