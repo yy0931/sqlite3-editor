@@ -257,10 +257,7 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
             .push(t);
     }
 
-    let schema_names = table_list
-        .iter()
-        .map(|t| Rc::clone(&t.database))
-        .collect::<HashSet<_>>();
+    let schema_names = table_list.iter().map(|t| &t.database).cloned().collect::<HashSet<_>>();
     let schema_names_lowered = schema_names.iter().map(|s| s.to_lowercase()).collect::<HashSet<_>>();
 
     let mut referenced_tables = HashSet::new();

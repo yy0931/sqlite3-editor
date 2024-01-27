@@ -31,6 +31,12 @@ pub enum Error {
         function_name: String,
         params: Vec<Literal>,
     },
+    UnexpectedChanges {
+        expected: u64,
+        actual: u64,
+        query: String,
+        params: Vec<Literal>,
+    },
     Other {
         message: String,
         query: Option<String>,
@@ -135,6 +141,19 @@ impl std::fmt::Display for Error {
                     function_name,
                     Self::format_params(params)
                 )
+            }
+            Self::UnexpectedChanges {
+                expected,
+                actual,
+                query,
+                params,
+            } => {
+                write!(f, "Rolled back the transaction because an unexpected number of rows were modified: expected {} rows, actually modified {} rows.\n{}\nParameters: {}",
+                expected,
+                actual,
+                Self::format_query(query),
+                Self::format_params(params),
+            )
             }
             Self::Other { message, query, params } => {
                 write!(

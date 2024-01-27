@@ -27,7 +27,7 @@ fn test_version() {
         ),
         0
     );
-    assert!(String::from_utf8(stdout).unwrap().starts_with("db-driver-rs "));
+    assert!(String::from_utf8(stdout).unwrap().starts_with("sqlite3-editor "));
 }
 
 #[test]

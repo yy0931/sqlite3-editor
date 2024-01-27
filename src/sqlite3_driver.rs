@@ -9,18 +9,11 @@ use crate::{
     request_type::QueryMode,
 };
 use lazy_static::lazy_static;
-use rusqlite::{functions::FunctionFlags, types::ValueRef, Row};
+use rusqlite::{functions::FunctionFlags, types::ValueRef, InterruptHandle, Row};
 use serde::{Deserialize, Serialize};
 
 use super::error::Error;
-use std::{
-    collections::HashMap,
-    io::Write,
-    mem::ManuallyDrop,
-    rc::Rc,
-    sync::{atomic::AtomicBool, Arc},
-    time::Duration,
-};
+use std::{collections::HashMap, io::Write, mem::ManuallyDrop, rc::Rc, time::Duration};
 
 #[derive(Debug, Clone)]
 struct StringError(String);
@@ -97,7 +90,6 @@ pub fn get_option_string<F: FnMut(InvalidUTF8)>(
 pub struct SQLite3Driver {
     con: ManuallyDrop<rusqlite::Connection>,
     pager: Pager,
-    abort_signal: Arc<AtomicBool>,
     pub database_label: String,
 }
 
@@ -136,20 +128,10 @@ pub struct TableSchemaColumnForeignKey {
 
 #[derive(ts_rs::TS, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[ts(export)]
-#[serde(untagged)]
-pub enum DfltValue {
-    Int(i64),
-    Real(f64),
-    String(String),
-    Blob(#[ts(type = "Uint8Array")] Vec<u8>),
-}
-
-#[derive(ts_rs::TS, Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[ts(export)]
 pub struct TableSchemaColumn {
     #[ts(type = "bigint")]
     pub cid: i64,
-    pub dflt_value: Option<DfltValue>,
+    pub dflt_value: Option<String>,
     pub name: String,
     pub notnull: bool,
     #[serde(rename = "type")]
@@ -327,22 +309,41 @@ pub fn connect_immutable(database_filepath: &str) -> std::result::Result<rusqlit
     .or_else(|err| Error::new_ffi_error(err, "sqlite3_open_v2 (immutable=1)", &[database_filepath.into()]))
 }
 
-fn assert_readonly_query(query: &str) -> std::result::Result<(), Error> {
+fn assert_readonly_query(query: &str, pre_stmt: &Option<String>) -> std::result::Result<(), Error> {
     if NON_READONLY_SQL_PATTERN.is_match(query) {
-        Error::new_other_error(
+        return Error::new_other_error(
             "This query is not allowed in the read-only mode.",
             Some(query.to_owned()),
             None,
-        )
-    } else {
-        Ok(())
+        );
     }
+
+    if let Some(pre_stmt) = pre_stmt {
+        return Error::new_other_error(
+            "pre_stmt is not allowed in the read-only mode.",
+            Some(pre_stmt.to_owned()),
+            None,
+        );
+    }
+
+    Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ExecMode {
     ReadOnly,
     ReadWrite,
+}
+
+#[derive(ts_rs::TS, Debug, PartialEq, Serialize, Deserialize, Clone, Default)]
+#[ts(export)]
+pub struct QueryOptions {
+    /// Rolls back the transaction if the number of rows affected by the statement does not match this value.
+    pub changes: Option<u64>,
+    pub allow_fewer_changes: bool,
+
+    /// A statement that is executed before the main statement. It shares the transaction and the parameters with the main statement, and requires ExecMode::ReadWrite.
+    pub pre_stmt: Option<String>,
 }
 
 #[derive(ts_rs::TS, Serialize, Debug, Clone)]
@@ -361,20 +362,6 @@ impl SQLite3Driver {
         database_filepath: &str,
         read_only: bool,
         sql_cipher_key: &Option<impl AsRef<str>>,
-    ) -> std::result::Result<Self, Error> {
-        Self::connect_with_abort_signal(
-            database_filepath,
-            read_only,
-            sql_cipher_key,
-            Arc::new(AtomicBool::new(false)),
-        )
-    }
-
-    pub fn connect_with_abort_signal(
-        database_filepath: &str,
-        read_only: bool,
-        sql_cipher_key: &Option<impl AsRef<str>>,
-        abort_signal: Arc<AtomicBool>,
     ) -> std::result::Result<Self, Error> {
         let con = if !read_only {
             // Connect to the database
@@ -397,7 +384,7 @@ impl SQLite3Driver {
         con.create_scalar_function(
             "find_widget_compare_w_c",
             2,
-            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_INNOCUOUS,
             move |ctx| Ok(find_widget_compare_w_c(ctx)),
         )
         .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_w_c".into()]))?;
@@ -405,7 +392,7 @@ impl SQLite3Driver {
         con.create_scalar_function(
             "find_widget_compare_w",
             2,
-            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_INNOCUOUS,
             move |ctx| Ok(find_widget_compare_w(ctx)),
         )
         .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_w".into()]))?;
@@ -413,7 +400,7 @@ impl SQLite3Driver {
         con.create_scalar_function(
             "find_widget_compare_c",
             2,
-            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_INNOCUOUS,
             move |ctx| Ok(find_widget_compare_c(ctx)),
         )
         .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_c".into()]))?;
@@ -421,7 +408,7 @@ impl SQLite3Driver {
         con.create_scalar_function(
             "find_widget_compare",
             2,
-            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_INNOCUOUS,
             move |ctx| Ok(find_widget_compare(ctx)),
         )
         .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare".into()]))?;
@@ -429,7 +416,7 @@ impl SQLite3Driver {
         con.create_scalar_function(
             "find_widget_compare_r_w_c",
             2,
-            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_INNOCUOUS,
             move |ctx| Ok(find_widget_compare_r_w_c(ctx)),
         )
         .or_else(|err| {
@@ -439,7 +426,7 @@ impl SQLite3Driver {
         con.create_scalar_function(
             "find_widget_compare_r_w",
             2,
-            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_INNOCUOUS,
             move |ctx| Ok(find_widget_compare_r_w(ctx)),
         )
         .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_r_w".into()]))?;
@@ -447,7 +434,7 @@ impl SQLite3Driver {
         con.create_scalar_function(
             "find_widget_compare_r_c",
             2,
-            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_INNOCUOUS,
             move |ctx| Ok(find_widget_compare_r_c(ctx)),
         )
         .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_r_c".into()]))?;
@@ -455,7 +442,7 @@ impl SQLite3Driver {
         con.create_scalar_function(
             "find_widget_compare_r",
             2,
-            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_INNOCUOUS,
             move |ctx| Ok(find_widget_compare_r(ctx)),
         )
         .or_else(|err| Error::new_ffi_error(err, "sqlite3_create_function_v2", &["find_widget_compare_r".into()]))?;
@@ -476,13 +463,12 @@ impl SQLite3Driver {
         Ok(Self {
             con: ManuallyDrop::new(con),
             pager: Pager::new(),
-            abort_signal,
             database_label,
         })
     }
 
-    pub fn abort_signal(&self) -> Arc<AtomicBool> {
-        Arc::clone(&self.abort_signal)
+    pub fn get_interrupt_handle(&self) -> InterruptHandle {
+        self.con.get_interrupt_handle()
     }
 
     #[cfg(test)]
@@ -496,10 +482,11 @@ impl SQLite3Driver {
         query: &str,
         params: &[Literal],
         read_only: ExecMode,
+        options: QueryOptions,
         warnings: &mut Vec<InvalidUTF8>,
     ) -> std::result::Result<Vec<u8>, Error> {
         if read_only == ExecMode::ReadOnly {
-            assert_readonly_query(query)?;
+            assert_readonly_query(query, &options.pre_stmt)?;
         } else {
             self.pager.clear_cache();
         }
@@ -508,11 +495,32 @@ impl SQLite3Driver {
             .pager
             .query(&mut self.con, query, params, |err| warnings.push(err.with(query)))?
         {
+            // Return the cache entry if it exists.
             records
         } else {
-            // Prepare
-            let mut stmt = self
+            // Prepare the statement
+            let tx = self
                 .con
+                .transaction()
+                .or_else(|err| Error::new_query_error(err, query, params))?;
+
+            // Pre-query
+            if let Some(pre_stmt_str) = options.pre_stmt {
+                let mut pre_stmt = tx
+                    .prepare(&pre_stmt_str)
+                    .or_else(|err| Error::new_query_error(err, &pre_stmt_str, params))?;
+
+                for (i, param) in params.iter().enumerate() {
+                    pre_stmt
+                        .raw_bind_parameter(i + 1, param)
+                        .or_else(|err| Error::new_query_error(err, &pre_stmt_str, params))?;
+                }
+                pre_stmt
+                    .raw_execute()
+                    .or_else(|err| Error::new_query_error(err, &pre_stmt_str, params))?;
+            }
+
+            let mut stmt = tx
                 .prepare(query)
                 .or_else(|err| Error::new_query_error(err, query, params))?;
 
@@ -549,6 +557,29 @@ impl SQLite3Driver {
                     Err(err) => Error::new_query_error(err, query, params)?,
                 }
             }
+
+            drop(rows);
+            drop(stmt);
+
+            if let Some(changes) = options.changes {
+                let actual_changes = tx.changes();
+                if !if options.allow_fewer_changes {
+                    actual_changes <= changes
+                } else {
+                    actual_changes == changes
+                } {
+                    tx.rollback()
+                        .or_else(|err| Error::new_query_error(err, query, params))?;
+                    return Err(Error::UnexpectedChanges {
+                        expected: changes,
+                        actual: actual_changes,
+                        query: query.to_owned(),
+                        params: params.to_owned(),
+                    });
+                }
+            }
+
+            tx.commit().or_else(|err| Error::new_query_error(err, query, params))?;
             Records::new(col_buf, n_rows, Rc::new(columns))
         };
 
@@ -563,14 +594,14 @@ impl SQLite3Driver {
         Ok(buf)
     }
 
-    /// Executes a SQL statement and returns the result.
+    /// Executes a SQL statement and maps the result.
     pub fn select_all<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T>(
         &self,
         query: &str,
         params: &[Literal],
-        map: F,
+        mut map: F,
     ) -> std::result::Result<Vec<T>, Error> {
-        assert_readonly_query(query)?;
+        assert_readonly_query(query, &None)?;
 
         // Prepare the statement
         let mut stmt = self
@@ -578,21 +609,24 @@ impl SQLite3Driver {
             .prepare(query)
             .or_else(|err| Error::new_query_error(err, query, params))?;
 
-        // Fetch data and pack into Vec<T>
-        let mut col_buf: Vec<Vec<u8>> = vec![];
-        let column_count = stmt.column_count();
-        for _ in 0..column_count {
-            col_buf.push(vec![]);
-        }
+        // Bind parameters
         for (i, param) in params.iter().enumerate() {
             stmt.raw_bind_parameter(i + 1, param)
                 .or_else(|err| Error::new_query_error(err, query, params))?;
         }
-        let records = stmt
-            .raw_query()
-            .mapped::<F, T>(map)
-            .collect::<rusqlite::Result<Vec<T>>>()
-            .or_else(|err| Error::new_query_error(err, query, params))?;
+
+        // Fetch data and pack into Vec<T>
+        let mut rows = stmt.raw_query();
+        let mut records = Vec::<T>::new();
+        loop {
+            match rows.next() {
+                Ok(Some(row)) => {
+                    records.push(map(row).or_else(|err| Error::new_query_error(err, query, params))?);
+                }
+                Ok(None) => break,
+                Err(err) => return Err(Error::new_query_error(err, query, params)?),
+            }
+        }
 
         Ok(records)
     }
@@ -965,16 +999,16 @@ JOIN main.pragma_table_info("table_name") p"#,
                     },
                     pk,
                     auto_increment: pk && has_table_auto_increment_column,
-                    foreign_keys: foreign_keys.get(&name).map(Rc::clone).unwrap_or_default(),
+                    foreign_keys: foreign_keys.get(&name).cloned().unwrap_or_default(),
                     hidden: row.get::<_, i64>(6)?,
                     dflt_value: match row.get_ref(4)? {
                         ValueRef::Null => None,
-                        ValueRef::Integer(v) => Some(DfltValue::Int(v)),
-                        ValueRef::Real(v) => Some(DfltValue::Real(v)),
-                        ValueRef::Text(v) => Some(DfltValue::String(from_utf8_lossy(v, |err| {
+                        ValueRef::Text(v) => Some(from_utf8_lossy(v, |err| {
                             warnings.push(err.with("table_xinfo.dflt_value"))
-                        }))),
-                        ValueRef::Blob(v) => Some(DfltValue::Blob(v.to_owned())),
+                        })),
+                        _ => {
+                            panic!("Unexpected value for table_xinfo.dflt_value");
+                        }
                     },
                     name,
                 })
@@ -1174,6 +1208,7 @@ JOIN main.pragma_table_info("table_name") p"#,
         query: &str,
         params: &[Literal],
         mode: QueryMode,
+        options: QueryOptions,
     ) -> std::result::Result<(), Error> {
         let start_time = std::time::Instant::now();
 
@@ -1245,7 +1280,7 @@ JOIN main.pragma_table_info("table_name") p"#,
 
             _ => {
                 if mode == QueryMode::ReadOnly {
-                    assert_readonly_query(query)?;
+                    assert_readonly_query(query, &options.pre_stmt)?;
                 }
 
                 rmp::encode::write_map_len(&mut w, 3).expect("Failed to write msgpack");
@@ -1271,11 +1306,11 @@ JOIN main.pragma_table_info("table_name") p"#,
                         .expect("Failed to write msgpack");
                     }
                     QueryMode::ReadOnly => {
-                        w.write_all(&self.execute(query, params, ExecMode::ReadOnly, &mut warnings)?)
+                        w.write_all(&self.execute(query, params, ExecMode::ReadOnly, options, &mut warnings)?)
                             .expect("Failed to write msgpack");
                     }
                     QueryMode::ReadWrite => {
-                        w.write_all(&self.execute(query, params, ExecMode::ReadWrite, &mut warnings)?)
+                        w.write_all(&self.execute(query, params, ExecMode::ReadWrite, options, &mut warnings)?)
                             .expect("Failed to write msgpack");
                     }
                 }

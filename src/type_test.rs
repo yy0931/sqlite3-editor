@@ -1,6 +1,7 @@
 use crate::{
     literal::Literal,
     request_type::{QueryMode, Request},
+    sqlite3_driver::QueryOptions,
 };
 
 #[test]
@@ -12,13 +13,35 @@ fn test_value() {
 
 #[test]
 fn test_parse_query() {
-    let q: Request = serde_json::from_str(r#"["foo", [1, 2], "read_only"]"#).unwrap();
+    let q: Request =
+        serde_json::from_str(r#"["foo", [1, 2], "read_only", {"changes": null, "allow_fewer_changes": false}]"#)
+            .unwrap();
     assert_eq!(
         q,
         Request {
             query: "foo".to_owned(),
             params: vec![Literal::I64(1), Literal::I64(2)],
-            mode: QueryMode::ReadOnly
+            mode: QueryMode::ReadOnly,
+            options: QueryOptions::default(),
+        }
+    );
+}
+
+#[test]
+fn test_parse_query_with_changes() {
+    let q: Request =
+        serde_json::from_str(r#"["foo", [1, 2], "read_only", {"changes": 10, "allow_fewer_changes": true}]"#).unwrap();
+    assert_eq!(
+        q,
+        Request {
+            query: "foo".to_owned(),
+            params: vec![Literal::I64(1), Literal::I64(2)],
+            mode: QueryMode::ReadOnly,
+            options: QueryOptions {
+                changes: Some(10),
+                allow_fewer_changes: true,
+                ..Default::default()
+            },
         }
     );
 }

@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     completion::{complete, ColumnCompletion, Completions, TableCompletion, TokenType},
-    sqlite3_driver::{ExecMode, SQLite3Driver, TableType},
+    sqlite3_driver::{ExecMode, QueryOptions, SQLite3Driver, TableType},
     tokenize::ZeroIndexedLocation,
 };
 
@@ -23,6 +23,7 @@ fn setup() -> SQLite3Driver {
         "CREATE TABLE table_name(column_name)",
         &[],
         ExecMode::ReadWrite,
+        QueryOptions::default(),
         &mut vec![],
     )
     .unwrap();
@@ -282,7 +283,8 @@ fn test_group() {
 fn test1() {
     let mut db = setup();
     for stmt in &[r#"CREATE TABLE t1(x);"#, r#"CREATE TABLE t2(y);"#] {
-        db.execute(stmt, &[], ExecMode::ReadWrite, &mut vec![]).unwrap();
+        db.execute(stmt, &[], ExecMode::ReadWrite, QueryOptions::default(), &mut vec![])
+            .unwrap();
     }
     let mut result = complete(&db, r#"SELECT * FROM t1 A, JOIN t2 B WHERE t1.x = t2."#, &loc(0, 46));
     assert_eq!(result.last_tokens.pop_back().unwrap(), TokenType::Period);

@@ -4,8 +4,8 @@ use crate::{
     literal::Literal,
     request_type::QueryMode,
     sqlite3_driver::{
-        from_utf8_lossy, read_msgpack_into_json, EntityRelationship, ExecMode, InvalidUTF8, SQLite3Driver, Table,
-        TableType,
+        from_utf8_lossy, read_msgpack_into_json, EntityRelationship, ExecMode, InvalidUTF8, QueryOptions,
+        SQLite3Driver, Table, TableType,
     },
 };
 
@@ -59,7 +59,8 @@ fn test_execute_params() {
                 "SELECT ? as a, ? as b, ? as c, ? as d, ? as e",
                 &params,
                 ExecMode::ReadWrite,
-                &mut warnings
+                QueryOptions::default(),
+                &mut warnings,
             )
             .unwrap()
         )),
@@ -81,6 +82,7 @@ SELECT * FROM temp_table;
 "#,
                 &[],
                 ExecMode::ReadWrite,
+                QueryOptions::default(),
                 &mut vec![],
             )
             .unwrap(),
@@ -95,7 +97,7 @@ mod test_table_schema {
     use std::{collections::HashMap, rc::Rc};
 
     use crate::sqlite3_driver::{
-        ColumnOriginAndIsRowId, DfltValue, ExecMode, IndexColumn, SQLite3Driver, TableSchema, TableSchemaColumn,
+        ColumnOriginAndIsRowId, ExecMode, IndexColumn, QueryOptions, SQLite3Driver, TableSchema, TableSchemaColumn,
         TableSchemaColumnForeignKey, TableSchemaIndex, TableSchemaTrigger, TableType,
     };
 
@@ -107,6 +109,7 @@ mod test_table_schema {
             "CREATE TABLE t(x INTEGER PRIMARY KEY NOT NULL) STRICT",
             &[],
             ExecMode::ReadWrite,
+            QueryOptions::default(),
             &mut vec![],
         )
         .unwrap();
@@ -142,12 +145,19 @@ mod test_table_schema {
     fn test_view() {
         let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
 
-        db.execute("CREATE TABLE t(x)", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
+        db.execute(
+            "CREATE TABLE t(x)",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
         db.execute(
             "CREATE VIEW u AS SELECT x as y FROM t",
             &[],
             ExecMode::ReadWrite,
+            QueryOptions::default(),
             &mut vec![],
         )
         .unwrap();
@@ -194,6 +204,7 @@ mod test_table_schema {
             "CREATE TABLE t(x INTEGER PRIMARY KEY NOT NULL) STRICT",
             &[],
             ExecMode::ReadWrite,
+            QueryOptions::default(),
             &mut vec![],
         )
         .unwrap();
@@ -201,6 +212,7 @@ mod test_table_schema {
             "CREATE TABLE u(y INTEGER NOT NULL REFERENCES t(x))",
             &[],
             ExecMode::ReadWrite,
+            QueryOptions::default(),
             &mut vec![],
         )
         .unwrap();
@@ -225,6 +237,7 @@ mod test_table_schema {
             "CREATE TABLE t(x INTEGER PRIMARY KEY NOT NULL) STRICT",
             &[],
             ExecMode::ReadWrite,
+            QueryOptions::default(),
             &mut vec![],
         )
         .unwrap();
@@ -232,6 +245,7 @@ mod test_table_schema {
             "CREATE TABLE v(x INTEGER NOT NULL REFERENCES t)",
             &[],
             ExecMode::ReadWrite,
+            QueryOptions::default(),
             &mut vec![],
         )
         .unwrap();
@@ -256,11 +270,18 @@ mod test_table_schema {
             "CREATE TABLE t(x INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)",
             &[],
             ExecMode::ReadWrite,
+            QueryOptions::default(),
             &mut vec![],
         )
         .unwrap();
-        db.execute("INSERT INTO t DEFAULT VALUES", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
+        db.execute(
+            "INSERT INTO t DEFAULT VALUES",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
         assert!(db.table_schema("main", "t").unwrap().0.unwrap().columns[0].auto_increment);
     }
 
@@ -271,18 +292,25 @@ mod test_table_schema {
             "CREATE TABLE t(x INTEGER NOT NULL PRIMARY KEY)",
             &[],
             ExecMode::ReadWrite,
+            QueryOptions::default(),
             &mut vec![],
         )
         .unwrap();
-        db.execute("INSERT INTO t DEFAULT VALUES", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
+        db.execute(
+            "INSERT INTO t DEFAULT VALUES",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
         assert!(!db.table_schema("main", "t").unwrap().0.unwrap().columns[0].auto_increment);
     }
 
     #[test]
     fn test_default_value() {
         let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
-        db.execute("CREATE TABLE t(a DEFAULT NULL, b DEFAULT 1, c DEFAULT 1.2, d DEFAULT 'a', e DEFAULT x'1234', f DEFAULT (1 + 2))", &[], ExecMode::ReadWrite, &mut vec![]).unwrap();
+        db.execute("CREATE TABLE t(a DEFAULT NULL, b DEFAULT 1, c DEFAULT 1.2, d DEFAULT 'a', e DEFAULT x'1234', f DEFAULT (1 + 2))", &[], ExecMode::ReadWrite, QueryOptions::default(), &mut vec![]).unwrap();
         assert_eq!(
             db.table_schema("main", "t")
                 .unwrap()
@@ -293,12 +321,12 @@ mod test_table_schema {
                 .map(|v| v.dflt_value)
                 .collect::<Vec<_>>(),
             vec![
-                Some(DfltValue::String("NULL".to_owned())),
-                Some(DfltValue::String("1".to_owned())),
-                Some(DfltValue::String("1.2".to_owned())),
-                Some(DfltValue::String("'a'".to_owned())),
-                Some(DfltValue::String("x'1234'".to_owned())),
-                Some(DfltValue::String("1 + 2".to_owned())),
+                Some("NULL".to_owned()),
+                Some("1".to_owned()),
+                Some("1.2".to_owned()),
+                Some("'a'".to_owned()),
+                Some("x'1234'".to_owned()),
+                Some("1 + 2".to_owned()),
             ]
         );
     }
@@ -306,10 +334,22 @@ mod test_table_schema {
     #[test]
     fn test_index() {
         let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
-        db.execute("CREATE TABLE t(x UNIQUE)", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
-        db.execute("CREATE INDEX idx1 ON t(x)", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
+        db.execute(
+            "CREATE TABLE t(x UNIQUE)",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
+        db.execute(
+            "CREATE INDEX idx1 ON t(x)",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
         assert_eq!(
             db.table_schema("main", "t").unwrap().0.unwrap().indexes,
             vec![
@@ -346,10 +386,17 @@ mod test_table_schema {
     #[test]
     fn test_trigger() {
         let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
-        db.execute("CREATE TABLE t(x)", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
+        db.execute(
+            "CREATE TABLE t(x)",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
         let sql = "CREATE TRIGGER trigger_insert AFTER INSERT ON t BEGIN SELECT 1; END";
-        db.execute(sql, &[], ExecMode::ReadWrite, &mut vec![]).unwrap();
+        db.execute(sql, &[], ExecMode::ReadWrite, QueryOptions::default(), &mut vec![])
+            .unwrap();
         assert_eq!(
             db.table_schema("main", "t").unwrap().0.unwrap().triggers,
             vec![TableSchemaTrigger {
@@ -363,8 +410,14 @@ mod test_table_schema {
     fn test_query_schema() {
         let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
 
-        db.execute("CREATE TABLE t(x INTEGER)", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
+        db.execute(
+            "CREATE TABLE t(x INTEGER)",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
         assert_eq!(
             db.query_schema("SELECT 1, x FROM t").unwrap().0,
             TableSchema {
@@ -417,12 +470,30 @@ mod test_table_schema {
     fn test_temp_table() {
         let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
 
-        db.execute("CREATE TABLE t(x)", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
-        db.execute("CREATE TEMP TABLE t(y)", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
-        db.execute("CREATE TEMP TABLE u(y)", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
+        db.execute(
+            "CREATE TABLE t(x)",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
+        db.execute(
+            "CREATE TEMP TABLE t(y)",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
+        db.execute(
+            "CREATE TEMP TABLE u(y)",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
 
         assert_eq!(
             db.table_schema("main", "t").unwrap().0.unwrap().schema.unwrap(),
@@ -441,7 +512,9 @@ mod test_table_schema {
     mod test_indirect_foreign_key {
         use std::{collections::HashMap, rc::Rc};
 
-        use crate::sqlite3_driver::{ColumnOriginAndIsRowId, ExecMode, SQLite3Driver, TableSchemaColumnForeignKey};
+        use crate::sqlite3_driver::{
+            ColumnOriginAndIsRowId, ExecMode, QueryOptions, SQLite3Driver, TableSchemaColumnForeignKey,
+        };
 
         #[test]
         fn test_table_schema() {
@@ -451,6 +524,7 @@ mod test_table_schema {
                 "CREATE TABLE t1(x INTEGER PRIMARY KEY)",
                 &[],
                 ExecMode::ReadWrite,
+                QueryOptions::default(),
                 &mut vec![],
             )
             .unwrap();
@@ -458,6 +532,7 @@ mod test_table_schema {
                 "CREATE TABLE t2(y INTEGER REFERENCES t1(x))",
                 &[],
                 ExecMode::ReadWrite,
+                QueryOptions::default(),
                 &mut vec![],
             )
             .unwrap();
@@ -465,6 +540,7 @@ mod test_table_schema {
                 "CREATE VIEW table_name AS SELECT y as z FROM t2;",
                 &[],
                 ExecMode::ReadWrite,
+                QueryOptions::default(),
                 &mut vec![],
             )
             .unwrap();
@@ -504,6 +580,7 @@ mod test_table_schema {
                 "CREATE TABLE t1(x INTEGER PRIMARY KEY)",
                 &[],
                 ExecMode::ReadWrite,
+                QueryOptions::default(),
                 &mut vec![],
             )
             .unwrap();
@@ -511,6 +588,7 @@ mod test_table_schema {
                 "CREATE TABLE t2(y INTEGER REFERENCES t1(x))",
                 &[],
                 ExecMode::ReadWrite,
+                QueryOptions::default(),
                 &mut vec![],
             )
             .unwrap();
@@ -518,6 +596,7 @@ mod test_table_schema {
                 "CREATE VIEW table_name AS SELECT y as z FROM t2;",
                 &[],
                 ExecMode::ReadWrite,
+                QueryOptions::default(),
                 &mut vec![],
             )
             .unwrap();
@@ -553,11 +632,12 @@ mod test_table_schema {
     mod test_rowid_alias {
         use crate::{
             column_origin::ColumnOrigin,
-            sqlite3_driver::{escape_sql_identifier, get_string, ExecMode, SQLite3Driver},
+            sqlite3_driver::{escape_sql_identifier, get_string, ExecMode, QueryOptions, SQLite3Driver},
         };
 
         fn execute(db: &mut SQLite3Driver, query: &str) {
-            db.execute(query, &[], ExecMode::ReadWrite, &mut vec![]).unwrap();
+            db.execute(query, &[], ExecMode::ReadWrite, QueryOptions::default(), &mut vec![])
+                .unwrap();
         }
 
         fn check_is_rowid(db: &SQLite3Driver, table: &str, column: &str, is_rowid: bool) {
@@ -669,6 +749,7 @@ fn test_list_entity_relationships() {
         "CREATE TABLE t(x INTEGER PRIMARY KEY NOT NULL) STRICT",
         &[],
         ExecMode::ReadWrite,
+        QueryOptions::default(),
         &mut vec![],
     )
     .unwrap();
@@ -676,6 +757,7 @@ fn test_list_entity_relationships() {
         "CREATE TABLE v(x INTEGER NOT NULL REFERENCES t)",
         &[],
         ExecMode::ReadWrite,
+        QueryOptions::default(),
         &mut vec![],
     )
     .unwrap();
@@ -697,6 +779,7 @@ fn test_list_tables() {
         "CREATE TABLE t1(x INTEGER NOT NULL PRIMARY KEY) WITHOUT ROWID, STRICT",
         &[],
         ExecMode::ReadWrite,
+        QueryOptions::default(),
         &mut vec![],
     )
     .unwrap();
@@ -704,6 +787,7 @@ fn test_list_tables() {
         "CREATE TABLE t2(x INTEGER NOT NULL PRIMARY KEY) WITHOUT ROWID, STRICT",
         &[],
         ExecMode::ReadWrite,
+        QueryOptions::default(),
         &mut vec![],
     )
     .unwrap();
@@ -711,6 +795,7 @@ fn test_list_tables() {
         "CREATE TEMP TABLE t3(x INTEGER NOT NULL PRIMARY KEY) WITHOUT ROWID, STRICT",
         &[],
         ExecMode::ReadWrite,
+        QueryOptions::default(),
         &mut vec![],
     )
     .unwrap();
@@ -772,7 +857,8 @@ fn test_query_error() {
                 &mut w,
                 "SELECT * FROM non_existent",
                 &[],
-                crate::request_type::QueryMode::ReadOnly
+                crate::request_type::QueryMode::ReadOnly,
+                QueryOptions::default(),
             )
             .unwrap_err()
         ),
@@ -792,6 +878,7 @@ INSERT INTO t VALUES (1);
 COMMIT;"#,
         &[],
         crate::request_type::QueryMode::Script,
+        QueryOptions::default(),
     )
     .unwrap();
 
@@ -821,6 +908,7 @@ SELECT * FROM invalid_view;
 COMMIT;"#,
         &[],
         crate::request_type::QueryMode::Script,
+        QueryOptions::default(),
     ) {
         Ok(_) => panic!(),
         Err(err) => {
@@ -840,6 +928,7 @@ SELECT * FROM invalid_view;
 COMMIT;"#,
         &[],
         crate::request_type::QueryMode::Script,
+        QueryOptions::default(),
     ) {
         Ok(_) => panic!(),
         Err(err) => {
@@ -870,6 +959,7 @@ INSERT INTO t VALUES (1);
 "#,
         &[],
         crate::request_type::QueryMode::Script,
+        QueryOptions::default(),
     )
     .unwrap();
 
@@ -878,6 +968,7 @@ INSERT INTO t VALUES (1);
         "BEGIN;",
         &[],
         crate::request_type::QueryMode::Script,
+        QueryOptions::default(),
     )
     .unwrap();
 
@@ -980,7 +1071,7 @@ fn test_find_widget_compare_r() {
 
 fn handle(db: &mut SQLite3Driver, query: &str, params: &[Literal], mode: QueryMode) -> String {
     let mut w = vec![];
-    db.handle(&mut w, query, params, mode).unwrap();
+    db.handle(&mut w, query, params, mode, QueryOptions::default()).unwrap();
     regex::Regex::new(r#""time":[\d.]+"#)
         .unwrap()
         .replace(&read_msgpack_into_json(std::io::Cursor::new(w)), r#""time":0"#)
@@ -1023,6 +1114,7 @@ fn test_handle_table_schema_invalid_params() {
             "EDITOR_PRAGMA table_schema",
             &[1.into(), 2.into()],
             QueryMode::ReadOnly,
+            QueryOptions::default(),
         )
         .unwrap_err()
         .to_string()
@@ -1033,6 +1125,7 @@ fn test_handle_table_schema_invalid_params() {
             "EDITOR_PRAGMA query_schema",
             &[1.into()],
             QueryMode::ReadOnly,
+            QueryOptions::default(),
         )
         .unwrap_err()
         .to_string()
@@ -1056,8 +1149,14 @@ fn test_handle_load_extensions() {
 fn test_invalid_utf8_text() {
     let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
     let mut warnings = vec![];
-    db.execute("SELECT CAST(x'ff' AS TEXT)", &[], ExecMode::ReadWrite, &mut warnings)
-        .unwrap();
+    db.execute(
+        "SELECT CAST(x'ff' AS TEXT)",
+        &[],
+        ExecMode::ReadWrite,
+        QueryOptions::default(),
+        &mut warnings,
+    )
+    .unwrap();
     assert_eq!(
         warnings,
         vec![InvalidUTF8 {
@@ -1075,7 +1174,8 @@ fn test_invalid_utf8_table_name() {
     let mut query = "CREATE TABLE ab(x)".as_bytes().to_vec();
     query[14] = 255;
     let query = unsafe { String::from_utf8_unchecked(query) };
-    db.execute(&query, &[], ExecMode::ReadWrite, &mut warnings).unwrap();
+    db.execute(&query, &[], ExecMode::ReadWrite, QueryOptions::default(), &mut warnings)
+        .unwrap();
     assert_eq!(
         db.list_tables(false).unwrap(),
         (
@@ -1108,18 +1208,36 @@ fn test_sqlcipher() {
     let path = &f.path().to_string_lossy();
     {
         let mut db = SQLite3Driver::connect(path, false, &Some("key1")).unwrap();
-        db.execute(&"CREATE TABLE t(x)", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
+        db.execute(
+            "CREATE TABLE t(x)",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
     }
     {
         let mut db = SQLite3Driver::connect(path, false, &Some("key2")).unwrap();
-        db.execute(&"SELECT * FROM t", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap_err();
+        db.execute(
+            "SELECT * FROM t",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap_err();
     }
     {
         let mut db = SQLite3Driver::connect(path, false, &Some("key1")).unwrap();
-        db.execute(&"SELECT * FROM t", &[], ExecMode::ReadWrite, &mut vec![])
-            .unwrap();
+        db.execute(
+            "SELECT * FROM t",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions::default(),
+            &mut vec![],
+        )
+        .unwrap();
     }
 }
 
@@ -1133,6 +1251,7 @@ fn test_cache_clear() {
         "SELECT ?",
         &[1.into()],
         QueryMode::ReadOnly,
+        QueryOptions::default(),
     )
     .unwrap();
 
@@ -1144,6 +1263,7 @@ fn test_cache_clear() {
         "SELECT ?",
         &[1.into()],
         QueryMode::ReadOnly,
+        QueryOptions::default(),
     )
     .unwrap();
     assert_eq!(db.pager().cache_clear_count, count);
@@ -1154,6 +1274,7 @@ fn test_cache_clear() {
         "CREATE TABLE t(x)",
         &[],
         QueryMode::ReadWrite,
+        QueryOptions::default(),
     )
     .unwrap();
     assert_eq!(db.pager().cache_clear_count, count + 1);
@@ -1164,7 +1285,87 @@ fn test_cache_clear() {
         "CREATE TABLE u(x)",
         &[],
         QueryMode::Script,
+        QueryOptions::default(),
     )
     .unwrap();
     assert_eq!(db.pager().cache_clear_count, count + 2);
+}
+
+#[test]
+fn test_changes() {
+    let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+    db.execute(
+        "CREATE TABLE t(x INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT)",
+        &[],
+        ExecMode::ReadWrite,
+        QueryOptions::default(),
+        &mut vec![],
+    )
+    .unwrap();
+
+    assert_eq!(db.select_all("SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(), 0);
+
+    assert_eq!(
+        db.execute(
+            "INSERT INTO t DEFAULT VALUES",
+            &[],
+            ExecMode::ReadWrite,
+            QueryOptions {
+                changes: Some(2),
+                ..Default::default()
+            },
+            &mut vec![],
+        ),
+        Err(crate::error::Error::UnexpectedChanges {
+            expected: 2,
+            actual: 1,
+            query: "INSERT INTO t DEFAULT VALUES".to_owned(),
+            params: vec![],
+        }),
+    );
+
+    assert_eq!(db.select_all("SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(), 0);
+
+    db.execute(
+        "INSERT INTO t DEFAULT VALUES",
+        &[],
+        ExecMode::ReadWrite,
+        QueryOptions::default(),
+        &mut vec![],
+    )
+    .unwrap();
+
+    assert_eq!(db.select_all("SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(), 1);
+
+    db.execute(
+        "INSERT INTO t DEFAULT VALUES",
+        &[],
+        ExecMode::ReadWrite,
+        QueryOptions {
+            changes: Some(1),
+            ..Default::default()
+        },
+        &mut vec![],
+    )
+    .unwrap();
+
+    assert_eq!(db.select_all("SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(), 2);
+}
+
+#[test]
+fn test_pre_stmt() {
+    let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+    db.execute(
+        "CREATE TABLE a AS SELECT 1",
+        &[],
+        ExecMode::ReadWrite,
+        QueryOptions {
+            pre_stmt: Some("CREATE TABLE b AS SELECT 1".to_owned()),
+            ..QueryOptions::default()
+        },
+        &mut vec![],
+    )
+    .unwrap();
+    db.select_all("SELECT * FROM a", &[], |_| Ok(1)).unwrap();
+    db.select_all("SELECT * FROM b", &[], |_| Ok(1)).unwrap();
 }

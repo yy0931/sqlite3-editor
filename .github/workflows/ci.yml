@@ -44,11 +44,11 @@ jobs:
 
           rustup target add ${{ matrix.target }}
           cargo build --release --features sqlite --target ${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/db-driver-rs.exe db-driver-${{ matrix.vsce_target }}.exe
+          cp target/${{ matrix.target }}/release/sqlite3-editor.exe sqlite3-editor-${{ matrix.vsce_target }}.exe
       - uses: actions/upload-artifact@v3
         with:
           name: artifact-${{ matrix.vsce_target }}.exe
-          path: db-driver-${{ matrix.vsce_target }}.exe
+          path: sqlite3-editor-${{ matrix.vsce_target }}.exe
           retention-days: 1
 
   build-linux:
@@ -82,12 +82,12 @@ jobs:
           rustup override set nightly
           rustup update
           cross build --release --features sqlite --target ${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/db-driver-rs db-driver-${{ matrix.vsce_target }}
+          cp target/${{ matrix.target }}/release/sqlite3-editor sqlite3-editor-${{ matrix.vsce_target }}
         shell: bash
       - uses: actions/upload-artifact@v3
         with:
           name: artifact-${{ matrix.vsce_target }}
-          path: db-driver-${{ matrix.vsce_target }}
+          path: sqlite3-editor-${{ matrix.vsce_target }}
           retention-days: 1
 
   build-darwin:
@@ -109,12 +109,12 @@ jobs:
           set -xEeuo pipefail
 
           cargo build --release --features sqlite --target ${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/db-driver-rs db-driver-${{ matrix.vsce_target }}
+          cp target/${{ matrix.target }}/release/sqlite3-editor sqlite3-editor-${{ matrix.vsce_target }}
         shell: bash
       - uses: actions/upload-artifact@v3
         with:
           name: artifact-${{ matrix.vsce_target }}
-          path: db-driver-${{ matrix.vsce_target }}
+          path: sqlite3-editor-${{ matrix.vsce_target }}
           retention-days: 1
 
   release:
@@ -130,11 +130,11 @@ jobs:
           for i in ./artifact-*/*
             do cp -r "$i" .
           done
-          chmod a+x ./db-driver-*
-          tar -cvf db-drivers.tar ./db-driver-*
+          chmod a+x ./sqlite3-editor-*
+          tar -cvf sqlite3-editor.tar ./sqlite3-editor-*
       - uses: softprops/action-gh-release@v1
         with:
-          files: 'db-drivers.tar'
+          files: 'sqlite3-editor.tar'
           name: ${{ needs.test.outputs.version }}
           tag_name: ${{ needs.test.outputs.version }}
           draft: true

@@ -1,6 +1,6 @@
 [package]
-name = "db-driver-rs"
-version = "1.0.162"
+name = "sqlite3-editor"
+version = "1.0.163"
 edition = "2021"
 
 [features]
@@ -27,7 +27,7 @@ rust_xlsxwriter = "0.52.0"
 [dependencies.rusqlite]
 git = "https://github.com/yy0931/rusqlite.git"
 branch = "master"
-features = ["functions", "load_extension"]
+features = ["functions", "load_extension", "modern_sqlite"]
 
 [dev-dependencies]
 tempfile = "3.8.0"

@@ -3,6 +3,8 @@ use std::{
     fs::File,
     io::{BufRead, Read, Seek, SeekFrom, Write},
     path::PathBuf,
+    str::FromStr,
+    sync::{Arc, Mutex},
 };
 mod completion;
 #[cfg(test)]
@@ -185,6 +187,35 @@ impl From<(String, i64, i64)> for CompletionQuery {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum ServerCommand {
+    Interrupt,
+    Close,
+    TryReconnect,
+    Handle,
+    SemanticHighlight,
+    CodeLens,
+    CheckSyntax,
+    Completion,
+}
+
+impl FromStr for ServerCommand {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s.trim() {
+            "interrupt" => Self::Interrupt,
+            "close" => Self::Close,
+            "try_reconnect" => Self::TryReconnect,
+            "handle" => Self::Handle,
+            "semantic_highlight" => Self::SemanticHighlight,
+            "code_lens" => Self::CodeLens,
+            "check_syntax" => Self::CheckSyntax,
+            "completion" => Self::Completion,
+            _ => return Err(()),
+        })
+    }
+}
+
 fn cli<F, I, O, E>(args: Args, stdin: F, mut stdout: &mut O, mut stderr: &mut E) -> i32
 where
     F: Fn() -> I + std::marker::Send + 'static,
@@ -203,7 +234,7 @@ where
                     .unwrap(),
                 "ok"
             );
-            writeln!(&mut stdout, "db-driver-rs {}", env!("CARGO_PKG_VERSION")).expect("writeln! failed.");
+            writeln!(&mut stdout, "sqlite3-editor {}", env!("CARGO_PKG_VERSION")).expect("writeln! failed.");
             writeln!(
                 &mut stdout,
                 "{} {}",
@@ -263,33 +294,44 @@ where
                 }
             };
 
-            let (command_sender, command_receiver) = std::sync::mpsc::channel::<String>();
-            let abort_signal = db.abort_signal();
-            let _thread = std::thread::spawn(move || {
-                let mut stdin = stdin();
-                loop {
-                    let mut command = String::new();
-                    match stdin.read_line(&mut command) {
-                        Err(_) => return,
-                        Ok(0) => return,
-                        _ => {}
+            let (command_sender, command_receiver) = std::sync::mpsc::channel::<ServerCommand>();
+            let interrupt_handle = Arc::new(Mutex::new(db.get_interrupt_handle()));
+            let _thread = {
+                let interrupt_handle = Arc::clone(&interrupt_handle);
+                std::thread::spawn(move || {
+                    let mut stdin = stdin();
+                    loop {
+                        let mut command_str = String::new();
+                        match stdin.read_line(&mut command_str) {
+                            Err(_) => return,
+                            Ok(0) => return,
+                            _ => {}
+                        }
+                        match command_str.parse::<ServerCommand>() {
+                            Ok(ServerCommand::Interrupt) => {
+                                interrupt_handle.lock().unwrap().interrupt();
+                            }
+                            Ok(command) => {
+                                if command_sender.send(command).is_err() {
+                                    return;
+                                }
+                            }
+                            _ => {}
+                        }
                     }
-                    command = command.trim().to_owned();
-                    if command == "abort" {
-                        abort_signal.store(true, std::sync::atomic::Ordering::SeqCst);
-                        continue;
-                    }
-                    if command_sender.send(command).is_err() {
-                        return;
-                    };
-                }
-            });
+                })
+            };
 
             // Start the main loop
             loop {
                 let Ok(command) = command_receiver.recv() else {
                     return 0;
                 };
+
+                // Terminate the loop before opening the files
+                if command == ServerCommand::Close {
+                    return 0;
+                }
 
                 // Open request and response files
                 let mut r = File::open(&request_body_filepath).unwrap();
@@ -301,25 +343,20 @@ where
                     .unwrap();
 
                 fn finish<T: Write, U: Write>(mut stdout: &mut T, w: &mut U, code: error::ErrorCode) {
+                    w.write_all(b"END").expect("Failed to write the result.");
                     w.flush().expect("Failed to flush the writer.");
                     writeln!(&mut stdout, "{code:?}").expect("writeln! failed.");
                     stdout.flush().unwrap();
                 }
 
                 // Handle the different commands
-                match command.as_str() {
-                    // Terminate the loop
-                    "close" => return 0,
-
-                    "try_reconnect" => {
-                        match sqlite3_driver::SQLite3Driver::connect_with_abort_signal(
-                            &database_filepath,
-                            READ_ONLY,
-                            &sql_cipher_key,
-                            db.abort_signal(),
-                        ) {
+                match command {
+                    ServerCommand::TryReconnect => {
+                        match sqlite3_driver::SQLite3Driver::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
                             Ok(new_db) => {
                                 db = new_db;
+
+                                *interrupt_handle.lock().unwrap() = db.get_interrupt_handle();
                                 write_named(&mut w, &None::<&i64>).expect("Failed to write the result.");
                                 finish(&mut stdout, &mut w, error::ErrorCode::Success);
                             }
@@ -332,7 +369,7 @@ where
                     }
 
                     // Handle the request
-                    "handle" => {
+                    ServerCommand::Handle => {
                         // Deserialize the request
                         let req = match rmp_serde::from_read::<_, Request>(&mut r) {
                             Ok(req) => req,
@@ -353,7 +390,7 @@ where
                             }
                         };
 
-                        match db.handle(&mut w, &req.query, &req.params, req.mode) {
+                        match db.handle(&mut w, &req.query, &req.params, req.mode, req.options) {
                             Ok(_) => {
                                 finish(&mut stdout, &mut w, error::ErrorCode::Success);
                             }
@@ -366,16 +403,18 @@ where
                     }
 
                     // Tokenize, get code lenses, or check syntax
-                    "semantic_highlight" | "code_lens" | "check_syntax" => {
+                    ServerCommand::SemanticHighlight | ServerCommand::CodeLens | ServerCommand::CheckSyntax => {
                         // Handle the command
                         if let Err(err) = rmp_serde::from_read(r).map(
                             |Query { query }: Query| -> std::result::Result<(), error::Error> {
-                                match command.trim() {
-                                    "semantic_highlight" => {
+                                match command {
+                                    ServerCommand::SemanticHighlight => {
                                         write_named(&mut w, &semantic_highlight::semantic_highlight(&query))?
                                     }
-                                    "code_lens" => write_named(&mut w, &code_lens::code_lens(&query))?,
-                                    "check_syntax" => write_named(&mut w, &check_syntax::check_syntax(&query)?)?,
+                                    ServerCommand::CodeLens => write_named(&mut w, &code_lens::code_lens(&query))?,
+                                    ServerCommand::CheckSyntax => {
+                                        write_named(&mut w, &check_syntax::check_syntax(&query)?)?
+                                    }
                                     _ => panic!("Unexpected command {:?}", command),
                                 };
                                 Ok(())
@@ -392,7 +431,7 @@ where
                     }
 
                     // Completion
-                    "completion" => {
+                    ServerCommand::Completion => {
                         // Handle the command
                         if let Err(err) =
                             rmp_serde::from_read(r).map(|CompletionQuery { sql, line, column }: CompletionQuery| -> std::result::Result<(), error::Error> {
