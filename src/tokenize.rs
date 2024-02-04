@@ -65,8 +65,8 @@ impl ZeroIndexedLocation {
 impl From<Location> for ZeroIndexedLocation {
     fn from(value: Location) -> Self {
         Self {
-            line: value.line as usize - 1,
-            column: value.column as usize - 1,
+            line: value.line.checked_sub(1).unwrap().try_into().unwrap(),
+            column: value.column.checked_sub(1).unwrap().try_into().unwrap(),
         }
     }
 }
@@ -127,7 +127,7 @@ pub fn tokenize_with_range_location(
                     // The location of the end of file
                     let lines = sql.lines().collect::<Vec<_>>();
                     ZeroIndexedLocation {
-                        line: lines.len().max(1) - 1,
+                        line: lines.len().saturating_sub(1),
                         column: lines.last().map_or(0, |line| line.len()),
                     }
                 }

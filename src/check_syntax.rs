@@ -58,7 +58,8 @@ fn check_syntax_stmt(stmt_str: &str, conn: &mut rusqlite::Connection, offset_sta
             {
                 Some(Diagnostic {
                     possible_causes: vec![PossibleCause {
-                        offset: offset_start + loose_byte_to_code_point_index(&sql, offset as usize) - "EXPLAIN ".len(),
+                        offset: (offset_start + loose_byte_to_code_point_index(&sql, offset.try_into().unwrap()))
+                            .saturating_sub("EXPLAIN ".len()),
                     }],
                     severity: Severity::Error,
                     message: msg,

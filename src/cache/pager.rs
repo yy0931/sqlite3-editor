@@ -14,6 +14,11 @@ pub struct PagerConfig {
     pub per_query_cache_limit_bytes: u64,
     pub cache_time_limit_relative_to_queried_range: f64,
     pub cache_limit_bytes: u64,
+
+    /// The number of records to prefetch before the start of the queried range.
+    pub margin_start: u64,
+    /// The number of records to prefetch after the end of the queried range.
+    pub margin_end: u64,
 }
 
 impl Default for PagerConfig {
@@ -23,6 +28,8 @@ impl Default for PagerConfig {
             per_query_cache_limit_bytes: /* 8MB */ 8 * 1024 * 1024,
             cache_time_limit_relative_to_queried_range: 0.2,
             cache_limit_bytes: /* 64MB */ 64 * 1024 * 1024,
+            margin_start: 0,
+            margin_end: 100000,
         }
     }
 }
@@ -109,7 +116,11 @@ impl Pager {
         let (Literal::I64(limit), Literal::I64(offset)) = (&params[len - 2], &params[len - 1]) else {
             return Ok(None);
         };
-        let (limit, offset) = (*limit, *offset);
+        let (Ok(limit), Ok(offset)): (Result<u64, _>, Result<u64, _>) = ((*limit).try_into(), (*offset).try_into())
+        else {
+            // Negative limits and negative offsets are not supported
+            return Ok(None);
+        };
 
         let cache_entry = self.cache.entry(query, &params);
         let mut cache_entry = cache_entry.borrow_mut();
@@ -124,20 +135,21 @@ impl Pager {
         }
 
         // Add margins before and after the queried area
-        let limit_with_margin = limit + 100000;
-        params[len - 2] = Literal::I64(limit_with_margin);
-        const MARGIN_START: i64 = 0; // disabled
-        let offset_with_margin = (offset - MARGIN_START).max(0);
-        params[len - 1] = Literal::I64(offset_with_margin);
+        let limit_with_margin = limit + self.config.margin_start.min(offset) + self.config.margin_end;
+        params[len - 2] = Literal::I64(limit_with_margin.try_into().unwrap());
+        let offset_with_margin = offset.saturating_sub(self.config.margin_start);
+        params[len - 1] = Literal::I64(offset_with_margin.try_into().unwrap());
 
         // Forward run: Fetch the queried area and cache records after that
         let mut col_buf: Vec<Vec<u8>>;
-        let mut n_rows = 0;
+        let mut n_rows: u32 = 0;
         let columns: Vec<String>;
         let mut end_margin_size = 0;
         {
             // Prepare
-            let mut stmt = tx.prepare(query).unwrap();
+            let mut stmt = tx
+                .prepare(query)
+                .or_else(|err| Error::new_query_error(err, query, &params))?;
 
             // Bind parameters
             for (i, param) in params.iter().enumerate() {
@@ -153,7 +165,7 @@ impl Pager {
                 .collect::<Vec<_>>();
             col_buf = vec![vec![]; columns.len()];
 
-            let cache_size_start = cache_entry.total_size_bytes();
+            let cache_size_prev = cache_entry.total_size_bytes();
             cache_entry.set_columns_if_not_set_yet(columns.clone());
 
             // Fetch records
@@ -180,7 +192,7 @@ impl Pager {
                                 // sqlite3_step()s in the end margin are fast and
                                 (timer.elapsed() - elapsed_until_end_margin).div_f64(self.config.cache_time_limit_relative_to_queried_range) < elapsed_until_end_margin &&
                                 // record sizes are small
-                                cache_entry.total_size_bytes() - cache_size_start < self.config.per_query_cache_limit_bytes / 2
+                                cache_entry.total_size_bytes().saturating_sub(cache_size_prev) < self.config.per_query_cache_limit_bytes / 2
                             ) {
                                 break;
                             }
@@ -220,14 +232,16 @@ impl Pager {
         // Backward run: cache `end_margin_size` records before the queried area
         // TODO: Send this work to another thread
         if end_margin_size > 0 {
-            let backward_offset = (offset - end_margin_size).max(0);
-            let backward_limit = offset - backward_offset;
-            params[len - 2] = Literal::I64(backward_limit);
-            params[len - 1] = Literal::I64(backward_offset);
+            let backward_offset = offset.saturating_sub(end_margin_size);
+            let backward_limit = offset.saturating_sub(backward_offset);
+            params[len - 2] = Literal::I64(backward_limit.try_into().unwrap());
+            params[len - 1] = Literal::I64(backward_offset.try_into().unwrap());
             let mut current_offset = backward_offset;
             if !cache_entry.has_range(backward_offset, backward_limit) {
                 // Prepare
-                let mut stmt = tx.prepare(query).unwrap();
+                let mut stmt = tx
+                    .prepare(query)
+                    .or_else(|err| Error::new_query_error(err, query, &params))?;
 
                 // Bind parameters
                 for (i, param) in params.iter().enumerate() {

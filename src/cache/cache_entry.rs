@@ -1,16 +1,17 @@
 use std::{collections::HashMap, rc::Rc, time::Instant};
 
-use crate::literal::Literal;
+use crate::{literal::Literal, util::into};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Records {
     col_buf: Vec<Vec<u8>>,
-    n_rows: i64,
+    // The max number of elements in an array in msgpack is u32::MAX.
+    n_rows: u32,
     columns: Rc<Vec<String>>,
 }
 
 impl Records {
-    pub fn new(col_buf: Vec<Vec<u8>>, n_rows: i64, columns: Rc<Vec<String>>) -> Self {
+    pub fn new(col_buf: Vec<Vec<u8>>, n_rows: u32, columns: Rc<Vec<String>>) -> Self {
         Self {
             col_buf,
             n_rows,
@@ -20,7 +21,7 @@ impl Records {
     pub fn col_buf(&self) -> &[Vec<u8>] {
         &self.col_buf
     }
-    pub fn n_rows(&self) -> i64 {
+    pub fn n_rows(&self) -> u32 {
         self.n_rows
     }
     pub fn columns(&self) -> Rc<Vec<String>> {
@@ -28,13 +29,17 @@ impl Records {
     }
 }
 
+/// Stores the last result of a query.
 pub(super) struct PagerCacheEntry {
     query: String,
     params: Vec<Literal>,
-    records: HashMap<i64, Vec<u8>>,
+
+    records: HashMap</* offset */ u64, Vec<u8>>,
     columns: Option<Rc<Vec<String>>>,
-    /// None means unknown
-    num_records: Option<i64>,
+
+    /// The total number of records to be returned when querying without a LIMIT and OFFSET. 'None' indicates unknown.
+    num_records: Option<u64>,
+
     last_accessed: Instant,
 
     // The approximate size (stack size + heap size) of this struct in bytes.
@@ -45,22 +50,22 @@ impl PagerCacheEntry {
     pub(super) fn new(
         query: String,
         params: Vec<Literal>,
-        records: HashMap<i64, Vec<u8>>,
+        records: HashMap<u64, Vec<u8>>,
         columns: Option<Vec<String>>,
-        num_records: Option<i64>,
+        num_records: Option<u64>,
     ) -> Self {
         Self {
-            total_size_bytes: std::mem::size_of::<Self>() as u64
-                + query.capacity() as u64
+            total_size_bytes: into::<_, u64>(std::mem::size_of::<Self>())
+                + into::<_, u64>(query.capacity())
                 + params
                     .iter()
                     .map(|p| {
-                        std::mem::size_of_val(p) as u64
+                        into::<_, u64>(std::mem::size_of_val(p))
                             + match p {
-                                Literal::Bool(_) | Literal::F64(_) | Literal::I64(_) | Literal::Nil => 0,
-                                Literal::Blob(b) => std::mem::size_of_val(b) + b.0.capacity(),
-                                Literal::String(s) => s.capacity(),
-                            } as u64
+                                Literal::Bool(_) | Literal::F64(_) | Literal::I64(_) | Literal::Nil => 0u64,
+                                Literal::Blob(b) => into::<_, u64>(std::mem::size_of_val(b) + b.0.capacity()),
+                                Literal::String(s) => into::<_, u64>(s.capacity()),
+                            }
                     })
                     .sum::<u64>(),
             query,
@@ -92,33 +97,33 @@ impl PagerCacheEntry {
         self.last_accessed = std::time::Instant::now();
     }
 
-    pub(super) fn set_num_records(&mut self, value: i64) {
+    pub(super) fn set_num_records(&mut self, value: u64) {
         self.num_records = Some(value);
     }
 
     pub(super) fn set_columns_if_not_set_yet(&mut self, columns: Vec<String>) {
         if self.columns.is_none() {
-            self.total_size_bytes += columns.iter().map(|c| c.capacity() as u64).sum::<u64>();
+            self.total_size_bytes += columns.iter().map(|c| into::<_, u64>(c.capacity())).sum::<u64>();
             self.columns = Some(columns.into());
         }
     }
 
-    pub(super) fn insert(&mut self, offset: i64, record: &[Vec<u8>]) {
+    pub(super) fn insert(&mut self, offset: u64, record: &[Vec<u8>]) {
         let buf = rmp_serde::encode::to_vec(&record).expect("Failed to encode a cache into a msgpack.");
-        self.total_size_bytes += std::mem::size_of::<Vec<u8>>() as u64 + buf.capacity() as u64;
+        self.total_size_bytes += into::<_, u64>(std::mem::size_of::<Vec<u8>>()) + into::<_, u64>(buf.capacity());
         self.records.insert(offset, buf);
     }
 
-    pub(super) fn add_limit_to_offset(&self, offset: i64, limit: i64) -> i64 {
+    /// Returns the ending offset of `OFFSET ? LIMIT ?`. The returned value is always greater than or equal to the `offset`.
+    pub(super) fn add_limit_to_offset(&self, offset: u64, limit: u64) -> u64 {
         if let Some(num_records) = self.num_records {
-            // Clip `LIMIT ? OFFSET ?` at `num_records` if the number of records is known.
-            (offset + limit).min(num_records)
+            (offset + limit).min(num_records).max(offset)
         } else {
             offset + limit
         }
     }
 
-    pub(super) fn has_range(&self, offset: i64, limit: i64) -> bool {
+    pub(super) fn has_range(&self, offset: u64, limit: u64) -> bool {
         if self.columns.is_none() {
             return false; // this check is needed to unwrap() columns in get_range()
         }
@@ -126,7 +131,7 @@ impl PagerCacheEntry {
         (offset..end).all(|row| self.records.contains_key(&row))
     }
 
-    pub(super) fn get_range(&self, offset: i64, limit: i64) -> Option<Records> {
+    pub(super) fn get_range(&self, offset: u64, limit: u64) -> Option<Records> {
         if !self.has_range(offset, limit) {
             return None;
         }
@@ -146,6 +151,10 @@ impl PagerCacheEntry {
             }
         }
 
-        Some(Records::new(col_buf, end - offset, columns))
+        Some(Records::new(
+            col_buf,
+            end.checked_sub(offset).unwrap().try_into().unwrap(),
+            columns,
+        ))
     }
 }

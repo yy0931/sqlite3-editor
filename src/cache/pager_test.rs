@@ -138,3 +138,119 @@ fn test_data_version() {
     pager.query(&mut conn, query, params, |_| {}).unwrap();
     assert_eq!(pager.data_version(), Some(2));
 }
+
+#[test]
+fn test_cache_hit_with_unknown_num_records() {
+    let f = NamedTempFile::new().unwrap();
+
+    let mut conn = rusqlite::Connection::open(f.path()).unwrap();
+    conn.execute("CREATE TABLE t(x)", ()).unwrap();
+    for i in 0..10 {
+        conn.execute("INSERT INTO t VALUES (?)", (i,)).unwrap();
+    }
+
+    let mut pager = Pager::new();
+    pager.config.margin_start = 0;
+    pager.config.margin_end = 0;
+
+    let query = "SELECT * FROM t LIMIT ? OFFSET ?";
+    let params = &[3.into(), 1.into()];
+    assert_eq!(
+        pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap().n_rows(),
+        3
+    );
+
+    // cache hit
+    assert_eq!(
+        pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap().n_rows(),
+        3
+    );
+}
+
+#[test]
+fn test_out_of_bounds() {
+    let f = NamedTempFile::new().unwrap();
+
+    let mut conn = rusqlite::Connection::open(f.path()).unwrap();
+    conn.execute("CREATE TABLE t(x)", ()).unwrap();
+    for i in 0..5 {
+        conn.execute("INSERT INTO t VALUES (?)", (i,)).unwrap();
+    }
+
+    let mut pager = Pager::new();
+
+    let query = "SELECT * FROM t LIMIT ? OFFSET ?";
+    let params = &[10.into(), 0.into()];
+    assert_eq!(
+        pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap().n_rows(),
+        5
+    );
+
+    let query = "SELECT * FROM t LIMIT ? OFFSET ?";
+    let params = &[10.into(), 10.into()];
+    assert_eq!(
+        pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap().n_rows(),
+        0
+    );
+
+    let query = "SELECT * FROM t LIMIT ? OFFSET ?";
+    let params = &[10.into(), 3.into()];
+    assert_eq!(
+        pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap().n_rows(),
+        2
+    );
+}
+
+#[test]
+fn test_query_error() {
+    let f = NamedTempFile::new().unwrap();
+
+    let mut conn = rusqlite::Connection::open(f.path()).unwrap();
+    let mut pager = Pager::new();
+
+    let query = r#"SELECT * FROM "non-existent-table" LIMIT ? OFFSET ?"#;
+    let params = &[10.into(), 0.into()];
+    pager.query(&mut conn, query, params, |_| {}).unwrap_err();
+}
+
+#[test]
+fn test_negative_limit() {
+    let f = NamedTempFile::new().unwrap();
+
+    let mut conn = rusqlite::Connection::open(f.path()).unwrap();
+    conn.execute("CREATE TABLE t(x)", ()).unwrap();
+
+    let mut pager = Pager::new();
+
+    let query = "SELECT * FROM t LIMIT ? OFFSET ?";
+    let params = &[(-1).into(), 0.into()];
+    assert_eq!(pager.query(&mut conn, query, params, |_| {}), Ok(None));
+}
+
+#[test]
+fn test_negative_offset() {
+    let f = NamedTempFile::new().unwrap();
+
+    let mut conn = rusqlite::Connection::open(f.path()).unwrap();
+    conn.execute("CREATE TABLE t(x)", ()).unwrap();
+
+    let mut pager = Pager::new();
+
+    let query = "SELECT * FROM t LIMIT ? OFFSET ?";
+    let params = &[0.into(), (-1).into()];
+    assert_eq!(pager.query(&mut conn, query, params, |_| {}), Ok(None));
+}
+
+#[test]
+fn test_wrong_parameter_type() {
+    let f = NamedTempFile::new().unwrap();
+
+    let mut conn = rusqlite::Connection::open(f.path()).unwrap();
+    conn.execute("CREATE TABLE t(x)", ()).unwrap();
+
+    let mut pager = Pager::new();
+
+    let query = "SELECT * FROM t LIMIT ? OFFSET ?";
+    let params = &["1".into(), "1".into()];
+    assert_eq!(pager.query(&mut conn, query, params, |_| {}), Ok(None));
+}

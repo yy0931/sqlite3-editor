@@ -39,7 +39,7 @@ pub fn parse_cte(stmt: &SplittedStatement) -> Option<CommonTableExpression> {
 
     let mut entries = Vec::<CTEEntry>::new();
 
-    let mut paren_depth = 0;
+    let mut paren_depth: i64 = 0;
     let mut current_entry: Option<CTEEntry> = None;
 
     for (i, token) in stmt.real_tokens.iter().enumerate() {
@@ -76,7 +76,7 @@ pub fn parse_cte(stmt: &SplittedStatement) -> Option<CommonTableExpression> {
                     Keyword::AS => {
                         // Find the last identifier
                         let mut paren_depth2 = 0;
-                        for j in (0..(i - 1)).rev() {
+                        for j in (0..(i.saturating_sub(1))).rev() {
                             match stmt.real_tokens[j].token {
                                 Token::Whitespace(_) => {}
                                 Token::LParen => { paren_depth2 -= 1;}

@@ -61,6 +61,7 @@ mod tokenize;
 mod tokenize_test;
 #[cfg(test)]
 mod type_test;
+mod util;
 
 #[cfg(all(feature = "sqlite", feature = "sqlcipher"))]
 compile_error!("Cannot enable both 'sqlite' and 'sqlcipher' features.");
@@ -441,8 +442,8 @@ where
                                         &db,
                                         &sql,
                                         &ZeroIndexedLocation {
-                                            line: line as usize,
-                                            column: column as usize,
+                                            line: line.try_into().unwrap(),
+                                            column: column.try_into().unwrap(),
                                         },
                                     ),
                                 )?;
@@ -472,23 +473,46 @@ where
             csv_delimiter,
             output_file,
         } => {
-            if let Err(err) = match format {
-                ExportFormat::CSV => {
-                    export::export_csv(&database_filepath, &sql_cipher_key, &query, &csv_delimiter, output_file)
+            if format == ExportFormat::XLSX {
+                let Some(output_file) = output_file else {
+                    writeln!(&mut stderr, "`--format xlsx` requires `--output-file <file-name>`.")
+                        .expect("writeln! failed.");
+                    return 1;
+                };
+                if let Err(err) = export::export_xlsx(&database_filepath, &sql_cipher_key, &query, &output_file) {
+                    writeln!(&mut stderr, "{err}").expect("writeln! failed.");
+                    return 1;
                 }
-                ExportFormat::TSV => export::export_csv(&database_filepath, &sql_cipher_key, &query, "\t", output_file),
-                ExportFormat::JSON => export::export_json(&database_filepath, &sql_cipher_key, &query, output_file),
-                ExportFormat::XLSX => {
-                    let Some(output_file) = output_file else {
-                        writeln!(&mut stderr, "`--format xlsx` requires `--output-file <file-name>`.")
-                            .expect("writeln! failed.");
+            } else {
+                let mut writer: Box<dyn Write> = if let Some(output_file) = output_file {
+                    let Ok(f) = std::fs::OpenOptions::new()
+                        .truncate(true)
+                        .create(true)
+                        .write(true)
+                        .open(output_file)
+                    else {
                         return 1;
                     };
-                    export::export_xlsx(&database_filepath, &sql_cipher_key, &query, &output_file)
+                    Box::new(f)
+                } else {
+                    Box::new(stdout)
+                };
+
+                if let Err(err) = match format {
+                    ExportFormat::CSV => {
+                        export::export_csv(&database_filepath, &sql_cipher_key, &query, &csv_delimiter, &mut writer)
+                    }
+                    ExportFormat::TSV => {
+                        export::export_csv(&database_filepath, &sql_cipher_key, &query, "\t", &mut writer)
+                    }
+                    ExportFormat::JSON => export::export_json(&database_filepath, &sql_cipher_key, &query, &mut writer),
+                    ExportFormat::XLSX => {
+                        panic!();
+                    }
+                } {
+                    writeln!(&mut stderr, "{err}").expect("writeln! failed.");
+                    return 1;
                 }
-            } {
-                writeln!(&mut stderr, "{err}").expect("writeln! failed.");
-                return 1;
             }
         }
         Commands::Import {

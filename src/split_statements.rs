@@ -47,9 +47,12 @@ impl SplittedStatement {
         start: ZeroIndexedLocation,
         end: ZeroIndexedLocation,
     ) -> Self {
+        // Get the position of the first non-whitespace token.
         let real_start_i = tokens
             .iter()
             .position(|token| !matches!(token.token, Token::Whitespace(_)));
+
+        // Get the position of the last non-whitespace token.
         let real_end_i = tokens
             .iter()
             .rev()
@@ -177,6 +180,11 @@ pub fn get_text_range(lines: &[&str], start: &ZeroIndexedLocation, end: &ZeroInd
 fn slice_unicode_str(s: &str, start: Option<usize>, end: Option<usize>) -> String {
     let start = start.unwrap_or(0);
     let end = end.unwrap_or_else(|| s.chars().count());
-    assert!(start <= end, "Invalid range: start index is greater than end index.");
-    s.chars().skip(start).take(end - start).collect()
+    s.chars()
+        .skip(start)
+        .take(
+            end.checked_sub(start)
+                .expect("Invalid range: start index is greater than end index."),
+        )
+        .collect()
 }

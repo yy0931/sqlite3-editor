@@ -540,7 +540,7 @@ impl SQLite3Driver {
             // Fetch records
             let mut col_buf: Vec<Vec<u8>> = vec![vec![]; columns.len()];
 
-            let mut n_rows = 0;
+            let mut n_rows: u32 = 0;
             let mut rows = stmt.raw_query();
             loop {
                 match rows.next() {
@@ -585,10 +585,11 @@ impl SQLite3Driver {
 
         // Pack the result into a msgpack
         let mut buf = vec![];
-        rmp::encode::write_map_len(&mut buf, records.columns().len() as u32).expect("Failed to write msgpack");
+        rmp::encode::write_map_len(&mut buf, records.columns().len().try_into().unwrap())
+            .expect("Failed to write msgpack");
         for (i, column_name) in records.columns().iter().enumerate() {
             rmp::encode::write_str(&mut buf, column_name).expect("Failed to write msgpack");
-            rmp::encode::write_array_len(&mut buf, records.n_rows() as u32).expect("Failed to write msgpack");
+            rmp::encode::write_array_len(&mut buf, records.n_rows()).expect("Failed to write msgpack");
             buf.extend(&records.col_buf()[i]);
         }
         Ok(buf)

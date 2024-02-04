@@ -5,7 +5,6 @@ use rusqlite::ffi::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ffi::{c_char, CStr, CString};
-use std::os::raw::c_int;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ColumnOrigin {
@@ -50,15 +49,15 @@ pub fn column_origin(db: *mut sqlite3, query: &str) -> Result<HashMap<String, Co
 
     let mut result = HashMap::<String, ColumnOrigin>::new();
 
-    let column_count = unsafe { sqlite3_column_count(stmt) as usize };
+    let column_count: usize = unsafe { sqlite3_column_count(stmt).try_into().unwrap() };
     for i in 0..column_count {
-        let Some(column_name) = ptr_to_string(unsafe { sqlite3_column_name(stmt, i as i32) }) else {
+        let Some(column_name) = ptr_to_string(unsafe { sqlite3_column_name(stmt, i.try_into().unwrap()) }) else {
             continue;
         };
         let (Some(database), Some(table), Some(column)) = (
-            ptr_to_string(unsafe { sqlite3_column_database_name(stmt, i as c_int) }),
-            ptr_to_string(unsafe { sqlite3_column_table_name(stmt, i as c_int) }),
-            ptr_to_string(unsafe { sqlite3_column_origin_name(stmt, i as c_int) }),
+            ptr_to_string(unsafe { sqlite3_column_database_name(stmt, i.try_into().unwrap()) }),
+            ptr_to_string(unsafe { sqlite3_column_table_name(stmt, i.try_into().unwrap()) }),
+            ptr_to_string(unsafe { sqlite3_column_origin_name(stmt, i.try_into().unwrap()) }),
         ) else {
             continue;
         };
