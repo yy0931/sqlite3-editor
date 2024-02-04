@@ -13,7 +13,13 @@ use rusqlite::{functions::FunctionFlags, types::ValueRef, InterruptHandle, Row};
 use serde::{Deserialize, Serialize};
 
 use super::error::Error;
-use std::{collections::HashMap, io::Write, mem::ManuallyDrop, rc::Rc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    io::Write,
+    mem::ManuallyDrop,
+    rc::Rc,
+    time::Duration,
+};
 
 #[derive(Debug, Clone)]
 struct StringError(String);
@@ -118,7 +124,6 @@ pub struct TableSchemaColumnForeignKey {
     #[ts(type = "bigint")]
     pub seq: i64,
     pub table: String,
-    /// Column name; foreign_key.to.unwrap_or(foreign_key.from)
     pub to: String,
     pub on_update: String,
     pub on_delete: String,
@@ -140,7 +145,7 @@ pub struct TableSchemaColumn {
     #[serde(rename = "autoIncrement")]
     pub auto_increment: bool,
     #[serde(rename = "foreignKeys")]
-    pub foreign_keys: Rc<Vec<TableSchemaColumnForeignKey>>,
+    pub foreign_keys: Vec<TableSchemaColumnForeignKey>,
     /** 1: columns in virtual tables, 2: dynamic generated columns, 3: stored generated columns */
     #[ts(type = "0n | 1n | 2n | 3n")]
     pub hidden: i64,
@@ -266,7 +271,14 @@ pub struct EntityRelationship {
     pub source: String,
     pub target: String,
     pub source_column: String,
-    pub target_column: String,
+}
+
+#[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[ts(export)]
+pub struct Reference {
+    pub table: String,
+    pub column: String,
+    pub count: u64,
 }
 
 pub fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUTF8)>(
@@ -293,8 +305,6 @@ pub fn write_value_ref_into_msgpack<W: rmp::encode::RmpWrite, F: FnMut(InvalidUT
     }
     Ok(())
 }
-
-type ForeignKeyList = HashMap</* column */ String, Rc<Vec<TableSchemaColumnForeignKey>>>;
 
 pub fn connect_immutable(database_filepath: &str) -> std::result::Result<rusqlite::Connection, Error> {
     // Connect to the database with `?immutable=1` and the readonly flag
@@ -469,6 +479,11 @@ impl SQLite3Driver {
 
     pub fn get_interrupt_handle(&self) -> InterruptHandle {
         self.con.get_interrupt_handle()
+    }
+
+    #[cfg(test)]
+    pub fn execute_batch(&self, sql: &str) -> rusqlite::Result<()> {
+        self.con.execute_batch(sql)
     }
 
     #[cfg(test)]
@@ -706,15 +721,13 @@ JOIN main.pragma_table_info("table_name") p"#,
 
         // foreign keys
         let mut result = self.select_all(
-            r#"SELECT t.name, f."table", f."from", f."to" FROM pragma_table_list t INNER JOIN pragma_foreign_key_list(name) f WHERE t.schema == 'main' AND NOT (t.name LIKE "sqlite\_%" ESCAPE "\");"#,
+            r#"SELECT t.name, f."table", f."from" FROM pragma_table_list t INNER JOIN pragma_foreign_key_list(name) f WHERE t.schema = 'main' COLLATE NOCASE AND NOT (t.name LIKE "sqlite\_%" ESCAPE "\");"#,
             &[],
             |row| {
-                let source_column = get_string(row, 2, |err| warnings.push(err.with("pragma_table_list.from")))?;
                 Ok(EntityRelationship {
                     source: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.name")))?,
                     target: get_string(row, 1, |err| warnings.push(err.with("pragma_table_list.table")))?,
-                    target_column: get_option_string(row, 3, |err| warnings.push(err.with("pragma_table_list.to")))?.unwrap_or_else(|| source_column.clone()),
-                    source_column,
+                    source_column: get_string(row, 2, |err| warnings.push(err.with("pragma_table_list.from")))?,
                 })
             },
         )?;
@@ -740,7 +753,6 @@ JOIN main.pragma_table_info("table_name") p"#,
                         source: view_name.clone(),
                         target: origin.table,
                         source_column: column,
-                        target_column: origin.column,
                     })
                 }
             }
@@ -749,52 +761,54 @@ JOIN main.pragma_table_info("table_name") p"#,
         Ok((result, warnings))
     }
 
-    /// Returns foreign keys for each column.
-    fn foreign_keys<'a>(
+    pub fn list_references(
         &self,
-        database: &str,
         table_name: &str,
-        warnings: &mut Vec<InvalidUTF8>,
-        cache: &'a mut HashMap<(String, String), ForeignKeyList>,
-    ) -> std::result::Result<&'a ForeignKeyList, Error> {
-        let cache_key = (database.to_owned(), table_name.to_owned());
+        column_name: &str,
+        value: &Literal,
+    ) -> std::result::Result<(Vec<Reference>, Vec<InvalidUTF8>), Error> {
+        let mut warnings = vec![];
 
-        if !cache.contains_key(&cache_key) {
-            let mut result = HashMap::<String, Vec<TableSchemaColumnForeignKey>>::new();
-            self.select_all(
-                &format!(
-                    "PRAGMA {}.foreign_key_list({})",
-                    escape_sql_identifier(database),
-                    escape_sql_identifier(table_name)
-                ),
-                &[],
-                |row| {
-                    let from = get_string(row, 3, |err| warnings.push(err.with("foreign_key_list.from")))?;
-                    let to = get_option_string(row, 4, |err| warnings.push(err.with("foreign_key_list.to")))?;
-                    result
-                        .entry(from.clone())
-                        .or_default()
-                        .push(TableSchemaColumnForeignKey {
-                            id: row.get::<_, i64>(0)?,
-                            seq: row.get::<_, i64>(1)?,
-                            table: get_string(row, 2, |err| warnings.push(err.with("foreign_key_list.table")))?,
-                            to: to.unwrap_or(from),
-                            on_update: get_string(row, 5, |err| warnings.push(err.with("foreign_key_list.on_update")))?,
-                            on_delete: get_string(row, 6, |err| warnings.push(err.with("foreign_key_list.on_delete")))?,
-                            match_: get_string(row, 7, |err| warnings.push(err.with("foreign_key_list.match")))?,
-                        });
-                    Ok(())
-                },
-            )?;
+        let primary_key_seq = self
+            .select_all(
+                "SELECT pk - 1 FROM pragma_table_info(?) WHERE name = ? AND pk > 0",
+                &[table_name.into(), column_name.into()],
+                |row| row.get::<_, i64>(0),
+            )?
+            .first()
+            .cloned();
 
-            let result = result
-                .into_iter()
-                .map(|(k, v)| (k, Rc::new(v)))
-                .collect::<HashMap<_, _>>();
-            cache.insert(cache_key.clone(), result);
+        // foreign keys
+        let mut result = self.select_all(
+            r#"SELECT t.name, f."from" FROM pragma_table_list t INNER JOIN pragma_foreign_key_list(name) f WHERE t.schema = 'main' COLLATE NOCASE AND NOT (t.name LIKE "sqlite\_%" ESCAPE "\") AND f."table" = ? COLLATE NOCASE AND (f."to" = ? OR (f."to" IS NULL AND f.seq = ?)) COLLATE NOCASE;"#,
+            &[table_name.into(), column_name.into(), primary_key_seq.into()],
+            |row| {
+                Ok(Reference {
+                    table: get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.name")))?,
+                    column: get_string(row, 1, |err| warnings.push(err.with("pragma_table_list.from")))?,
+                    count: 0,
+                })
+            },
+        )?;
+
+        for entry in &mut result {
+            if let Some(&count) = self
+                .select_all(
+                    &format!(
+                        "SELECT COUNT(*) FROM {} WHERE {} IS ?",
+                        escape_sql_identifier(&entry.table),
+                        escape_sql_identifier(&entry.column)
+                    ),
+                    &[value.clone()],
+                    |row| row.get::<_, i64>(0),
+                )?
+                .first()
+            {
+                entry.count = count.try_into().unwrap();
+            }
         }
 
-        Ok(cache.get(&cache_key).unwrap())
+        Ok((result, warnings))
     }
 
     pub fn is_rowid(
@@ -886,64 +900,62 @@ JOIN main.pragma_table_info("table_name") p"#,
         let has_rowid_column = table_type == TableType::Table && !wr;
 
         // Select pragma_foreign_key_list
-        let mut foreign_key_list_cache = HashMap::new();
+        let mut foreign_key_list_cache = ForeignKeyListCache::default();
 
-        #[allow(clippy::type_complexity)]
-        let (column_origins, foreign_keys): (
-            Option<HashMap<String, ColumnOriginAndIsRowId>>,
-            HashMap<String, Rc<Vec<TableSchemaColumnForeignKey>>>,
-        ) = if table_type == TableType::View {
-            let column_origins = column_origin(
-                unsafe { self.con.handle() },
-                &format!("SELECT * FROM {} LIMIT 0", escape_sql_identifier(table_name)),
-            )
-            .unwrap_or_default();
+        let (column_origins, foreign_keys): (Option<HashMap<String, ColumnOriginAndIsRowId>>, ForeignKeyList) =
+            if table_type == TableType::View {
+                let column_origins = column_origin(
+                    unsafe { self.con.handle() },
+                    &format!("SELECT * FROM {} LIMIT 0", escape_sql_identifier(table_name)),
+                )
+                .unwrap_or_default();
 
-            // In this case:
-            // ```
-            // CREATE TABLE t1(x INTEGER PRIMARY KEY);
-            // CREATE TABLE t2(y INTEGER REFERENCES t1(x));
-            // CREATE VIEW table_name AS SELECT y as z FROM t2;
-            // ```
-            // column_origins = {"z": ("main", "t2", "y")}
-            // origin_fk = { from: "y", to: "x", table: "t1" }
-            let mut foreign_keys = HashMap::<String, Vec<TableSchemaColumnForeignKey>>::new();
-            for (from, to) in &column_origins {
-                if let Some(origin_fk) = self
-                    .foreign_keys(&to.database, &to.table, &mut warnings, &mut foreign_key_list_cache)?
-                    .get(&to.column)
-                {
-                    let vec = foreign_keys.entry(from.to_owned()).or_default();
-                    for item in origin_fk.iter() {
-                        vec.push(item.to_owned());
+                // In this case:
+                // ```
+                // CREATE TABLE t1(x INTEGER PRIMARY KEY);
+                // CREATE TABLE t2(y INTEGER REFERENCES t1(x));
+                // CREATE VIEW table_name AS SELECT y as z FROM t2;
+                // ```
+                // column_origins = {"z": ("main", "t2", "y")}
+                // origin_fk = { from: "y", to: "x", table: "t1" }
+                let mut foreign_keys = HashMap::<String, Vec<TableSchemaColumnForeignKey>>::new();
+                for (from, to) in &column_origins {
+                    if let Some(origin_fk) = foreign_key_list_cache
+                        .get(self, &to.database, &to.table, &mut warnings)?
+                        .get(&to.column)
+                    {
+                        let vec = foreign_keys.entry(from.to_owned()).or_default();
+                        for item in origin_fk.iter() {
+                            vec.push(item.to_owned());
+                        }
                     }
                 }
-            }
-            (
-                Some(
-                    column_origins
-                        .into_iter()
-                        .map(|(k, v)| {
-                            (
-                                k,
-                                ColumnOriginAndIsRowId::new(
-                                    self.is_rowid(&v, &mut warnings)
-                                        .unwrap_or(false /* TODO: error handling */),
-                                    v,
-                                ),
-                            )
-                        })
-                        .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
-                ),
-                foreign_keys.into_iter().map(|(k, v)| (k, Rc::new(v))).collect(),
-            )
-        } else {
-            (
-                None,
-                self.foreign_keys(database, table_name, &mut warnings, &mut foreign_key_list_cache)?
-                    .clone(),
-            )
-        };
+                (
+                    Some(
+                        column_origins
+                            .into_iter()
+                            .map(|(k, v)| {
+                                (
+                                    k,
+                                    ColumnOriginAndIsRowId::new(
+                                        self.is_rowid(&v, &mut warnings)
+                                            .unwrap_or(false /* TODO: error handling */),
+                                        v,
+                                    ),
+                                )
+                            })
+                            .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
+                    ),
+                    foreign_keys,
+                )
+            } else {
+                (
+                    None,
+                    foreign_key_list_cache
+                        .get(self, database, table_name, &mut warnings)?
+                        .clone(),
+                )
+            };
 
         // Select sqlite_sequence
         // NOTE: There is no way to check if an empty table has an autoincrement column.
@@ -1129,7 +1141,7 @@ JOIN main.pragma_table_info("table_name") p"#,
             .map(|v| v.to_owned())
             .collect::<Vec<_>>();
 
-        let mut foreign_key_list_cache = HashMap::new();
+        let mut foreign_key_list_cache = ForeignKeyListCache::default();
 
         Ok((
             TableSchema {
@@ -1154,14 +1166,10 @@ JOIN main.pragma_table_info("table_name") p"#,
                         foreign_keys: column_origins
                             .get(&name)
                             .and_then(|origin| {
-                                self.foreign_keys(
-                                    &origin.database,
-                                    &origin.table,
-                                    &mut warnings,
-                                    &mut foreign_key_list_cache,
-                                )
-                                .ok()
-                                .and_then(|map| map.get(&origin.column).cloned())
+                                foreign_key_list_cache
+                                    .get(self, &origin.database, &origin.table, &mut warnings)
+                                    .ok()
+                                    .and_then(|map| map.get(&origin.column).cloned())
                             })
                             .unwrap_or_default(),
                         hidden: 0,
@@ -1235,12 +1243,24 @@ JOIN main.pragma_table_info("table_name") p"#,
             "EDITOR_PRAGMA list_entity_relationships" => {
                 write_editor_pragma(w, self.list_entity_relationships()?, start_time)
             }
+            "EDITOR_PRAGMA list_references" => {
+                let (Some(Literal::String(table_name)), Some(Literal::String(column_name)), Some(value)) =
+                    (params.first(), params.get(1), params.get(2))
+                else {
+                    return Error::new_other_error(
+                        "invalid arguments for list_references",
+                        Some(query.to_owned()),
+                        Some(params),
+                    );
+                };
+                write_editor_pragma(w, self.list_references(table_name, column_name, value)?, start_time)
+            }
             "EDITOR_PRAGMA table_schema" => {
                 let (Some(Literal::String(database)), Some(Literal::String(table_name))) =
                     (params.first(), params.get(1))
                 else {
                     return Error::new_other_error(
-                        "invalid arguments for `EDITOR_PRAGMA table_schema`",
+                        "invalid arguments table_schema",
                         Some(query.to_owned()),
                         Some(params),
                     );
@@ -1250,7 +1270,7 @@ JOIN main.pragma_table_info("table_name") p"#,
             "EDITOR_PRAGMA query_schema" => {
                 let Some(Literal::String(query)) = params.first() else {
                     return Error::new_other_error(
-                        "invalid argument for `EDITOR_PRAGMA query_schema`",
+                        "invalid argument for query_schema",
                         Some(query.to_owned()),
                         Some(params),
                     );
@@ -1338,6 +1358,108 @@ impl Drop for SQLite3Driver {
         unsafe {
             let _ = ManuallyDrop::take(&mut self.con);
         };
+    }
+}
+
+/// column -> foreign_key[]
+type ForeignKeyList = HashMap<String, Vec<TableSchemaColumnForeignKey>>;
+
+#[derive(Default)]
+struct ForeignKeyListCache {
+    /// (database, table) -> column -> foreign_key[]
+    tables: HashMap<(String, String), ForeignKeyList>,
+}
+
+#[derive(Debug)]
+pub struct ForeignKeyListEntry {
+    id: i64,
+    seq: i64,
+    table: String,
+    from: String,
+    to: Option<String>,
+    on_update: String,
+    on_delete: String,
+    match_: String,
+}
+
+impl ForeignKeyListCache {
+    fn get_primary_key(
+        &self,
+        db: &SQLite3Driver,
+        table_name: &str,
+        seq: i64,
+        warnings: &mut Vec<InvalidUTF8>,
+    ) -> std::result::Result<Option<String>, Error> {
+        Ok(db
+            .select_all(
+                "SELECT name FROM pragma_table_info(?) WHERE pk = ? + 1",
+                &[table_name.into(), seq.into()],
+                |row| get_string(row, 0, |err| warnings.push(err.with("pragma_table_list.from"))),
+            )?
+            .first()
+            .cloned())
+    }
+
+    fn get(
+        &mut self,
+        db: &SQLite3Driver,
+        database: &str,
+        table_name: &str,
+        warnings: &mut Vec<InvalidUTF8>,
+    ) -> std::result::Result<&ForeignKeyList, Error> {
+        let key = (database.to_owned(), table_name.to_owned());
+        if !self.tables.contains_key(&key) {
+            let mut foreign_key_list = db.select_all(
+                &format!(
+                    "PRAGMA {}.foreign_key_list({})",
+                    escape_sql_identifier(database),
+                    escape_sql_identifier(table_name)
+                ),
+                &[],
+                |row| {
+                    Ok(ForeignKeyListEntry {
+                        id: row.get::<_, i64>(0)?,
+                        seq: row.get::<_, i64>(1)?,
+                        table: get_string(row, 2, |err| warnings.push(err.with("foreign_key_list.table")))?,
+                        from: get_string(row, 3, |err| warnings.push(err.with("foreign_key_list.from")))?,
+                        to: get_option_string(row, 4, |err| warnings.push(err.with("foreign_key_list.to")))?,
+                        on_update: get_string(row, 5, |err| warnings.push(err.with("foreign_key_list.on_update")))?,
+                        on_delete: get_string(row, 6, |err| warnings.push(err.with("foreign_key_list.on_delete")))?,
+                        match_: get_string(row, 7, |err| warnings.push(err.with("foreign_key_list.match")))?,
+                    })
+                },
+            )?;
+
+            let mut invalid_foreign_keys = HashSet::<i64>::new();
+            for fk in &mut foreign_key_list {
+                if fk.to.is_none() {
+                    fk.to = self.get_primary_key(db, &fk.table, fk.seq, warnings)?;
+                    if fk.to.is_none() {
+                        invalid_foreign_keys.insert(fk.id);
+                    }
+                }
+            }
+
+            let mut list = ForeignKeyList::new();
+
+            for fk in foreign_key_list {
+                if invalid_foreign_keys.contains(&fk.id) {
+                    continue;
+                }
+                list.entry(fk.from).or_default().push(TableSchemaColumnForeignKey {
+                    id: fk.id,
+                    seq: fk.seq,
+                    table: fk.table,
+                    to: fk.to.unwrap(),
+                    on_update: fk.on_update,
+                    on_delete: fk.on_delete,
+                    match_: fk.match_,
+                });
+            }
+
+            self.tables.insert(key.clone(), list);
+        }
+        Ok(self.tables.get(&key).unwrap())
     }
 }
 
