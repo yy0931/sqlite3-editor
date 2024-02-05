@@ -39,7 +39,7 @@ fn test_with_clause() {
                 kind: CodeLensKind::Select,
                 start: ZeroIndexedLocation::new(0, 5),
                 end: ZeroIndexedLocation::new(0, 6),
-                stmt_executed: "WITH a AS (SELECT 1) SELECT * FROM \"a\"".to_owned(),
+                stmt_executed: "WITH a AS (SELECT 1) SELECT * FROM `a`".to_owned(),
             },
             CodeLens {
                 kind: CodeLensKind::Select,
@@ -125,7 +125,7 @@ fn test_with_update() {
                 kind: CodeLensKind::Select,
                 start: ZeroIndexedLocation::new(0, 5),
                 end: ZeroIndexedLocation::new(0, 6),
-                stmt_executed: "WITH x AS (SELECT 1) SELECT * FROM \"x\"".to_owned(),
+                stmt_executed: "WITH x AS (SELECT 1) SELECT * FROM `x`".to_owned(),
             },
             CodeLens {
                 kind: CodeLensKind::Other,

@@ -7,7 +7,7 @@ use crate::{
     keywords::KEYWORDS_UNSUPPORTED_BY_SQLPARSER,
     parse_cte::parse_cte,
     split_statements::split_sqlite_statements,
-    sqlite3_driver::{SQLite3Driver, Table, TableType},
+    sqlite3_driver::{SQLite3Driver, TableName, TableType},
     tokenize::{TokenWithRangeLocation, ZeroIndexedLocation},
 };
 use serde::{Deserialize, Serialize};
@@ -246,10 +246,10 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
         .rev()
         .find(|stmt| stmt.start <= *position && *position <= stmt.end);
 
-    let table_list = conn.list_tables(true).unwrap_or_default().0;
+    let table_list = conn.table_names().unwrap_or_default().0;
 
     // table.name -> table
-    let mut table_name_lowered_to_info = HashMap::<String, Vec<&Table>>::new();
+    let mut table_name_lowered_to_info = HashMap::<String, Vec<&TableName>>::new();
     for t in &table_list {
         table_name_lowered_to_info
             .entry(t.name.to_lowercase())

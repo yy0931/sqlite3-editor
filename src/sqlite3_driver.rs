@@ -255,14 +255,29 @@ impl From<&str> for TableType {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TableName {
+    pub database: Rc<String>,
+    pub name: Rc<String>,
+    pub type_: TableType,
+}
+
 #[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[ts(export)]
-pub struct Table {
+pub struct TableNameAndColumns {
     pub database: Rc<String>,
     pub name: Rc<String>,
     #[serde(rename = "type")]
     pub type_: TableType,
     pub column_names: Vec<String>,
+}
+
+#[derive(ts_rs::TS, Debug, Clone, Serialize, Deserialize)]
+#[ts(export)]
+pub struct TableList {
+    pub table_list: Vec<TableNameAndColumns>,
+    pub entity_relationships: Vec<EntityRelationship>,
+    pub views: Vec<(String, String)>,
 }
 
 #[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -647,21 +662,39 @@ impl SQLite3Driver {
         Ok(records)
     }
 
-    pub fn list_tables(
-        &self,
-        include_system_tables: bool,
-    ) -> std::result::Result<(Vec<Table>, Vec<InvalidUTF8>), Error> {
+    pub fn table_names(&self) -> std::result::Result<(Vec<TableName>, Vec<InvalidUTF8>), Error> {
         let mut warnings = vec![];
-        let mut tables = self.select_all(
-            &(r#"SELECT schema, name, type FROM pragma_table_list"#.to_owned()
-                + if include_system_tables {
-                    ""
-                } else {
-                    r#" WHERE NOT (name LIKE "sqlite\_%" ESCAPE "\")"#
-                }),
+
+        // list tables in all databases including sqlite_ tables
+        let tables = self.select_all(r#"SELECT schema, name, type FROM pragma_table_list"#, &[], |row| {
+            Ok(TableName {
+                database: Rc::new(get_string(row, 0, |err| {
+                    warnings.push(err.with("pragma_table_list.schema"))
+                })?),
+                name: Rc::new(get_string(row, 1, |err| {
+                    warnings.push(err.with("pragma_table_list.name"))
+                })?),
+                type_: TableType::from(
+                    get_string(row, 2, |err| {
+                        warnings.push(err.with("pragma_table_list.type (list_tables)"))
+                    })?
+                    .as_str(),
+                ),
+            })
+        })?;
+
+        Ok((tables, warnings))
+    }
+
+    pub fn list_tables(&self) -> std::result::Result<(TableList, Vec<InvalidUTF8>), Error> {
+        let mut warnings = vec![];
+
+        // List tables in the main database excluding the sqlite_ tables
+        let mut table_list = self.select_all(
+            r#"SELECT schema, name, type FROM pragma_table_list WHERE NOT (name LIKE "sqlite\_%" ESCAPE "\") AND schema = 'main' COLLATE NOCASE"#,
             &[],
             |row| {
-                Ok(Table {
+                Ok(TableNameAndColumns {
                     database: Rc::new(get_string(row, 0, |err| {
                         warnings.push(err.with("pragma_table_list.schema"))
                     })?),
@@ -679,11 +712,13 @@ impl SQLite3Driver {
             },
         )?;
 
-        let mut column_names_map = HashMap::<String, Vec<String>>::new();
-
+        // List columns
         // Ignore broken tables
-        let _ = self.select_all(
-            r#"
+        {
+            let mut column_names_map = HashMap::<String, Vec<String>>::new();
+
+            let _ = self.select_all(
+                r#"
 WITH tables AS (
     SELECT DISTINCT name AS "table_name"
     FROM pragma_table_list()
@@ -691,36 +726,31 @@ WITH tables AS (
 SELECT table_name, p.name
 FROM tables
 JOIN main.pragma_table_info("table_name") p"#,
-            &[],
-            |row| {
-                column_names_map
-                    .entry(get_string(row, 0, |err| {
-                        warnings.push(err.with("list_columns.table_name"))
-                    })?)
-                    .or_default()
-                    .push(get_string(row, 1, |err| {
-                        warnings.push(err.with("list_columns.column_name"))
-                    })?);
-                Ok(0)
-            },
-        );
+                &[],
+                |row| {
+                    column_names_map
+                        .entry(get_string(row, 0, |err| {
+                            warnings.push(err.with("list_columns.table_name"))
+                        })?)
+                        .or_default()
+                        .push(get_string(row, 1, |err| {
+                            warnings.push(err.with("list_columns.column_name"))
+                        })?);
+                    Ok(0)
+                },
+            );
 
-        for table in &mut tables {
-            if let Some(columns) = column_names_map.remove(table.name.as_ref()) {
-                for column in columns {
-                    table.column_names.push(column);
+            for table in &mut table_list {
+                if let Some(columns) = column_names_map.remove(table.name.as_ref()) {
+                    for column in columns {
+                        table.column_names.push(column);
+                    }
                 }
             }
         }
 
-        Ok((tables, warnings))
-    }
-
-    pub fn list_entity_relationships(&self) -> std::result::Result<(Vec<EntityRelationship>, Vec<InvalidUTF8>), Error> {
-        let mut warnings = vec![];
-
-        // foreign keys
-        let mut result = self.select_all(
+        // List foreign keys
+        let mut entity_relationships = self.select_all(
             r#"SELECT t.name, f."table", f."from" FROM pragma_table_list t INNER JOIN pragma_foreign_key_list(name) f WHERE t.schema = 'main' COLLATE NOCASE AND NOT (t.name LIKE "sqlite\_%" ESCAPE "\");"#,
             &[],
             |row| {
@@ -732,7 +762,7 @@ JOIN main.pragma_table_info("table_name") p"#,
             },
         )?;
 
-        // views
+        // List column origins of views
         if let Ok(views) = self.select_all(
             "SELECT name FROM pragma_table_list WHERE schema = 'main' AND type = 'view'",
             &[],
@@ -749,7 +779,7 @@ JOIN main.pragma_table_info("table_name") p"#,
                     if origin.database.to_lowercase() != "main" {
                         continue;
                     }
-                    result.push(EntityRelationship {
+                    entity_relationships.push(EntityRelationship {
                         source: view_name.clone(),
                         target: origin.table,
                         source_column: column,
@@ -758,7 +788,27 @@ JOIN main.pragma_table_info("table_name") p"#,
             }
         }
 
-        Ok((result, warnings))
+        // List views
+        let views = self.select_all(
+            // `sql IS NOT NULL` may not be needed
+            "SELECT name, sql FROM sqlite_schema WHERE type = 'view' AND sql IS NOT NULL",
+            &[],
+            |row| {
+                Ok((
+                    get_string(row, 0, |err| warnings.push(err.with("sqlite_schema.name")))?,
+                    get_string(row, 1, |err| warnings.push(err.with("sqlite_schema.sql")))?,
+                ))
+            },
+        )?;
+
+        Ok((
+            TableList {
+                table_list,
+                entity_relationships,
+                views,
+            },
+            warnings,
+        ))
     }
 
     pub fn list_references(
@@ -1239,10 +1289,7 @@ JOIN main.pragma_table_info("table_name") p"#,
 
         match query {
             "EDITOR_PRAGMA database_label" => write_editor_pragma(w, (self.database_label.clone(), vec![]), start_time),
-            "EDITOR_PRAGMA list_tables" => write_editor_pragma(w, self.list_tables(false)?, start_time),
-            "EDITOR_PRAGMA list_entity_relationships" => {
-                write_editor_pragma(w, self.list_entity_relationships()?, start_time)
-            }
+            "EDITOR_PRAGMA list_tables" => write_editor_pragma(w, self.list_tables()?, start_time),
             "EDITOR_PRAGMA list_references" => {
                 let (Some(Literal::String(table_name)), Some(Literal::String(column_name)), Some(value)) =
                     (params.first(), params.get(1), params.get(2))
@@ -1467,7 +1514,7 @@ pub fn escape_sql_identifier(ident: &str) -> String {
     if ident.contains('\x00') {
         panic!("Failed to quote the SQL identifier {ident:?} as it contains a NULL char");
     }
-    format!("\"{}\"", ident.replace('"', "\"\""))
+    format!("`{}`", ident.replace('`', "``"))
 }
 
 pub fn is_sqlcipher(con: &rusqlite::Connection) -> bool {

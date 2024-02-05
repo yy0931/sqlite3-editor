@@ -5,7 +5,7 @@ use crate::{
     request_type::QueryMode,
     sqlite3_driver::{
         from_utf8_lossy, read_msgpack_into_json, EntityRelationship, ExecMode, InvalidUTF8, QueryOptions, Reference,
-        SQLite3Driver, Table, TableType,
+        SQLite3Driver, TableName, TableNameAndColumns, TableType,
     },
 };
 
@@ -635,7 +635,7 @@ mod test_table_schema {
 }
 
 #[test]
-fn test_list_entity_relationships() {
+fn test_entity_relationships() {
     let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
     db.execute_batch(
         "
@@ -644,7 +644,7 @@ CREATE TABLE v(x INTEGER NOT NULL REFERENCES t);",
     )
     .unwrap();
     assert_eq!(
-        db.list_entity_relationships().unwrap().0,
+        db.list_tables().unwrap().0.entity_relationships,
         vec![EntityRelationship {
             source: "v".to_owned(),
             target: "t".to_owned(),
@@ -725,6 +725,47 @@ INSERT INTO u VALUES (10, 1), (20, 2), (20, 2);",
 }
 
 #[test]
+fn test_table_names() {
+    let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+    db.execute_batch(
+        "CREATE TABLE t1(x INTEGER NOT NULL PRIMARY KEY) WITHOUT ROWID, STRICT;
+        CREATE TABLE t2(x INTEGER NOT NULL PRIMARY KEY) WITHOUT ROWID, STRICT;
+        CREATE TEMP TABLE t3(x INTEGER NOT NULL PRIMARY KEY) WITHOUT ROWID, STRICT",
+    )
+    .unwrap();
+    assert_eq!(
+        db.table_names().unwrap().0.into_iter().collect::<HashSet<TableName>>(),
+        HashSet::from([
+            TableName {
+                database: Rc::new("main".to_owned()),
+                name: Rc::new("t1".to_owned()),
+                type_: TableType::Table,
+            },
+            TableName {
+                database: Rc::new("main".to_owned()),
+                name: Rc::new("t2".to_owned()),
+                type_: TableType::Table,
+            },
+            TableName {
+                database: Rc::new("temp".to_owned()),
+                name: Rc::new("t3".to_owned()),
+                type_: TableType::Table,
+            },
+            TableName {
+                database: Rc::new("temp".to_owned()),
+                name: Rc::new("sqlite_temp_schema".to_owned()),
+                type_: TableType::Table,
+            },
+            TableName {
+                database: Rc::new("main".to_owned()),
+                name: Rc::new("sqlite_schema".to_owned()),
+                type_: TableType::Table,
+            },
+        ]),
+    );
+}
+
+#[test]
 fn test_list_tables() {
     let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
     db.execute_batch(
@@ -734,26 +775,47 @@ fn test_list_tables() {
     )
     .unwrap();
     assert_eq!(
-        db.list_tables(false).unwrap().0.into_iter().collect::<HashSet<Table>>(),
+        db.list_tables()
+            .unwrap()
+            .0
+            .table_list
+            .into_iter()
+            .collect::<HashSet<TableNameAndColumns>>(),
         HashSet::from([
-            Table {
+            TableNameAndColumns {
                 database: Rc::new("main".to_owned()),
                 name: Rc::new("t1".to_owned()),
                 type_: TableType::Table,
                 column_names: vec!["x".to_owned()],
             },
-            Table {
+            TableNameAndColumns {
                 database: Rc::new("main".to_owned()),
                 name: Rc::new("t2".to_owned()),
                 type_: TableType::Table,
                 column_names: vec!["x".to_owned()],
             },
-            Table {
-                database: Rc::new("temp".to_owned()),
-                name: Rc::new("t3".to_owned()),
-                type_: TableType::Table,
-                column_names: vec![],
-            },
+        ]),
+    );
+}
+
+#[test]
+fn test_list_views() {
+    let db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+    db.execute_batch(
+        "CREATE VIEW v1 AS SELECT 1;
+        CREATE VIEW v2 AS SELECT 2;",
+    )
+    .unwrap();
+    assert_eq!(
+        db.list_tables()
+            .unwrap()
+            .0
+            .views
+            .into_iter()
+            .collect::<HashSet<(String, String)>>(),
+        HashSet::from([
+            ("v1".to_owned(), "CREATE VIEW v1 AS SELECT 1".to_owned()),
+            ("v2".to_owned(), "CREATE VIEW v2 AS SELECT 2".to_owned()),
         ]),
     );
 }
@@ -1104,34 +1166,35 @@ fn test_invalid_utf8_text() {
 #[test]
 fn test_invalid_utf8_table_name() {
     let mut db = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
-    let mut warnings = vec![];
     let mut query = "CREATE TABLE ab(x)".as_bytes().to_vec();
     query[14] = 255;
     let query = unsafe { String::from_utf8_unchecked(query) };
-    db.execute(&query, &[], ExecMode::ReadWrite, QueryOptions::default(), &mut warnings)
+    db.execute(&query, &[], ExecMode::ReadWrite, QueryOptions::default(), &mut vec![])
         .unwrap();
+    let result = db.list_tables().unwrap();
     assert_eq!(
-        db.list_tables(false).unwrap(),
-        (
-            vec![Table {
-                database: Rc::new("main".to_owned()),
-                name: Rc::new("a�".to_owned()),
-                type_: TableType::Table,
-                column_names: vec!["x".to_owned()],
-            }],
-            vec![
-                InvalidUTF8 {
-                    text_lossy: "a�".to_owned(),
-                    bytes: "61ff".to_owned(),
-                    context: Some("pragma_table_list.name".to_owned()),
-                },
-                InvalidUTF8 {
-                    text_lossy: "a�".to_owned(),
-                    bytes: "61ff".to_owned(),
-                    context: Some("list_columns.table_name".to_owned())
-                },
-            ],
-        )
+        result.0.table_list,
+        vec![TableNameAndColumns {
+            database: Rc::new("main".to_owned()),
+            name: Rc::new("a�".to_owned()),
+            type_: TableType::Table,
+            column_names: vec!["x".to_owned()],
+        }],
+    );
+    assert_eq!(
+        result.1,
+        vec![
+            InvalidUTF8 {
+                text_lossy: "a�".to_owned(),
+                bytes: "61ff".to_owned(),
+                context: Some("pragma_table_list.name".to_owned()),
+            },
+            InvalidUTF8 {
+                text_lossy: "a�".to_owned(),
+                bytes: "61ff".to_owned(),
+                context: Some("list_columns.table_name".to_owned())
+            },
+        ],
     );
 }
 
