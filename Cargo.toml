@@ -1,6 +1,6 @@
 [package]
 name = "sqlite3-editor"
-version = "1.0.170"
+version = "1.0.172"
 edition = "2021"
 
 [features]

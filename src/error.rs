@@ -148,12 +148,23 @@ impl std::fmt::Display for Error {
                 query,
                 params,
             } => {
-                write!(f, "Rolled back the transaction because an unexpected number of rows were modified: expected {} rows, actually modified {} rows.\n{}\nParameters: {}",
-                expected,
-                actual,
-                Self::format_query(query),
-                Self::format_params(params),
-            )
+                if *expected > 0 && *actual == 0 {
+                    write!(
+                        f,
+                        "The query did not make any changes. Maybe the data was already updated by a different process.\n{}\nParameters: {}",
+                        Self::format_query(query),
+                        Self::format_params(params),
+                    )
+                } else {
+                    write!(
+                        f,
+                        "Rolled back the transaction because an unexpected number of rows were modified: expected {} rows, actually modified {} rows.\n{}\nParameters: {}",
+                        expected,
+                        actual,
+                        Self::format_query(query),
+                        Self::format_params(params),
+                    )
+                }
             }
             Self::Other { message, query, params } => {
                 write!(
