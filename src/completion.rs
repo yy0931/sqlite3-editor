@@ -41,8 +41,8 @@ pub struct Completions {
     pub cte_names: HashSet<String>,
     pub as_clauses: HashSet<String>,
     pub last_tokens: VecDeque<TokenType>,
-    pub last_schema_period: Option<String>,
-    pub last_table_period: Option<String>,
+    pub last_schema: Option<String>,
+    pub last_table: Option<String>,
     pub last_create_trigger_table: Option<String>,
 }
 
@@ -59,8 +59,8 @@ mod completions_ts {
         pub cte_names: Vec<String>,
         pub as_clauses: Vec<String>,
         pub last_tokens: Vec<TokenType>,
-        pub last_schema_period: Option<String>,
-        pub last_table_period: Option<String>,
+        pub last_schema: Option<String>,
+        pub last_table: Option<String>,
         pub last_create_trigger_table: Option<String>,
     }
 }
@@ -211,6 +211,8 @@ pub enum TokenType {
     LParen,
     #[serde(rename = ".")]
     Period,
+    #[serde(rename = "=")]
+    Equal,
 
     // Identifiers
     #[serde(rename = "<schema-name>")]
@@ -267,8 +269,8 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
 
     let mut last_token_before_position: Option<usize> = None;
     let mut last_tokens = VecDeque::<TokenType>::new();
-    let mut last_schema_period = None;
-    let mut last_table_period: Option<Option<String>> = None;
+    let mut last_schema = None;
+    let mut last_table: Option<Option<String>> = None;
     let mut last_create_trigger_table: Option<String> = None;
 
     if let Some(stmt) = stmt {
@@ -372,17 +374,19 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
                                 value,
                             }) if value.to_uppercase() == "PRAGMA" => TokenType::PRAGMA,
                             Token::Word(Word {
-                                keyword: Keyword::NoKeyword,
+                                keyword: Keyword::NoKeyword | Keyword::ENCODING, // ENCODING is not a SQLite's keyword
                                 value,
                                 ..
                             }) if !KEYWORDS_UNSUPPORTED_BY_SQLPARSER.contains(value.to_uppercase().as_str()) => {
                                 let value_lower = value.to_lowercase();
                                 if schema_names_lowered.contains(&value_lower) {
-                                    last_schema_period = Some(value.to_owned());
+                                    if last_schema.is_none() {
+                                        last_schema = Some(value.to_owned());
+                                    }
                                     TokenType::SchemaIdent
                                 } else {
-                                    if last_table_period.is_none() {
-                                        last_table_period =
+                                    if last_table.is_none() {
+                                        last_table =
                                             Some(if let Some((_, target)) = as_clauses_lower.get(&value_lower) {
                                                 match target {
                                                     AliasableToken::Ident(ident)
@@ -431,7 +435,9 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
 
                                 // TEMP is a keyword but "TEMP" in "TEMP." is a schema name
                                 Keyword::TEMP if last_tokens.back() == Some(&TokenType::Period) => {
-                                    last_schema_period = Some("temp".to_owned());
+                                    if last_schema.is_none() {
+                                        last_schema = Some("temp".to_owned());
+                                    }
                                     TokenType::SchemaIdent
                                 }
 
@@ -443,6 +449,7 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
                                 TokenType::Group
                             }
                             Token::Period => TokenType::Period,
+                            Token::Eq => TokenType::Equal,
                             Token::Number(_, _)
                             | Token::SingleQuotedString(_)
                             | Token::DoubleQuotedString(_)
@@ -506,8 +513,8 @@ pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation)
             .map(|(_, (v, _))| v)
             .collect::<HashSet<_>>(),
         last_tokens,
-        last_schema_period,
-        last_table_period: last_table_period.flatten(),
+        last_schema,
+        last_table: last_table.flatten(),
         last_create_trigger_table,
     }
 }

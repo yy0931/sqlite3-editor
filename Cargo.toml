@@ -1,6 +1,6 @@
 [package]
 name = "sqlite3-editor"
-version = "1.0.172"
+version = "1.0.173"
 edition = "2021"
 
 [features]
@@ -33,8 +33,8 @@ features = ["functions", "load_extension", "modern_sqlite"]
 tempfile = "3.8.0"
 
 [profile.release]
-strip = true       # 9.5MB -> 4.5MB
-lto = true         # 4.5MB -> 4.2MB
-opt-level = "z"    # 4.2MB -> 3.1MB
-codegen-units = 1  # 3.1MB -> 3.0MB
-# using nightly rust: 3.0MB -> 2.9MB
+strip = true       # 8.2MB -> 7.0MB
+lto = true         # 7.0MB -> 6.2MB
+opt-level = "z"    # 6.2MB -> 4.3MB
+codegen-units = 1  # 4.3MB -> 4.2MB
+panic = "abort"    # 4.2MB -> 4.0MB

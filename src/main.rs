@@ -69,9 +69,7 @@ compile_error!("Cannot enable both 'sqlite' and 'sqlcipher' features.");
 #[cfg(not(any(feature = "sqlite", feature = "sqlcipher")))]
 compile_error!("Must use `--features sqlite` or `--features sqlcipher` command line option.");
 
-/// SQLite bindings for https://marketplace.visualstudio.com/items?itemName=yy0931.vscode-sqlite3-editor
-///
-/// Source: https://github.com/yy0931/sqlite3-editor/tree/rust-backend
+/// This is the SQLite bindings for the VSCode extension "SQLite3 Editor" (https://marketplace.visualstudio.com/items?itemName=yy0931.vscode-sqlite3-editor). The source code is available at: https://github.com/yy0931/sqlite3-editor/tree/rust-backend
 #[derive(Parser)]
 struct Args {
     #[command(subcommand)]

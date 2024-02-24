@@ -65,8 +65,8 @@ fn test_simple() {
             cte_names: hash_set(&["cte_ident"]),
             as_clauses: hash_set(&["as_ident1", "as_ident2"]),
             last_tokens: VecDeque::from([TokenType::StartOfStatement, TokenType::Other]),
-            last_schema_period: None,
-            last_table_period: None,
+            last_schema: None,
+            last_table: None,
             last_create_trigger_table: None,
         }
     );
@@ -249,7 +249,7 @@ fn test_temp_schema() {
     let mut result = complete(&setup(), r#"SELECT * FROM temp."#, &loc(0, 19));
     assert_eq!(result.last_tokens.pop_back(), Some(TokenType::Period));
     assert_eq!(result.last_tokens.pop_back(), Some(TokenType::SchemaIdent));
-    assert_eq!(result.last_schema_period, Some("temp".to_owned()));
+    assert_eq!(result.last_schema, Some("temp".to_owned()));
 }
 
 #[test]
@@ -289,8 +289,22 @@ fn test1() {
     let mut result = complete(&db, r#"SELECT * FROM t1 A, JOIN t2 B WHERE t1.x = t2."#, &loc(0, 46));
     assert_eq!(result.last_tokens.pop_back().unwrap(), TokenType::Period);
     assert_eq!(result.last_tokens.pop_back().unwrap(), TokenType::TableIdent);
-    assert_eq!(result.last_schema_period, None);
-    assert_eq!(result.last_table_period, Some("t2".to_owned()));
+    assert_eq!(result.last_schema, None);
+    assert_eq!(result.last_table, Some("t2".to_owned()));
+}
+
+#[test]
+fn test_last_table() {
+    let db = setup();
+    let result = complete(&db, r#"SELECT a.b, c."#, &loc(0, 14));
+    assert_eq!(result.last_table, Some("c".to_owned()));
+}
+
+#[test]
+fn test_last_schema() {
+    let db = setup();
+    let result = complete(&db, r#"SELECT * FROM temp.b, main."#, &loc(0, 27));
+    assert_eq!(result.last_schema, Some("main".to_owned()));
 }
 
 #[test]
@@ -302,4 +316,22 @@ fn test_last_create_trigger_table() {
         &loc(0, 46),
     );
     assert_eq!(result.last_create_trigger_table, Some("table1".to_owned()));
+}
+
+#[test]
+fn test_pragma_encoding() {
+    let db = setup();
+    let result = complete(&db, r#"PRAGMA main.encoding = "#, &loc(0, 23));
+    assert_eq!(
+        result.last_tokens,
+        [
+            TokenType::StartOfStatement,
+            TokenType::PRAGMA,
+            TokenType::SchemaIdent,
+            TokenType::Period,
+            TokenType::TableIdent,
+            TokenType::Equal
+        ],
+    );
+    assert_eq!(result.last_table, Some("encoding".to_owned()));
 }
