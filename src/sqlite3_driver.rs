@@ -278,6 +278,7 @@ pub struct TableList {
     pub table_list: Vec<TableNameAndColumns>,
     pub entity_relationships: Vec<EntityRelationship>,
     pub views: Vec<(String, String)>,
+    pub virtual_tables: Vec<(String, String)>,
 }
 
 #[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -806,6 +807,10 @@ JOIN main.pragma_table_info("table_name") p"#,
                 table_list,
                 entity_relationships,
                 views,
+                virtual_tables: self.select_all("WITH virutal_tables AS (SELECT name FROM pragma_table_list WHERE schema = 'main' AND type = 'virtual') SELECT name, sql FROM sqlite_schema s WHERE s.name IN virutal_tables", &[], |row| Ok((
+                    get_string(row, 0, |err| warnings.push(err.with("table_schema.name")))?,
+                    get_string(row, 1, |err| warnings.push(err.with("table_schema.sql")))?,
+                )))?,
             },
             warnings,
         ))
@@ -947,7 +952,9 @@ JOIN main.pragma_table_info("table_name") p"#,
         };
 
         let table_type = TableType::from(table_type.as_str());
-        let has_rowid_column = table_type == TableType::Table && !wr;
+
+        // rowid tables https://www.sqlite.org/rowidtable.html or virtual tables without `WITHOUT ROWID` https://www.sqlite.org/vtab.html#_without_rowid_virtual_tables_
+        let has_rowid_column = (table_type == TableType::Table || table_type == TableType::Virtual) && !wr;
 
         // Select pragma_foreign_key_list
         let mut foreign_key_list_cache = ForeignKeyListCache::default();
