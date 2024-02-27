@@ -1,7 +1,7 @@
 use crate::{
     literal::Literal,
     request_type::{QueryMode, Request},
-    sqlite3_driver::QueryOptions,
+    sqlite3::QueryOptions,
 };
 
 #[test]

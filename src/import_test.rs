@@ -1,5 +1,5 @@
 use crate::import;
-use crate::sqlite3_driver::get_string;
+use crate::sqlite3::get_string;
 use std::fs;
 use std::io::Write;
 

@@ -3,7 +3,7 @@ use std::{rc::Rc, time::Duration};
 use crate::{
     error::Error,
     literal::Literal,
-    sqlite3_driver::{write_value_ref_into_msgpack, InvalidUTF8},
+    sqlite3::{write_value_ref_into_msgpack, InvalidUTF8},
 };
 
 use super::{cache_entry::Records, pager_cache::PagerCache};

@@ -93,7 +93,7 @@ pub fn get_option_string<F: FnMut(InvalidUTF8)>(
     }
 }
 
-pub struct SQLite3Driver {
+pub struct SQLite3 {
     con: ManuallyDrop<rusqlite::Connection>,
     pager: Pager,
     pub database_label: String,
@@ -380,7 +380,7 @@ struct EditorPragmaResponse<T: Serialize> {
     time: f64,
 }
 
-impl SQLite3Driver {
+impl SQLite3 {
     /// Connects to the database, set busy_timeout to 500, register the find_widget_compare_r function, enable loading extensions, and fetch the version number of SQLite.
     /// * `read_only` - If true, connects to the database with immutable=1 and the readonly flag. Use this argument to read a database that is under an EXCLUSIVE lock.
     /// * `sql_cipher_key` - The encryption key for SQLCipher.
@@ -1404,7 +1404,7 @@ JOIN main.pragma_table_info("table_name") p"#,
     }
 }
 
-impl Drop for SQLite3Driver {
+impl Drop for SQLite3 {
     fn drop(&mut self) {
         if let Ok(mut stmt) = self.con.prepare("SELECT * FROM sqlite_schema LIMIT 1") {
             let _ = stmt.query(());
@@ -1439,7 +1439,7 @@ pub struct ForeignKeyListEntry {
 impl ForeignKeyListCache {
     fn get_primary_key(
         &self,
-        db: &SQLite3Driver,
+        db: &SQLite3,
         table_name: &str,
         seq: i64,
         warnings: &mut Vec<InvalidUTF8>,
@@ -1456,7 +1456,7 @@ impl ForeignKeyListCache {
 
     fn get(
         &mut self,
-        db: &SQLite3Driver,
+        db: &SQLite3,
         database: &str,
         table_name: &str,
         warnings: &mut Vec<InvalidUTF8>,

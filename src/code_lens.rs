@@ -5,7 +5,7 @@ use sqlparser::tokenizer::{Token, Word};
 use crate::keywords::START_OF_STATEMENT_KEYWORDS_UNSUPPORTED_BY_SQLPARSER;
 use crate::parse_cte::parse_cte;
 use crate::split_statements::{get_text_range, split_sqlite_statements};
-use crate::sqlite3_driver::escape_sql_identifier;
+use crate::sqlite3::escape_sql_identifier;
 use crate::tokenize::ZeroIndexedLocation;
 
 /// Represents the kind of code lens.

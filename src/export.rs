@@ -1,4 +1,4 @@
-use crate::{error::Error, sqlite3_driver::set_sqlcipher_key, util::into};
+use crate::{error::Error, sqlite3::set_sqlcipher_key, util::into};
 use base64::{engine::general_purpose, Engine as _};
 use rusqlite::types::ValueRef;
 use std::io::Write;

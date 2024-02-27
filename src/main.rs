@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 mod column_origin;
 mod export;
 mod import;
-use crate::{request_type::Request, sqlite3_driver::read_msgpack_into_json, tokenize::ZeroIndexedLocation};
+use crate::{request_type::Request, sqlite3::read_msgpack_into_json, tokenize::ZeroIndexedLocation};
 mod cache;
 mod check_syntax;
 #[cfg(test)]
@@ -53,9 +53,9 @@ mod semantic_highlight_test;
 mod split_statements;
 #[cfg(test)]
 mod split_statements_test;
-mod sqlite3_driver;
+mod sqlite3;
 #[cfg(test)]
-mod sqlite3_driver_test;
+mod sqlite3_test;
 mod tokenize;
 #[cfg(test)]
 mod tokenize_test;
@@ -237,7 +237,7 @@ where
             writeln!(
                 &mut stdout,
                 "{} {}",
-                if sqlite3_driver::is_sqlcipher(&con) {
+                if sqlite3::is_sqlcipher(&con) {
                     "SQLCipher"
                 } else {
                     "SQLite"
@@ -285,7 +285,7 @@ where
             const READ_ONLY: bool = false;
 
             // Create a server
-            let mut db = match sqlite3_driver::SQLite3Driver::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
+            let mut db = match sqlite3::SQLite3::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
                 Ok(db) => db,
                 Err(err) => {
                     writeln!(&mut stderr, "{err}").expect("writeln! failed.");
@@ -351,7 +351,7 @@ where
                 // Handle the different commands
                 match command {
                     ServerCommand::TryReconnect => {
-                        match sqlite3_driver::SQLite3Driver::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
+                        match sqlite3::SQLite3::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
                             Ok(new_db) => {
                                 db = new_db;
 

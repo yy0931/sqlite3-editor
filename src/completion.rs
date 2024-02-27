@@ -7,7 +7,7 @@ use crate::{
     keywords::KEYWORDS_UNSUPPORTED_BY_SQLPARSER,
     parse_cte::parse_cte,
     split_statements::split_sqlite_statements,
-    sqlite3_driver::{SQLite3Driver, TableName, TableType},
+    sqlite3::{SQLite3, TableName, TableType},
     tokenize::{TokenWithRangeLocation, ZeroIndexedLocation},
 };
 use serde::{Deserialize, Serialize};
@@ -235,7 +235,7 @@ pub enum TokenType {
     StartOfStatement,
 }
 
-pub fn complete(conn: &SQLite3Driver, sql: &str, position: &ZeroIndexedLocation) -> Completions {
+pub fn complete(conn: &SQLite3, sql: &str, position: &ZeroIndexedLocation) -> Completions {
     // TODO: cache list_tables and table_schema if they are slow
 
     let stmt = split_sqlite_statements(sql)

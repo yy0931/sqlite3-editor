@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{literal::Literal, sqlite3_driver::QueryOptions};
+use crate::{literal::Literal, sqlite3::QueryOptions};
 
 /// Request body
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     literal::Literal,
-    sqlite3_driver::{escape_sql_identifier, set_sqlcipher_key},
+    sqlite3::{escape_sql_identifier, set_sqlcipher_key},
 };
 use std::collections::HashMap;
 use std::io::Read;

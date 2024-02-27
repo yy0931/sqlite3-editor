@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     completion::{complete, ColumnCompletion, Completions, TableCompletion, TokenType},
-    sqlite3_driver::{ExecMode, QueryOptions, SQLite3Driver, TableType},
+    sqlite3::{ExecMode, QueryOptions, SQLite3, TableType},
     tokenize::ZeroIndexedLocation,
 };
 
@@ -17,8 +17,8 @@ fn loc(line: usize, column: usize) -> ZeroIndexedLocation {
     ZeroIndexedLocation { line, column }
 }
 
-fn setup() -> SQLite3Driver {
-    let mut conn = SQLite3Driver::connect(":memory:", false, &None::<&str>).unwrap();
+fn setup() -> SQLite3 {
+    let mut conn = SQLite3::connect(":memory:", false, &None::<&str>).unwrap();
     conn.execute(
         "CREATE TABLE table_name(column_name)",
         &[],
