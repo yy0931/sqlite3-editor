@@ -1,6 +1,6 @@
 [package]
 name = "sqlite3-editor"
-version = "1.0.175"
+version = "1.0.182"
 edition = "2021"
 
 [features]
@@ -37,4 +37,4 @@ strip = true       # 8.2MB -> 7.0MB
 lto = true         # 7.0MB -> 6.2MB
 opt-level = "z"    # 6.2MB -> 4.3MB
 codegen-units = 1  # 4.3MB -> 4.2MB
-panic = "abort"    # 4.2MB -> 4.0MB
+# Do not use "panic = "abort" as it causes the executable to throw STATUS_ENTRYPOINT_NOT_FOUND on Windows 7.

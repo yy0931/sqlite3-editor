@@ -120,7 +120,10 @@ pub fn split_sqlite_statements(sql: &str) -> Result<Vec<SplittedStatement>, Toke
             }
             Token::SemiColon if begin_end_block_depth == 0 => {
                 result.push(SplittedStatement::new(&lines, &stmt_tokens, stmt_start, end.to_owned()));
-                stmt_start = end.to_owned();
+                #[allow(clippy::assigning_clones)] // cannot use clone_into because stmt_start has been moved
+                {
+                    stmt_start = end.to_owned();
+                }
                 stmt_tokens.clear();
             }
             _ => {}
