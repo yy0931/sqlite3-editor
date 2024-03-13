@@ -68,6 +68,9 @@ jobs:
           rustup +nightly component add rust-src
           cargo +nightly build -Z build-std --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/sqlite3-editor.exe sqlite3-editor-${{ matrix.vsce_target }}.exe
+      - name: Test
+        run: target/${{ matrix.target }}/release/sqlite3-editor.exe version
+        if: ${{ matrix.target == 'x86_64-win7-windows-msvc' }}
       - uses: actions/upload-artifact@v3
         with:
           name: artifact-${{ matrix.vsce_target }}.exe
