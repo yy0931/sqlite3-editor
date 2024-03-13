@@ -22,16 +22,12 @@ jobs:
           version=$(grep "^version" Cargo.toml | sed 's/version = "//g' | sed 's/"//g')
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  build-win32:
+  build-pc:  # Windows 8+
     runs-on: windows-latest
     strategy:
       matrix:
         include:
-          - target: x86_64-pc-windows-msvc
-            vsce_target: win32-x64
-          - target: i686-pc-windows-msvc
-            vsce_target: win32-ia32
-          - target: aarch64-pc-windows-msvc
+          - target: aarch64-pc-windows-msvc  # NOTE: aarch64-win7-windows-msvc does not exist
             vsce_target: win32-arm64
     steps:
       - uses: actions/checkout@v1
@@ -44,6 +40,33 @@ jobs:
 
           rustup target add ${{ matrix.target }}
           cargo build --release --features sqlite --target ${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/sqlite3-editor.exe sqlite3-editor-${{ matrix.vsce_target }}.exe
+      - uses: actions/upload-artifact@v3
+        with:
+          name: artifact-${{ matrix.vsce_target }}.exe
+          path: sqlite3-editor-${{ matrix.vsce_target }}.exe
+          retention-days: 1
+
+  build-win7:  # Windows 7+
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-win7-windows-msvc
+            vsce_target: win32-x64
+          - target: i686-win7-windows-msvc
+            vsce_target: win32-ia32
+    steps:
+      - uses: actions/checkout@v1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+          # prebuilt toolchains are unavailable for win7 targets
+      - run: |
+          $ErrorActionPreference = "Stop"
+
+          rustup +nightly component add rust-src
+          cargo +nightly build -Z build-std --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/sqlite3-editor.exe sqlite3-editor-${{ matrix.vsce_target }}.exe
       - uses: actions/upload-artifact@v3
         with:
@@ -119,7 +142,8 @@ jobs:
 
   release:
     needs:
-      - build-win32
+      - build-win7
+      - build-pc
       - build-linux
       - build-darwin
       - test

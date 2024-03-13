@@ -104,18 +104,6 @@ lazy_static! {
         regex::Regex::new(r"(?i)^\s*(INSERT|DELETE|UPDATE|CREATE|DROP|ALTER\s+TABLE)\b").unwrap();
 }
 
-// TODO: test LoadableSQLiteExtensionNotAvailable
-#[derive(Debug)]
-struct LoadableSQLiteExtensionNotAvailable {}
-
-impl std::fmt::Display for LoadableSQLiteExtensionNotAvailable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Loadable SQLite extension is not available on this binary.")
-    }
-}
-
-impl std::error::Error for LoadableSQLiteExtensionNotAvailable {}
-
 #[derive(ts_rs::TS, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[ts(export)]
 pub struct TableSchemaColumnForeignKey {
