@@ -108,23 +108,23 @@ pub fn export_json<W: Write>(
             if col_id != 0 {
                 writer.write_all(b",")?;
             }
-            serde_json::to_writer(&mut writer, &column_name)?;
+            serde_json::to_writer::<&mut W, _>(&mut writer, &column_name)?;
             writer.write_all(b":")?;
             match row.get_ref_unwrap(col_id) {
                 ValueRef::Null => {
                     writer.write_all(b"null")?;
                 }
                 ValueRef::Real(v) => {
-                    serde_json::to_writer(&mut writer, &v)?;
+                    serde_json::to_writer::<&mut W, _>(&mut writer, &v)?;
                 }
                 ValueRef::Blob(v) => {
-                    serde_json::to_writer(&mut writer, &general_purpose::STANDARD.encode(v))?;
+                    serde_json::to_writer::<&mut W, _>(&mut writer, &general_purpose::STANDARD.encode(v))?;
                 }
                 ValueRef::Integer(v) => {
-                    serde_json::to_writer(&mut writer, &v)?;
+                    serde_json::to_writer::<&mut W, _>(&mut writer, &v)?;
                 }
                 ValueRef::Text(v) => {
-                    serde_json::to_writer(&mut writer, &String::from_utf8_lossy(v))?;
+                    serde_json::to_writer::<&mut W, _>(&mut writer, &String::from_utf8_lossy(v))?;
                 }
             }
         }

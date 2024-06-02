@@ -60,13 +60,14 @@ jobs:
       - uses: actions/checkout@v1
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: nightly
+          toolchain: nightly-2024-05-16
           # prebuilt toolchains are unavailable for win7 targets
+          # backtrace\src\symbolize\dbghelp.rs:111:9 failed to compile with the latest version of nightly Rust.
       - run: |
           $ErrorActionPreference = "Stop"
 
-          rustup +nightly component add rust-src
-          cargo +nightly build -Z build-std --release --features sqlite --target ${{ matrix.target }}
+          rustup +nightly-2024-05-16 component add rust-src
+          cargo +nightly-2024-05-16 build -Z build-std --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/sqlite3-editor.exe sqlite3-editor-${{ matrix.vsce_target }}.exe
       - name: Test
         run: target/${{ matrix.target }}/release/sqlite3-editor.exe version

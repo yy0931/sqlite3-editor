@@ -267,7 +267,7 @@ where
         Commands::FunctionList {} => {
             let mut functions = rusqlite::Connection::open_in_memory()
                 .unwrap()
-                .prepare("PRAGMA function_list")
+                .prepare("SELECT DISTINCT name FROM pragma_function_list()")
                 .unwrap()
                 .query_map((), |row| row.get::<_, String>(0))
                 .unwrap()
@@ -334,12 +334,23 @@ where
 
                 // Open request and response files
                 let mut r = File::open(&request_body_filepath).unwrap();
-                let mut w = std::fs::OpenOptions::new()
+                let mut w = match std::fs::OpenOptions::new()
                     .write(true)
                     .create(true)
                     .truncate(true)
                     .open(&response_body_filepath)
-                    .unwrap();
+                {
+                    Ok(w) => w,
+                    Err(err) => {
+                        // Handle `Os { code: 1224, kind: Uncategorized, message: "The requested operation cannot be performed on a file with a user-mapped section open." }`
+                        if err.kind() == std::io::ErrorKind::Other && err.raw_os_error() == Some(1224) {
+                            writeln!(&mut stderr, "Failed to create a temporary file: {err}")
+                                .expect("writeln! failed.");
+                            return 1;
+                        }
+                        panic!("{err:?}");
+                    }
+                };
 
                 fn finish<T: Write, U: Write>(mut stdout: &mut T, w: &mut U, code: error::ErrorCode) {
                     w.write_all(b"END").expect("Failed to write the result.");
