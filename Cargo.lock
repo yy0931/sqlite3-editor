@@ -554,7 +554,7 @@ checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
 
 [[package]]
 name = "sqlite3-editor"
-version = "1.0.188"
+version = "1.0.189"
 dependencies = [
  "base64",
  "clap",

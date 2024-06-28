@@ -68,8 +68,9 @@ fn test_export_to_stdout(format: ExportFormat) -> String {
                     sql_cipher_key: None,
                     format,
                     query: "SELECT * FROM t".to_owned(),
-                    csv_delimiter: ",".to_owned(),
                     output_file: None,
+                    xlsx_options: None,
+                    csv_options: None,
                 },
             },
             || Cursor::new("".to_owned()),
@@ -84,11 +85,6 @@ fn test_export_to_stdout(format: ExportFormat) -> String {
 #[test]
 fn test_export_csv() {
     assert_eq!(test_export_to_stdout(ExportFormat::CSV), "x,y\n1,2\n3,4\n");
-}
-
-#[test]
-fn test_export_tsv() {
-    assert_eq!(test_export_to_stdout(ExportFormat::TSV), "x\ty\n1\t2\n3\t4\n");
 }
 
 #[test]

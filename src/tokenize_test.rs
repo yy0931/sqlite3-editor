@@ -12,14 +12,14 @@ fn test_tokenize() {
             .map(|t| format!("{:?}", t))
             .collect::<Vec<_>>(),
         [
-            r#"{<line 0, column 0>-<line 0, column 6>: Word(Word { value: "CREATE", quote_style: None, keyword: CREATE })}"#,
-            r#"{<line 0, column 6>-<line 0, column 7>: Whitespace(Space)}"#,
-            r#"{<line 0, column 7>-<line 0, column 12>: Word(Word { value: "TABLE", quote_style: None, keyword: TABLE })}"#,
-            r#"{<line 0, column 12>-<line 0, column 13>: Whitespace(Space)}"#,
-            r#"{<line 0, column 13>-<line 0, column 14>: Word(Word { value: "t", quote_style: None, keyword: NoKeyword })}"#,
-            r#"{<line 0, column 14>-<line 0, column 15>: LParen}"#,
-            r#"{<line 0, column 15>-<line 0, column 16>: Word(Word { value: "c", quote_style: None, keyword: NoKeyword })}"#,
-            r#"{<line 0, column 16>-<line 0, column 17>: RParen}"#,
+            r#"{0:0-0:6 Word(Word { value: "CREATE", quote_style: None, keyword: CREATE })}"#,
+            r#"{0:6-0:7 Whitespace(Space)}"#,
+            r#"{0:7-0:12 Word(Word { value: "TABLE", quote_style: None, keyword: TABLE })}"#,
+            r#"{0:12-0:13 Whitespace(Space)}"#,
+            r#"{0:13-0:14 Word(Word { value: "t", quote_style: None, keyword: NoKeyword })}"#,
+            r#"{0:14-0:15 LParen}"#,
+            r#"{0:15-0:16 Word(Word { value: "c", quote_style: None, keyword: NoKeyword })}"#,
+            r#"{0:16-0:17 RParen}"#,
         ],
     );
 }
@@ -34,10 +34,10 @@ fn test_merge_whitespace() {
             .map(|t| format!("{:?}", t))
             .collect::<Vec<_>>(),
         [
-            r#"{<line 0, column 0>-<line 0, column 6>: Word(Word { value: "SELECT", quote_style: None, keyword: SELECT })}"#,
-            r#"{<line 0, column 6>-<line 0, column 9>: Whitespace(Space)}"#,
-            r#"{<line 0, column 9>-<line 0, column 10>: Number("1", false)}"#,
-            r#"{<line 0, column 10>-<line 0, column 11>: SemiColon}"#,
+            r#"{0:0-0:6 Word(Word { value: "SELECT", quote_style: None, keyword: SELECT })}"#,
+            r#"{0:6-0:9 Whitespace(Space)}"#,
+            r#"{0:9-0:10 Number("1", false)}"#,
+            r#"{0:10-0:11 SemiColon}"#,
         ],
     );
 }

@@ -34,7 +34,7 @@ impl CTEString {
 }
 
 fn parse_cte_then_slice_string(sql: &str) -> CTEString {
-    let cte = parse_cte(&split_sqlite_statements(sql).unwrap()[0]).unwrap();
+    let cte = parse_cte(&split_sqlite_statements(sql).unwrap().0[0]).unwrap();
     let lines = sql.lines().collect::<Vec<_>>();
 
     // Convert positions into strings
@@ -128,6 +128,6 @@ fn test_values() {
 
 #[test]
 fn test_non_cte() {
-    assert_eq!(parse_cte(&split_sqlite_statements(";").unwrap()[0]), None);
-    assert_eq!(parse_cte(&split_sqlite_statements("SELECT 1").unwrap()[0]), None);
+    assert_eq!(parse_cte(&split_sqlite_statements(";").unwrap().0[0]), None);
+    assert_eq!(parse_cte(&split_sqlite_statements("SELECT 1").unwrap().0[0]), None);
 }

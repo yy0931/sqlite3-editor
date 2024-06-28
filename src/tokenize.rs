@@ -50,7 +50,7 @@ impl ZeroIndexedLocation {
 
 impl std::fmt::Debug for ZeroIndexedLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<line {}, column {}>", self.line, self.column)
+        write!(f, "[{}:{}]", self.line, self.column)
     }
 }
 
@@ -81,7 +81,11 @@ pub struct TokenWithRangeLocation {
 
 impl std::fmt::Debug for TokenWithRangeLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{{{:?}-{:?}: {:?}}}", self.start, self.end, self.token)
+        write!(
+            f,
+            "{{{}:{}-{}:{} {:?}}}",
+            self.start.line, self.start.column, self.end.line, self.end.column, self.token
+        )
     }
 }
 

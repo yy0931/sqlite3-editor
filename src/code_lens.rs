@@ -32,7 +32,7 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
     let lines = sql.lines().collect::<Vec<_>>();
 
     // For each statement
-    for stmt in split_sqlite_statements(sql).unwrap_or_default() {
+    for stmt in split_sqlite_statements(sql).unwrap_or_default().0 {
         if stmt.real_tokens.is_empty() {
             continue;
         }

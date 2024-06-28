@@ -85,7 +85,7 @@ fn check_syntax_stmt(stmt_str: &str, conn: &mut rusqlite::Connection, offset_sta
 pub fn check_syntax(sql: &str) -> std::result::Result<Vec<Diagnostic>, Error> {
     let mut errors: Vec<Diagnostic> = vec![];
     let statements = match split_sqlite_statements(sql) {
-        Ok(statements) => statements,
+        Ok(statements) => statements.0,
         Err(TokenizerError { line, col, message }) => {
             errors.push(Diagnostic {
                 possible_causes: vec![PossibleCause {

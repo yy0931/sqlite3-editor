@@ -90,8 +90,6 @@ pub enum ImportFormat {
 pub enum ExportFormat {
     #[clap(name = "csv")]
     CSV,
-    #[clap(name = "tsv")]
-    TSV,
     #[clap(name = "json")]
     JSON,
     #[clap(name = "xlsx")]
@@ -131,10 +129,13 @@ enum Commands {
         format: ExportFormat,
         #[arg(long)]
         query: String,
-        #[arg(long, default_value = ",")]
-        csv_delimiter: String,
         #[arg(long)]
         output_file: Option<String>,
+
+        #[arg(long)]
+        csv_options: Option<String>,
+        #[arg(long)]
+        xlsx_options: Option<String>,
     },
     Server {
         /// Path to the database file
@@ -479,8 +480,9 @@ where
             sql_cipher_key,
             format,
             query,
-            csv_delimiter,
             output_file,
+            csv_options,
+            xlsx_options,
         } => {
             if format == ExportFormat::XLSX {
                 let Some(output_file) = output_file else {
@@ -488,7 +490,14 @@ where
                         .expect("writeln! failed.");
                     return 1;
                 };
-                if let Err(err) = export::export_xlsx(&database_filepath, &sql_cipher_key, &query, &output_file) {
+                let options: export::XLSXExportOptions = if let Some(s) = xlsx_options {
+                    serde_json::from_str(&s).unwrap_or_default()
+                } else {
+                    export::XLSXExportOptions::default()
+                };
+                if let Err(err) =
+                    export::export_xlsx(&database_filepath, &sql_cipher_key, &query, &output_file, &options)
+                {
                     writeln!(&mut stderr, "{err}").expect("writeln! failed.");
                     return 1;
                 }
@@ -509,10 +518,12 @@ where
 
                 if let Err(err) = match format {
                     ExportFormat::CSV => {
-                        export::export_csv(&database_filepath, &sql_cipher_key, &query, &csv_delimiter, &mut writer)
-                    }
-                    ExportFormat::TSV => {
-                        export::export_csv(&database_filepath, &sql_cipher_key, &query, "\t", &mut writer)
+                        let options: export::CSVExportOptions = if let Some(s) = csv_options {
+                            serde_json::from_str(&s).unwrap_or_default()
+                        } else {
+                            export::CSVExportOptions::default()
+                        };
+                        export::export_csv(&database_filepath, &sql_cipher_key, &query, &mut writer, &options)
                     }
                     ExportFormat::JSON => export::export_json(&database_filepath, &sql_cipher_key, &query, &mut writer),
                     ExportFormat::XLSX => {

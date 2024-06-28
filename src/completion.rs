@@ -240,6 +240,7 @@ pub fn complete(conn: &SQLite3, sql: &str, position: &ZeroIndexedLocation) -> Co
 
     let stmt = split_sqlite_statements(sql)
         .unwrap_or_default()
+        .0
         .into_iter()
         // include .end only for the last statement
         // `SELECT 1|; SELECT 2` -> | belongs to SELECT 1

@@ -1,4 +1,4 @@
-use crate::export;
+use crate::export::{self, CSVExportOptions, XLSXExportOptions};
 
 fn setup_test_db(tmp_db_filepath: &str) {
     let connection = rusqlite::Connection::open(tmp_db_filepath).unwrap();
@@ -33,7 +33,14 @@ fn test_export_csv() {
 
     setup_test_db(&tmp_db_filepath);
 
-    export::export_csv(&tmp_db_filepath, &None, "SELECT * FROM test", ",", &mut buf).unwrap();
+    export::export_csv(
+        &tmp_db_filepath,
+        &None,
+        "SELECT * FROM test",
+        &mut buf,
+        &CSVExportOptions::default(),
+    )
+    .unwrap();
     assert_eq!(
         String::from_utf8(buf).unwrap(),
         "t,i,n,r,b\nAlice,20,,1.2,AQID\nAlice,25,,2.4,BAUG\n"
@@ -48,7 +55,17 @@ fn test_export_tsv() {
 
     setup_test_db(&tmp_db_filepath);
 
-    export::export_csv(&tmp_db_filepath, &None, "SELECT * FROM test", "\t", &mut buf).unwrap();
+    export::export_csv(
+        &tmp_db_filepath,
+        &None,
+        "SELECT * FROM test",
+        &mut buf,
+        &CSVExportOptions {
+            delimiter: "\t".to_owned(),
+            null: "".to_owned(),
+        },
+    )
+    .unwrap();
 
     assert_eq!(
         String::from_utf8(buf).unwrap(),
@@ -80,12 +97,19 @@ fn test_invalid_delimiter() {
 
     setup_test_db(&tmp_db_filepath);
 
-    assert!(
-        export::export_csv(&tmp_db_filepath, &None, "SELECT * FROM test", ",,", &mut buf)
-            .unwrap_err()
-            .to_string()
-            .contains("csv_delimiter needs to be a single character.")
-    );
+    assert!(export::export_csv(
+        &tmp_db_filepath,
+        &None,
+        "SELECT * FROM test",
+        &mut buf,
+        &CSVExportOptions {
+            delimiter: ",,".to_owned(),
+            null: "".to_owned(),
+        }
+    )
+    .unwrap_err()
+    .to_string()
+    .contains("The delimiter needs to be a single character."));
 }
 
 #[test]
@@ -98,7 +122,14 @@ fn test_export_xlsx() {
 
     setup_test_db(&tmp_db_filepath);
 
-    export::export_xlsx(&tmp_db_filepath, &None, "SELECT * FROM test", &tmp_out_path).unwrap();
+    export::export_xlsx(
+        &tmp_db_filepath,
+        &None,
+        "SELECT * FROM test",
+        &tmp_out_path,
+        &XLSXExportOptions::default(),
+    )
+    .unwrap();
 
     dbg!(tmp_out.as_file().metadata().unwrap().len());
 }
