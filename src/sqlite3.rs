@@ -358,6 +358,9 @@ pub struct QueryOptions {
 
     /// A statement that is executed before the main statement. It shares the transaction and the parameters with the main statement, and requires ExecMode::ReadWrite.
     pub pre_stmt: Option<String>,
+
+    /// Checks the list of placeholders returned by list_placeholders.rs.
+    pub check_placeholders: Option<Vec<Option<String>>>,
 }
 
 #[derive(ts_rs::TS, Serialize, Debug, Clone)]
@@ -544,6 +547,31 @@ impl SQLite3 {
                 .or_else(|err| Error::new_query_error(err, query, params))?;
 
             // Bind parameters
+            if params.len() != stmt.parameter_count() {
+                return Err(Error::InvalidNumberOfParameters {
+                    query: query.to_string(),
+                    placeholders: (1..=stmt.parameter_count())
+                        .map(|i| stmt.parameter_name(i).map(|v| v.to_owned()))
+                        .collect(),
+                    params: params.to_vec(),
+                });
+            }
+            if let Some(placeholders) = options.check_placeholders {
+                if placeholders.len() != stmt.parameter_count()
+                    || (0..placeholders.len()).any(|i| placeholders[i].as_deref() != stmt.parameter_name(i + 1))
+                {
+                    return Error::new_other_error(
+                        format!(
+                            "Failed to parse the SQL statement: {placeholders:?} != {:?}",
+                            (0..placeholders.len())
+                                .map(|i| stmt.parameter_name(i + 1))
+                                .collect::<Vec<_>>()
+                        ),
+                        Some(query.to_owned()),
+                        Some(params),
+                    );
+                }
+            }
             for (i, param) in params.iter().enumerate() {
                 stmt.raw_bind_parameter(i + 1, param)
                     .or_else(|err| Error::new_query_error(err, query, params))?;

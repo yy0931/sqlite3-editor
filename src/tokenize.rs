@@ -12,6 +12,30 @@ pub struct ZeroIndexedLocation {
     pub column: usize,
 }
 
+impl std::ops::Sub<&Self> for ZeroIndexedLocation {
+    type Output = Self;
+    fn sub(self, rhs: &Self) -> Self::Output {
+        Self {
+            line: self.line.saturating_sub(rhs.line),
+            column: if self.line == rhs.line {
+                self.column.saturating_sub(rhs.column)
+            } else {
+                self.column
+            },
+        }
+    }
+}
+
+impl std::ops::SubAssign<&Self> for ZeroIndexedLocation {
+    fn sub_assign(&mut self, rhs: &Self) {
+        if self.line == rhs.line {
+            self.column = self.column.saturating_sub(rhs.column);
+        }
+        // Update line after comparing it to rhs.line
+        self.line = self.line.saturating_sub(rhs.line);
+    }
+}
+
 impl std::cmp::Ord for ZeroIndexedLocation {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.line.cmp(&other.line).then_with(|| self.column.cmp(&other.column))

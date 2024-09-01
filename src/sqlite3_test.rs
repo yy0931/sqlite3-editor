@@ -863,6 +863,29 @@ fn test_query_error() {
 }
 
 #[test]
+fn test_invalid_number_of_parameters() {
+    let mut db = SQLite3::connect(":memory:", false, &None::<&str>).unwrap();
+    let mut w = Cursor::new(Vec::<u8>::new());
+    assert_eq!(
+        format!(
+            "{}",
+            db.handle(
+                &mut w,
+                "SELECT ?, ?, @a",
+                &[Literal::I64(1)],
+                crate::request_type::QueryMode::ReadOnly,
+                QueryOptions::default(),
+            )
+            .unwrap_err()
+        ),
+        "Invalid number of parameters.
+Query: SELECT ?, ?, @a
+Parameters: [1]
+Placeholders: [?, ?, @a]",
+    );
+}
+
+#[test]
 fn test_transaction_success() {
     let mut db = SQLite3::connect(":memory:", false, &None::<&str>).unwrap();
     db.handle(

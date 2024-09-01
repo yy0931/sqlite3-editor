@@ -35,6 +35,9 @@ mod export_test;
 mod find;
 #[cfg(test)]
 mod import_test;
+mod list_placeholders;
+#[cfg(test)]
+mod list_placeholders_test;
 mod literal;
 #[cfg(test)]
 mod literal_test;

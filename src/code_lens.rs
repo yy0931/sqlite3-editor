@@ -3,6 +3,7 @@ use sqlparser::keywords::Keyword;
 use sqlparser::tokenizer::{Token, Word};
 
 use crate::keywords::START_OF_STATEMENT_KEYWORDS_UNSUPPORTED_BY_SQLPARSER;
+use crate::list_placeholders::{list_placeholders, Placeholder};
 use crate::parse_cte::parse_cte;
 use crate::split_statements::{get_text_range, split_sqlite_statements};
 use crate::sqlite3::escape_sql_identifier;
@@ -24,6 +25,8 @@ pub struct CodeLens {
     pub start: ZeroIndexedLocation,
     pub end: ZeroIndexedLocation,
     pub stmt_executed: String,
+    pub cte_identifier: Option<String>,
+    pub placeholders: Vec<Placeholder>,
 }
 
 /// Returns a list of code lenses for the given SQL input.
@@ -43,22 +46,33 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
         if let Some(cte) = cte {
             for entry in cte.entries {
                 let with_clause = get_text_range(&lines, &stmt.real_start, &cte.body_start);
+                let cte_ident = escape_sql_identifier(&get_text_range(&lines, &entry.ident_start, &entry.ident_end));
                 let select_stmt = format!(
                     "{}SELECT * FROM {}",
                     if with_clause.ends_with(' ') { "" } else { " " },
-                    escape_sql_identifier(&get_text_range(&lines, &entry.ident_start, &entry.ident_end))
+                    cte_ident.clone()
                 );
+                let stmt_executed = with_clause + &select_stmt;
+                let Ok((cte_stmt, _)) = split_sqlite_statements(&stmt_executed) else {
+                    continue;
+                };
+                let Some(cte_stmt) = cte_stmt.first() else {
+                    continue;
+                };
                 code_lens.push(CodeLens {
                     kind: CodeLensKind::Select,
-                    stmt_executed: with_clause + &select_stmt,
+                    placeholders: list_placeholders(cte_stmt),
+                    stmt_executed,
                     start: entry.ident_start,
                     end: entry.ident_end,
+                    cte_identifier: Some(cte_ident),
                 })
             }
             cte_end = cte.body_start;
         }
 
         let mut kind: Option<CodeLensKind> = None;
+        let placeholders = list_placeholders(&stmt);
         for token in stmt.real_tokens {
             if token.start < cte_end {
                 continue;
@@ -120,6 +134,8 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
                 start: stmt.real_start,
                 end: stmt.real_end,
                 stmt_executed: stmt.real_text,
+                cte_identifier: None,
+                placeholders,
             })
         }
     }

@@ -37,6 +37,11 @@ pub enum Error {
         query: String,
         params: Vec<Literal>,
     },
+    InvalidNumberOfParameters {
+        query: String,
+        placeholders: Vec<Option<String>>,
+        params: Vec<Literal>,
+    },
     Other {
         message: String,
         query: Option<String>,
@@ -165,6 +170,23 @@ impl std::fmt::Display for Error {
                         Self::format_params(params),
                     )
                 }
+            }
+            Self::InvalidNumberOfParameters {
+                query,
+                placeholders,
+                params,
+            } => {
+                write!(
+                    f,
+                    "Invalid number of parameters.\n{}\nParameters: {}\nPlaceholders: [{}]",
+                    Self::format_query(query),
+                    Self::format_params(params),
+                    placeholders
+                        .iter()
+                        .map(|v| v.clone().unwrap_or("?".to_owned()))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
             Self::Other { message, query, params } => {
                 write!(
