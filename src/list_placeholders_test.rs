@@ -58,3 +58,9 @@ pub fn test_placeholder_reuse() {
 pub fn test_everything() {
     compare("WITH x AS (SELECT @a) SELECT ?, ?, ?10, :10, @10, $10, :aa, @aa, $aa, ?12, ?, :1a1");
 }
+
+#[test]
+#[cfg(not(feature = "sqlcipher"))] // "The bundled SQLCipher does not support the delimited numeric literal.
+pub fn test_issue_65() {
+    compare("SELECT 1_2");
+}

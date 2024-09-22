@@ -3,6 +3,7 @@ use std::{rc::Rc, time::Duration};
 use tempfile::NamedTempFile;
 
 use crate::cache::{cache_entry::Records, pager::Pager};
+use crate::error::{Error, ErrorCode};
 
 #[test]
 fn test_repeat_same_query() {
@@ -14,6 +15,7 @@ fn test_repeat_same_query() {
     let mut pager = Pager::new();
     pager.config.slow_query_threshold = Duration::ZERO;
     pager.config.cache_time_limit_relative_to_queried_range = f64::MAX;
+    assert!(pager.total_cache_size_bytes() == 0);
 
     let query = "SELECT * FROM t LIMIT ? OFFSET ?";
     let params = &[3.into(), 0.into()];
@@ -34,6 +36,7 @@ fn test_repeat_same_query() {
     );
     assert_eq!(result1.n_rows(), 2);
     assert_eq!(result1.columns(), Rc::new(vec!["x".to_owned(), "y".to_owned()]));
+    assert!(pager.total_cache_size_bytes() > 0);
 }
 
 #[test]
@@ -253,4 +256,25 @@ fn test_wrong_parameter_type() {
     let query = "SELECT * FROM t LIMIT ? OFFSET ?";
     let params = &["1".into(), "1".into()];
     assert_eq!(pager.query(&mut conn, query, params, |_| {}), Ok(None));
+}
+
+#[test]
+fn test_failed_to_start_a_transaction() {
+    let mut conn = rusqlite::Connection::open_in_memory().unwrap();
+    conn.execute("CREATE TABLE t(x)", ()).unwrap();
+    conn.execute("BEGIN", ()).unwrap();
+
+    let mut pager = Pager::new();
+
+    let query = "SELECT * FROM t LIMIT ? OFFSET ?";
+    let params = &["1".into(), "1".into()];
+    assert_eq!(
+        pager.query(&mut conn, query, params, |_| {}),
+        Err(Error::Query {
+            message: "cannot start a transaction within a transaction".to_owned(),
+            query: "BEGIN;".to_owned(),
+            params: vec![],
+            code: ErrorCode::OtherError
+        })
+    );
 }

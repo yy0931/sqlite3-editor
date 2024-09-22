@@ -70,63 +70,66 @@ pub fn list_placeholders(stmt: &SplittedStatement) -> Vec<Placeholder> {
                 }
             }
         }
-        match &token.token {
-            // https://www.sqlite.org/c3ref/bind_blob.html
-            // ?
-            Token::Placeholder(p) if p == "?" => {
-                result.push(Placeholder {
-                    name: None,
-                    ranges_relative_to_stmt: vec![PlaceholderRange::new(token)],
-                });
-            }
-            // ?NNN
-            Token::Placeholder(s) if QUESTION_NUMBER.is_match(s) => {
-                if let Ok(n) = s[1..].parse::<usize>().map(|v| v - 1) {
-                    while result.len() < n + 1 {
-                        result.push(Placeholder {
-                            name: None,
-                            ranges_relative_to_stmt: vec![],
-                        });
-                    }
-                    if result[n].name.is_none() {
-                        result[n].name = Some(s.to_owned());
-                        result[n].ranges_relative_to_stmt.push(PlaceholderRange::new(token));
-                    }
-                }
-            }
-            // :VVV, @VVV, $VVV
-            Token::Word(Word {
-                value: s,
-                quote_style: None,
-                keyword: Keyword::NoKeyword,
-            }) => {
-                if s.starts_with(":") || s.starts_with("@") || s.starts_with("$") {
+        if !is_previous_placeholder_unfinished {
+            match &token.token {
+                // https://www.sqlite.org/c3ref/bind_blob.html
+                // ?
+                Token::Placeholder(p) if p == "?" => {
                     result.push(Placeholder {
-                        name: Some(s.to_owned()),
+                        name: None,
                         ranges_relative_to_stmt: vec![PlaceholderRange::new(token)],
                     });
-                } else if let Some(sign) = previous_colon_or_at_sign {
-                    let mut range = PlaceholderRange::new(token);
-                    range.start.column = range.start.column.saturating_sub(1);
-                    result.push(Placeholder {
-                        name: Some(sign + s.as_str()),
-                        ranges_relative_to_stmt: vec![range],
-                    });
                 }
-                is_previous_placeholder_unfinished = true;
-            }
-            Token::Number(s, /* "L" suffix */ false) => {
-                if let Some(sign) = previous_colon_or_at_sign {
-                    let mut range = PlaceholderRange::new(token);
-                    range.start.column = range.start.column.saturating_sub(1);
-                    result.push(Placeholder {
-                        name: Some(sign + s.as_str()),
-                        ranges_relative_to_stmt: vec![range],
-                    });
+                // ?NNN
+                Token::Placeholder(s) if QUESTION_NUMBER.is_match(s) => {
+                    if let Ok(n) = s[1..].parse::<usize>().map(|v| v - 1) {
+                        while result.len() < n + 1 {
+                            result.push(Placeholder {
+                                name: None,
+                                ranges_relative_to_stmt: vec![],
+                            });
+                        }
+                        if result[n].name.is_none() {
+                            result[n].name = Some(s.to_owned());
+                            result[n].ranges_relative_to_stmt.push(PlaceholderRange::new(token));
+                        }
+                    }
                 }
-                is_previous_placeholder_unfinished = true;
+                // :VVV, @VVV, $VVV
+                Token::Word(Word {
+                    value: s,
+                    quote_style: None,
+                    keyword: Keyword::NoKeyword,
+                }) => {
+                    if s.starts_with(":") || s.starts_with("@") || s.starts_with("$") {
+                        result.push(Placeholder {
+                            name: Some(s.to_owned()),
+                            ranges_relative_to_stmt: vec![PlaceholderRange::new(token)],
+                        });
+                        is_previous_placeholder_unfinished = true;
+                    } else if let Some(sign) = previous_colon_or_at_sign {
+                        let mut range = PlaceholderRange::new(token);
+                        range.start.column = range.start.column.saturating_sub(1);
+                        result.push(Placeholder {
+                            name: Some(sign + s.as_str()),
+                            ranges_relative_to_stmt: vec![range],
+                        });
+                        is_previous_placeholder_unfinished = true;
+                    }
+                }
+                Token::Number(s, /* "L" suffix */ false) => {
+                    if let Some(sign) = previous_colon_or_at_sign {
+                        let mut range = PlaceholderRange::new(token);
+                        range.start.column = range.start.column.saturating_sub(1);
+                        result.push(Placeholder {
+                            name: Some(sign + s.as_str()),
+                            ranges_relative_to_stmt: vec![range],
+                        });
+                        is_previous_placeholder_unfinished = true;
+                    }
+                }
+                _ => {}
             }
-            _ => {}
         }
         previous_colon_or_at_sign = match token.token {
             Token::Colon => Some(":".to_owned()),

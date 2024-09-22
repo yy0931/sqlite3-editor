@@ -1,3 +1,4 @@
+use crate::error::Error;
 use crate::import;
 use crate::sqlite3::get_string;
 use std::fs;
@@ -63,6 +64,21 @@ fn test_import_csv_empty_lines() {
         .unwrap(),
         r#"[["Alice","20"],["Bob","25"]]"#
     );
+}
+
+#[test]
+fn test_import_csv_with_inconsistent_columns() {
+    let tmp_db_file = tempfile::NamedTempFile::new().unwrap();
+    let tmp_db_filepath = tmp_db_file.path().to_str().unwrap();
+
+    let mut tmp_csv_file = tempfile::NamedTempFile::new().unwrap();
+    let tmp_csv_file_path = tmp_csv_file.path().to_str().unwrap().to_owned();
+
+    // Write a sample CSV file to import.
+    writeln!(tmp_csv_file, "name,age\nAlice,20\nBob,25,30").unwrap();
+
+    // Import the CSV file.
+    assert_eq!(import::import_csv(tmp_db_filepath, &None, "test", ",", Some(tmp_csv_file_path.to_string())), Err(Error::Other { message: "CSV error: record 2 (line: 3, byte: 18): found record with 3 fields, but the previous record has 2 fields".to_owned(), query: None, params: None }));
 }
 
 #[test]

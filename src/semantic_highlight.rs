@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use sqlparser::{
     dialect::SQLiteDialect,
@@ -32,18 +33,70 @@ pub struct SemanticHighlight {
     pub end: ZeroIndexedLocation,
 }
 
+lazy_static! {
+    static ref HEXADECIMAL_NUMERIC_LITERAL: regex::Regex = regex::Regex::new(r#"^\d+(_\d+)*$"#).unwrap();
+    static ref NUMERIC_LITERAL_CONTINUATION: regex::Regex =
+        regex::Regex::new(r#"^(_\d+)+([eE](\d+(_\d+)*)?)?$"#).unwrap();
+    static ref HEXADECIMAL_LITERAL_CONTINUATION: regex::Regex = regex::Regex::new(r#"^X\d+(_\d+)*$"#).unwrap();
+}
+
 /// Tokenizes the given SQL input string and returns the tokens with highlighting information.
 pub fn semantic_highlight(sql: &str) -> Vec<SemanticHighlight> {
     let mut tokens = vec![];
     let Ok(parsed_tokens) = tokenize_with_range_location(&SQLiteDialect {}, sql) else {
         return tokens;
     };
+
+    let mut ends_with_e = false;
+    let mut is_zero = false;
+
     for TokenWithRangeLocation { token, start, end } in parsed_tokens {
+        let previous_token_ends_with_e = ends_with_e;
+        ends_with_e = false;
+        let previous_token_is_zero = is_zero;
+        is_zero = false;
         if start == end {
             continue;
         }
         tokens.push(SemanticHighlight {
             kind: match token {
+                // number
+                Token::Number(s, is_long) => {
+                    is_zero = s == "0" && !is_long;
+                    SemanticTokenKind::Number
+                }
+                Token::HexStringLiteral(s) if HEXADECIMAL_NUMERIC_LITERAL.is_match(&s) => SemanticTokenKind::Number,
+                Token::Word(Word {
+                    quote_style: None,
+                    value,
+                    keyword: Keyword::NoKeyword,
+                }) if NUMERIC_LITERAL_CONTINUATION.is_match(&value)  // _123e
+                    && tokens
+                        .last()
+                        .map(|last| last.end == start && last.kind == SemanticTokenKind::Number)
+                        .unwrap_or(false) =>
+                {
+                    ends_with_e = value.ends_with("e") || value.ends_with("E");
+                    SemanticTokenKind::Number
+                }
+                Token::Minus | Token::Plus
+                    if previous_token_ends_with_e && tokens.last().map(|last| last.end == start).unwrap_or(false) =>
+                {
+                    SemanticTokenKind::Number
+                }
+                Token::Word(Word {
+                    quote_style: None,
+                    value,
+                    keyword: Keyword::NoKeyword,
+                }) if previous_token_is_zero && HEXADECIMAL_LITERAL_CONTINUATION.is_match(&value)  // Z12_34
+                    && tokens
+                        .last()
+                        .map(|last| last.end == start)
+                        .unwrap_or(false) =>
+                {
+                    SemanticTokenKind::Number
+                }
+
                 // word
                 Token::Word(w) => match w {
                     Word {
@@ -59,9 +112,6 @@ pub fn semantic_highlight(sql: &str) -> Vec<SemanticHighlight> {
                     } => SemanticTokenKind::Variable,
                     _ => SemanticTokenKind::Keyword,
                 },
-
-                // number
-                Token::Number(_, _) => SemanticTokenKind::Number,
 
                 // string
                 Token::SingleQuotedString(_)
