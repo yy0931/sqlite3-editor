@@ -103,15 +103,14 @@ fn test_pragma() {
 #[test]
 fn test_blob_literal() {
     assert_eq!(
-        semantic_highlight("SELECT 0x'ff'")
+        semantic_highlight("SELECT x'ff'")
             .into_iter()
             .map(|t| t.kind)
             .collect::<Vec<_>>(),
         [
             SemanticTokenKind::Keyword, // "SELECT"
             SemanticTokenKind::Other,   // " "
-            SemanticTokenKind::String,  // "0x"
-            SemanticTokenKind::String,  // "'ff'"
+            SemanticTokenKind::String,  // "x'ff'"
         ]
     );
 }
