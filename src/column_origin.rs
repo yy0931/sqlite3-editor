@@ -1,6 +1,6 @@
 use rusqlite::ffi::{
     sqlite3, sqlite3_column_count, sqlite3_column_database_name, sqlite3_column_name, sqlite3_column_origin_name,
-    sqlite3_column_table_name, sqlite3_errmsg, sqlite3_finalize, sqlite3_prepare_v2, sqlite3_stmt,
+    sqlite3_column_table_name, sqlite3_errmsg, sqlite3_finalize, sqlite3_prepare_v2, sqlite3_step, sqlite3_stmt,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -48,6 +48,9 @@ pub fn column_origin(db: *mut sqlite3, query: &str) -> Result<HashMap<String, Co
     }
 
     let mut result = HashMap::<String, ColumnOrigin>::new();
+
+    // NOTE: We need to call `sqlite3_column_count()` and `sqlite3_column_name()` after `sqlite3_step()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53)
+    unsafe { sqlite3_step(stmt) };
 
     let column_count: usize = unsafe { sqlite3_column_count(stmt).try_into().unwrap() };
     for i in 0..column_count {

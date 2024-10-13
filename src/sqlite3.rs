@@ -1,6 +1,7 @@
 use crate::{
     cache::{Pager, Records},
     column_origin::{column_origin, ColumnOrigin},
+    columnar_buffer::ColumnarBuffer,
     find::{
         find_widget_compare, find_widget_compare_c, find_widget_compare_r, find_widget_compare_r_c,
         find_widget_compare_r_w, find_widget_compare_r_w_c, find_widget_compare_w, find_widget_compare_w_c,
@@ -577,26 +578,28 @@ impl SQLite3 {
                     .or_else(|err| Error::new_query_error(err, query, params))?;
             }
 
-            // List columns
-            let columns = stmt
-                .column_names()
-                .into_iter()
-                .map(|v| v.to_owned())
-                .collect::<Vec<_>>();
-
             // Fetch records
-            let mut col_buf: Vec<Vec<u8>> = vec![vec![]; columns.len()];
+            let mut col_buf = ColumnarBuffer::default();
 
             let mut n_rows: u32 = 0;
             let mut rows = stmt.raw_query();
             loop {
                 match rows.next() {
                     Ok(Some(row)) => {
-                        for (i, col_buf_i) in col_buf.iter_mut().enumerate() {
-                            write_value_ref_into_msgpack(col_buf_i, row.get_ref_unwrap(i), |err| {
-                                warnings.push(err.with(query))
-                            })
-                            .expect("Failed to write msgpack");
+                        // NOTE: We need to call `stmt.column_count()` after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53),
+                        //       but since the borrow checker prevents us from calling `stmt.column_count()` while `row` is alive,
+                        //       we rely on `rusqlite::Error::InvalidColumnIndex` returned from `row.get_ref(i)` to check the number of columns.
+                        for i in 0usize..=usize::MAX {
+                            match row.get_ref(i) {
+                                Ok(value) => {
+                                    write_value_ref_into_msgpack(&mut col_buf.get_column(i), value, |err| {
+                                        warnings.push(err.with(query))
+                                    })
+                                    .expect("Failed to write msgpack");
+                                }
+                                Err(rusqlite::Error::InvalidColumnIndex(_)) => break,
+                                Err(err) => return Error::new_query_error(err, query, params),
+                            }
                         }
                         n_rows += 1;
                     }
@@ -606,6 +609,14 @@ impl SQLite3 {
             }
 
             drop(rows);
+
+            // NOTE: We need to call `stmt.column_names()` after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53)
+            let columns = stmt
+                .column_names()
+                .into_iter()
+                .map(|v| v.to_owned())
+                .collect::<Vec<_>>();
+
             drop(stmt);
 
             if let Some(changes) = options.changes {
@@ -627,7 +638,7 @@ impl SQLite3 {
             }
 
             tx.commit().or_else(|err| Error::new_query_error(err, query, params))?;
-            Records::new(col_buf, n_rows, Rc::new(columns))
+            Records::new(col_buf.finish(columns.len()), n_rows, Rc::new(columns))
         };
 
         // Pack the result into a msgpack
@@ -1199,16 +1210,20 @@ JOIN main.pragma_table_info("table_name") p"#,
 
         let column_origins = column_origin(
             unsafe { self.con.handle() },
-            // \n is to handle comments, e.g. customQuery = "SELECT ... FROM ... -- comments"
+            // \n is to handle line comments, e.g. query = "SELECT a FROM b -- comments"
             &format!("SELECT * FROM ({query}\n) LIMIT 0"),
         )
         .unwrap_or_default();
 
-        let stmt = format!("SELECT * FROM ({query}\n) LIMIT 0");
-        let column_names = self
+        let stmt_str = format!("SELECT * FROM ({query}\n) LIMIT 0");
+        let mut stmt = self
             .con
-            .prepare(&stmt)
-            .or_else(|err| Error::new_query_error(err, &stmt, &[]))?
+            .prepare(&stmt_str)
+            .or_else(|err| Error::new_query_error(err, &stmt_str, &[]))?;
+
+        // NOTE: We need to call `stmt.column_names()` after `.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53)
+        let _ = stmt.raw_query().next();
+        let column_names = stmt
             .column_names()
             .into_iter()
             .map(|v| v.to_owned())

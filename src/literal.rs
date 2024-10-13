@@ -22,7 +22,7 @@ impl<'de> Deserialize<'de> for Blob {
     {
         struct MyBlobVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for MyBlobVisitor {
+        impl serde::de::Visitor<'_> for MyBlobVisitor {
             type Value = Blob;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

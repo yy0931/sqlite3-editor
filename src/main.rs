@@ -6,6 +6,7 @@ use std::{
     str::FromStr,
     sync::{Arc, Mutex},
 };
+mod columnar_buffer;
 mod completion;
 #[cfg(test)]
 mod completion_test;

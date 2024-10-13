@@ -65,6 +65,7 @@ pub fn export_csv<W: Write>(
         Error::new_other_error("The delimiter needs to be a single character.", None, None)?;
     }
 
+    // TODO: `stmt.column_count()` and `stmt.column_names()` should be called after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53).
     let column_count = stmt.column_count();
     let column_names = stmt
         .column_names()
@@ -112,6 +113,7 @@ pub fn export_json<W: Write>(
         .prepare(query)
         .or_else(|err| Error::new_query_error(err, query, &[]))?;
 
+    // TODO: `stmt.column_names()` should be called after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53).
     let column_names = stmt
         .column_names()
         .into_iter()
@@ -273,6 +275,7 @@ fn write_table_data(
         .prepare(query)
         .or_else(|err| Error::new_query_error(err, query, &[]))?;
 
+    // TODO: `stmt.column_count()` and `stmt.column_names()` should be called after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53).
     let column_count = stmt.column_count();
     let column_names = stmt
         .column_names()

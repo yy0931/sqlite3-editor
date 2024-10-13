@@ -1,6 +1,7 @@
 use std::{rc::Rc, time::Duration};
 
 use crate::{
+    columnar_buffer::ColumnarBuffer,
     error::Error,
     literal::Literal,
     sqlite3::{write_value_ref_into_msgpack, InvalidUTF8},
@@ -141,9 +142,9 @@ impl Pager {
         params[len - 1] = Literal::I64(offset_with_margin.try_into().unwrap());
 
         // Forward run: Fetch the queried area and cache records after that
-        let mut col_buf: Vec<Vec<u8>>;
-        let mut n_rows: u32 = 0;
+        let mut col_buf = ColumnarBuffer::default();
         let columns: Vec<String>;
+        let mut n_rows: u32 = 0;
         let mut end_margin_size = 0;
         {
             // Prepare
@@ -157,16 +158,7 @@ impl Pager {
                     .or_else(|err| Error::new_query_error(err, query, &params))?;
             }
 
-            // List columns
-            columns = stmt
-                .column_names()
-                .into_iter()
-                .map(|v| v.to_owned())
-                .collect::<Vec<_>>();
-            col_buf = vec![vec![]; columns.len()];
-
             let cache_size_prev = cache_entry.total_size_bytes();
-            cache_entry.set_columns_if_not_set_yet(columns.clone());
 
             // Fetch records
             let mut current_offset = offset_with_margin;
@@ -201,15 +193,23 @@ impl Pager {
                         }
 
                         let mut cache_record = vec![];
-                        for (i, col_buf_i) in col_buf.iter_mut().enumerate() {
-                            let mut w = vec![];
-                            write_value_ref_into_msgpack(&mut w, row.get_ref_unwrap(i), &mut on_invalid_utf8)
-                                .expect("Failed to write msgpack");
-                            if !is_margin {
-                                col_buf_i.extend(&w);
+                        // NOTE: We need to call `stmt.column_count()` after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53),
+                        //       but since the borrow checker prevents us from calling `stmt.column_count()` while `row` is alive,
+                        //       we rely on `rusqlite::Error::InvalidColumnIndex` returned from `row.get_ref(i)` to check the number of columns.
+                        for i in 0usize..=usize::MAX {
+                            match row.get_ref(i) {
+                                Ok(value) => {
+                                    let mut w = vec![];
+                                    write_value_ref_into_msgpack(&mut w, value, &mut on_invalid_utf8)
+                                        .expect("Failed to write msgpack");
+                                    if !is_margin {
+                                        col_buf.get_column(i).extend(&w);
+                                    }
+                                    cache_record.push(w);
+                                }
+                                Err(rusqlite::Error::InvalidColumnIndex(_)) => break,
+                                Err(err) => return Error::new_query_error(err, query, &params),
                             }
-
-                            cache_record.push(w);
                         }
                         cache_entry.insert(current_offset, &cache_record);
 
@@ -227,6 +227,16 @@ impl Pager {
                     Err(err) => Error::new_query_error(err, query, &params)?,
                 }
             }
+
+            drop(rows);
+
+            // NOTE: We need to call `stmt.column_names()` after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53)
+            columns = stmt
+                .column_names()
+                .into_iter()
+                .map(|v| v.to_owned())
+                .collect::<Vec<_>>();
+            cache_entry.set_columns_if_not_set_yet(columns.clone());
         }
 
         // Backward run: cache `end_margin_size` records before the queried area
@@ -243,7 +253,7 @@ impl Pager {
                     .prepare(query)
                     .or_else(|err| Error::new_query_error(err, query, &params))?;
 
-                // Bind parameters
+                // Bind parametersnew_other_error
                 for (i, param) in params.iter().enumerate() {
                     stmt.raw_bind_parameter(i + 1, param)
                         .or_else(|err| Error::new_query_error(err, query, &params))?;
@@ -258,8 +268,18 @@ impl Pager {
                             let mut cache_record = vec![];
                             for i in 0..columns.len() {
                                 let mut w = vec![];
-                                write_value_ref_into_msgpack(&mut w, row.get_ref_unwrap(i), &mut on_invalid_utf8)
-                                    .expect("Failed to write msgpack");
+                                write_value_ref_into_msgpack(
+                                    &mut w,
+                                    row.get_ref(i).or_else(|err| {
+                                        Error::new_other_error(
+                                            format!("Error while caching backwards, possibly due to the database schema being updated during the process: {err:?}"),
+                                            Some(query.to_string()),
+                                            Some(&params),
+                                        )
+                                    })?,
+                                    &mut on_invalid_utf8,
+                                )
+                                .expect("Failed to write msgpack");
                                 cache_record.push(w);
                             }
                             cache_entry.insert(current_offset, &cache_record);
@@ -275,7 +295,11 @@ impl Pager {
             }
         }
 
-        Ok(Some(Records::new(col_buf, n_rows, Rc::new(columns))))
+        Ok(Some(Records::new(
+            col_buf.finish(columns.len()),
+            n_rows,
+            Rc::new(columns),
+        )))
     }
 }
 

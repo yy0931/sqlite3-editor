@@ -13,7 +13,7 @@ impl PagerCache {
         Self { cache: vec![] }
     }
 
-    /// Returns the cache entry that is associated to (query, params).
+    /// Returns the cache entry that is associated to (query, params[:-2]).
     /// Inserts an entry if it does not exist.
     pub(super) fn entry(&mut self, query: &str, params: &[Literal]) -> Rc<RefCell<PagerCacheEntry>> {
         let params = &params[0..(params.len() - 2)];
