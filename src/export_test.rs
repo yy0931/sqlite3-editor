@@ -109,7 +109,7 @@ fn test_invalid_delimiter() {
     )
     .unwrap_err()
     .to_string()
-    .contains("The delimiter needs to be a single character."));
+    .contains("The delimiter needs to be a single-byte character."));
 }
 
 #[test]

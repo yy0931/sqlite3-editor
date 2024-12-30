@@ -106,34 +106,16 @@ pub fn import_json(
     table_name: &str,
     input_file: Option<String>,
 ) -> std::result::Result<(), Error> {
-    use serde_json::Value;
-
-    let parsed: Vec<HashMap<String, String>> =
-        serde_json::from_reader::<_, Vec<HashMap<String, Value>>>(open_reader(input_file)?)?
-            .into_iter()
-            .map(|map| {
-                map.into_iter()
-                    .map(|(k, v)| {
-                        (
-                            k,
-                            match v {
-                                Value::String(s) => s,
-                                v => v.to_string(),
-                            },
-                        )
-                    })
-                    .collect()
-            })
-            .collect();
+    let parsed = serde_json::from_reader::<_, Vec<HashMap<String, Literal>>>(open_reader(input_file)?)?;
 
     if parsed.is_empty() {
-        Error::new_other_error("No data present.", None, None)?;
+        return Error::new_other_error("No data present.", None, None);
     }
 
     let columns = parsed.first().unwrap().keys().map(|v| v.to_owned()).collect::<Vec<_>>();
 
     if columns.is_empty() {
-        Error::new_other_error("No column headers present.", None, None)?;
+        return Error::new_other_error("No column headers present.", None, None);
     }
 
     let mut con = connect(database_filepath, sql_cipher_key)?;
@@ -145,7 +127,7 @@ pub fn import_json(
         escape_sql_identifier(table_name),
         columns
             .iter()
-            .map(|v| format!("{} TEXT", escape_sql_identifier(v)))
+            .map(|v| escape_sql_identifier(v))
             .collect::<Vec<_>>()
             .join(", ")
     );
@@ -165,23 +147,25 @@ pub fn import_json(
         let mut insert = tx
             .prepare(&stmt)
             .or_else(|err| Error::new_query_error(err, &stmt, &[]))?;
-        for record in &parsed {
-            let values = columns.iter().map(|column| record.get(column)).collect::<Vec<_>>();
+        for (record_id, record) in parsed.iter().enumerate() {
+            let mut values = Vec::<&Literal>::new();
+            for column in &columns {
+                let Some(value) = record.get(column) else {
+                    return Error::new_other_error(
+                        format!("The row {} does not have the column '{column}'.", record_id + 1),
+                        None,
+                        None,
+                    );
+                };
+                values.push(value);
+            }
             for (i, value) in values.iter().enumerate() {
                 insert.raw_bind_parameter(i + 1, value).or_else(|err| {
-                    Error::new_query_error(
-                        err,
-                        &stmt,
-                        &values.iter().map(|v| (*v).into()).collect::<Vec<Literal>>(),
-                    )
+                    Error::new_query_error(err, &stmt, &values.iter().map(|&v| v.clone()).collect::<Vec<Literal>>())
                 })?;
             }
             insert.raw_execute().or_else(|err| {
-                Error::new_query_error(
-                    err,
-                    &stmt,
-                    &values.iter().map(|v| (*v).into()).collect::<Vec<Literal>>(),
-                )
+                Error::new_query_error(err, &stmt, &values.iter().map(|&v| v.clone()).collect::<Vec<Literal>>())
             })?;
         }
     }

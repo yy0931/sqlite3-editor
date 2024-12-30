@@ -61,8 +61,8 @@ pub fn export_csv<W: Write>(
         .prepare(query)
         .or_else(|err| Error::new_query_error(err, query, &[]))?;
 
-    if options.delimiter.as_bytes().len() != 1 {
-        Error::new_other_error("The delimiter needs to be a single character.", None, None)?;
+    if options.delimiter.len() != 1 {
+        Error::new_other_error("The delimiter needs to be a single-byte character.", None, None)?;
     }
 
     // TODO: `stmt.column_count()` and `stmt.column_names()` should be called after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53).

@@ -128,7 +128,11 @@ fn test_import_json() {
     let tmp_json_file_path = tmp_json_file.path().to_str().unwrap().to_owned();
 
     // Write a sample JSON file to import.
-    fs::write(&tmp_json_file, r#"[{"name":"Alice","age":20},{"name":"Bob","age":25}]"#).unwrap();
+    fs::write(
+        &tmp_json_file,
+        r#"[{"name":"Alice","age":20,"optional":null},{"name":"Bob","age":25,"optional":0}]"#,
+    )
+    .unwrap();
 
     // Import the JSON file.
     assert!(import::import_json(tmp_db_filepath, &None, "test", Some(tmp_json_file_path)).is_ok());
@@ -137,9 +141,15 @@ fn test_import_json() {
     let result = serde_json::to_string(
         &rusqlite::Connection::open(tmp_db_filepath)
             .unwrap()
-            .prepare("SELECT * FROM test")
+            .prepare("SELECT name, age, optional FROM test")
             .unwrap()
-            .query_map([], |row| Ok((get_string(row, 0, |_| {})?, get_string(row, 1, |_| {})?)))
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i32>(1)?,
+                    row.get::<_, Option<i32>>(2)?,
+                ))
+            })
             .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap(),
@@ -147,7 +157,7 @@ fn test_import_json() {
     .unwrap();
 
     // key orders are not maintained
-    assert!(result == r#"[["Alice","20"],["Bob","25"]]"# || result == r#"[["20","Alice"],["25","Bob"]]"#);
+    assert_eq!(result, r#"[["Alice",20,null],["Bob",25,0]]"#);
 }
 
 #[test]
