@@ -93,6 +93,8 @@ jobs:
             vsce_target: linux-arm64-musl
           - target: armv7-unknown-linux-gnueabihf
             vsce_target: linux-arm-gnu
+          - target: arm-unknown-linux-musleabi
+            vsce_target: linux-arm-musl
     steps:
       - uses: actions/checkout@v1
       - uses: dtolnay/rust-toolchain@stable

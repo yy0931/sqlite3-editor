@@ -1,4 +1,5 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sqlparser::tokenizer::{Location, TokenizerError};
 
@@ -8,18 +9,14 @@ use crate::{
     tokenize::ZeroIndexedLocation,
 };
 
-lazy_static! {
-    static ref PRAGMA: regex::Regex = regex::Regex::new(r"(?i)(?s).*\bPRAGMA[^_a-zA-Z0-9]").unwrap();
-    static ref QUERY: regex::Regex = regex::Regex::new(r"(?i)(?s).*\bQUERY[^_a-zA-Z0-9]").unwrap();
-    static ref EXPLAIN: regex::Regex = regex::Regex::new(r"(?i)(?s).*\bEXPLAIN[^_a-zA-Z0-9]").unwrap();
-}
+static PRAGMA: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)(?s).*\bPRAGMA[^_a-zA-Z0-9]").unwrap());
+static QUERY: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)(?s).*\bQUERY[^_a-zA-Z0-9]").unwrap());
+static EXPLAIN: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)(?s).*\bEXPLAIN[^_a-zA-Z0-9]").unwrap());
 
-lazy_static! {
-    static ref SQL_INPUT_ERROR_SYNTAX_ERROR: regex::Regex =
-        regex::Regex::new(r#"(?i)(?s)^(?:near .*: syntax error|unrecognized token:|incomplete input)"#).unwrap();
-    static ref SQLITE_FAILURE_SYNTAX_ERROR: regex::Regex =
-        regex::Regex::new(r#"(?i)(?s)^(?:unknown table option)"#).unwrap();
-}
+static SQL_INPUT_ERROR_SYNTAX_ERROR: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"(?i)(?s)^(?:near .*: syntax error|unrecognized token:|incomplete input)"#).unwrap());
+static SQLITE_FAILURE_SYNTAX_ERROR: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"(?i)(?s)^(?:unknown table option)"#).unwrap());
 
 #[derive(ts_rs::TS, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 #[ts(export)]

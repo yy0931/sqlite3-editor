@@ -1,4 +1,4 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sqlparser::{
     dialect::SQLiteDialect,
@@ -33,12 +33,11 @@ pub struct SemanticHighlight {
     pub end: ZeroIndexedLocation,
 }
 
-lazy_static! {
-    static ref HEXADECIMAL_NUMERIC_LITERAL: regex::Regex = regex::Regex::new(r#"^\d+(_\d+)*$"#).unwrap();
-    static ref NUMERIC_LITERAL_CONTINUATION: regex::Regex =
-        regex::Regex::new(r#"^(_\d+)+([eE](\d+(_\d+)*)?)?$"#).unwrap();
-    static ref HEXADECIMAL_LITERAL_CONTINUATION: regex::Regex = regex::Regex::new(r#"^X\d+(_\d+)*$"#).unwrap();
-}
+static HEXADECIMAL_NUMERIC_LITERAL: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r#"^\d+(_\d+)*$"#).unwrap());
+static NUMERIC_LITERAL_CONTINUATION: Lazy<regex::Regex> =
+    Lazy::new(|| regex::Regex::new(r#"^(_\d+)+([eE](\d+(_\d+)*)?)?$"#).unwrap());
+static HEXADECIMAL_LITERAL_CONTINUATION: Lazy<regex::Regex> =
+    Lazy::new(|| regex::Regex::new(r#"^X\d+(_\d+)*$"#).unwrap());
 
 /// Tokenizes the given SQL input string and returns the tokens with highlighting information.
 pub fn semantic_highlight(sql: &str) -> Vec<SemanticHighlight> {

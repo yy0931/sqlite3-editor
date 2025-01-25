@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
-lazy_static! {
-    pub static ref START_OF_STATEMENT_KEYWORDS_UNSUPPORTED_BY_SQLPARSER: HashSet<&'static str> =
-        HashSet::from(["VACUUM", "ATTACH", "DETACH", "PRAGMA", "REINDEX"]);
-    pub static ref KEYWORDS_UNSUPPORTED_BY_SQLPARSER: HashSet<&'static str> = HashSet::from([
+pub static START_OF_STATEMENT_KEYWORDS_UNSUPPORTED_BY_SQLPARSER: Lazy<HashSet<&'static str>> =
+    Lazy::new(|| HashSet::from(["VACUUM", "ATTACH", "DETACH", "PRAGMA", "REINDEX"]));
+pub static KEYWORDS_UNSUPPORTED_BY_SQLPARSER: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    HashSet::from([
         "AFTER",
         "ATTACH",
         "BEFORE",
@@ -26,5 +26,5 @@ lazy_static! {
         "RAISE",
         "REGEXP",
         "REINDEX",
-    ]);
-}
+    ])
+});

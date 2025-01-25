@@ -4,7 +4,7 @@ use crate::{
     util::into,
 };
 use base64::{engine::general_purpose, Engine as _};
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use rusqlite::{types::ValueRef, Connection};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, io::Write};
@@ -171,9 +171,7 @@ pub struct XLSXExportOptions {
     pub active_sheet: Option<String>,
 }
 
-lazy_static! {
-    static ref INVALID_SHEET_NAME_PATTERN: regex::Regex = regex::Regex::new(r"[*?:\[\]\\/]|^'|'$").unwrap();
-}
+static INVALID_SHEET_NAME_PATTERN: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"[*?:\[\]\\/]|^'|'$").unwrap());
 
 /// - Integer values between i32::MIN and i32::MAX are encoded as i32. Values outside this range are rounded to the nearest f64 values because Excel does not support 64-bit integers.
 /// - NULL is encoded as an empty string.

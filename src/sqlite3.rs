@@ -9,7 +9,7 @@ use crate::{
     literal::Literal,
     request_type::QueryMode,
 };
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use rusqlite::{functions::FunctionFlags, types::ValueRef, InterruptHandle, Row};
 use serde::{Deserialize, Serialize};
 
@@ -100,10 +100,8 @@ pub struct SQLite3 {
     pub database_label: String,
 }
 
-lazy_static! {
-    static ref NON_READONLY_SQL_PATTERN: regex::Regex =
-        regex::Regex::new(r"(?i)^\s*(INSERT|DELETE|UPDATE|CREATE|DROP|ALTER\s+TABLE)\b").unwrap();
-}
+static NON_READONLY_SQL_PATTERN: Lazy<regex::Regex> =
+    Lazy::new(|| regex::Regex::new(r"(?i)^\s*(INSERT|DELETE|UPDATE|CREATE|DROP|ALTER\s+TABLE)\b").unwrap());
 
 #[derive(ts_rs::TS, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[ts(export)]

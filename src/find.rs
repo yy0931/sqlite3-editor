@@ -1,14 +1,14 @@
 use std::sync::{Arc, Mutex};
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use rusqlite::types::ValueRef;
 
-lazy_static! {
-    static ref REGEX_CACHE: Arc<Mutex<(String, regex::Regex)>> = Arc::new(Mutex::<(String, regex::Regex)>::new((
+static REGEX_CACHE: Lazy<Arc<Mutex<(String, regex::Regex)>>> = Lazy::new(|| {
+    Arc::new(Mutex::<(String, regex::Regex)>::new((
         "".to_owned(),
         regex::Regex::new("").unwrap(),
-    )));
-}
+    )))
+});
 
 #[inline]
 fn get_find_widget_input(ctx: &rusqlite::functions::Context) -> String {

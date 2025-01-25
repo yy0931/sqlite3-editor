@@ -1,4 +1,4 @@
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sqlparser::{
     keywords::Keyword,
@@ -10,10 +10,7 @@ use crate::{
     tokenize::{TokenWithRangeLocation, ZeroIndexedLocation},
 };
 
-lazy_static! {
-    static ref QUESTION_NUMBER: regex::Regex = regex::Regex::new(r"^\?\d+$").unwrap();
-    static ref NUMBER: regex::Regex = regex::Regex::new(r"^.+$").unwrap();
-}
+static QUESTION_NUMBER: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"^\?\d+$").unwrap());
 
 #[derive(ts_rs::TS, Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[ts(export)]
