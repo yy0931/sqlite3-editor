@@ -1,6 +1,7 @@
 use crate::{
-    code_lens::{code_lens, CodeLens, CodeLensKind},
+    code_lens::{code_lens, get_table_to_be_focused, CodeLens, CodeLensKind, TableToBeFocused},
     list_placeholders::{Placeholder, PlaceholderRange},
+    split_statements::split_sqlite_statements,
     tokenize::ZeroIndexedLocation,
 };
 
@@ -16,6 +17,7 @@ fn test_select() {
                 stmt_executed: "SELECT 1;".to_owned(),
                 cte_identifier: None,
                 placeholders: vec![],
+                table_to_be_focused: None,
             },
             CodeLens {
                 kind: CodeLensKind::Select,
@@ -24,6 +26,7 @@ fn test_select() {
                 stmt_executed: "SELECT 2;".to_owned(),
                 cte_identifier: None,
                 placeholders: vec![],
+                table_to_be_focused: None,
             },
             CodeLens {
                 kind: CodeLensKind::Select,
@@ -32,6 +35,7 @@ fn test_select() {
                 stmt_executed: "VALUES(3);".to_owned(),
                 cte_identifier: None,
                 placeholders: vec![],
+                table_to_be_focused: None,
             },
         ]
     );
@@ -49,6 +53,7 @@ fn test_with_clause() {
                 stmt_executed: "WITH a AS (SELECT 1) SELECT * FROM `a`".to_owned(),
                 cte_identifier: Some("`a`".to_owned()),
                 placeholders: vec![],
+                table_to_be_focused: None,
             },
             CodeLens {
                 kind: CodeLensKind::Select,
@@ -57,6 +62,7 @@ fn test_with_clause() {
                 stmt_executed: "WITH a AS (SELECT 1) SELECT 2;".to_owned(),
                 cte_identifier: None,
                 placeholders: vec![],
+                table_to_be_focused: None,
             },
         ]
     );
@@ -79,6 +85,7 @@ fn test_other() {
                 stmt_executed: "DROP TABLE t;".to_owned(),
                 cte_identifier: None,
                 placeholders: vec![],
+                table_to_be_focused: None,
             },
             CodeLens {
                 kind: CodeLensKind::Other,
@@ -87,6 +94,7 @@ fn test_other() {
                 stmt_executed: "ATTACH 'db' as db".to_owned(),
                 cte_identifier: None,
                 placeholders: vec![],
+                table_to_be_focused: None,
             }
         ]
     );
@@ -103,6 +111,7 @@ fn test_begin_end() {
             stmt_executed: "BEGIN; SELECT 1; SELECT 2; END;".to_owned(),
             cte_identifier: None,
             placeholders: vec![],
+            table_to_be_focused: None,
         }]
     );
 }
@@ -118,6 +127,7 @@ fn test_pragma() {
             stmt_executed: "PRAGMA analysis_limit;".to_owned(),
             cte_identifier: None,
             placeholders: vec![],
+            table_to_be_focused: None,
         }]
     );
 }
@@ -133,6 +143,7 @@ fn test_vacuum() {
             stmt_executed: "VACUUM;".to_owned(),
             cte_identifier: None,
             placeholders: vec![],
+            table_to_be_focused: None,
         }]
     );
 }
@@ -149,6 +160,7 @@ fn test_with_update() {
                 stmt_executed: "WITH x AS (SELECT 1) SELECT * FROM `x`".to_owned(),
                 cte_identifier: Some("`x`".to_owned()),
                 placeholders: vec![],
+                table_to_be_focused: None,
             },
             CodeLens {
                 kind: CodeLensKind::Other,
@@ -157,6 +169,10 @@ fn test_with_update() {
                 stmt_executed: "WITH x AS (SELECT 1) UPDATE t SET a = 1;".to_owned(),
                 cte_identifier: None,
                 placeholders: vec![],
+                table_to_be_focused: Some(TableToBeFocused {
+                    schema: None,
+                    table: "t".to_owned()
+                }),
             }
         ]
     );
@@ -188,7 +204,8 @@ fn test_placeholders() {
                     }]
                 }
             ],
-        },]
+            table_to_be_focused: None,
+        }]
     );
 }
 
@@ -218,6 +235,88 @@ fn test_placeholders_with_prefix() {
                     }]
                 }
             ],
-        },]
+            table_to_be_focused: None,
+        }]
+    );
+}
+
+#[test]
+fn test_get_table_to_be_focused_create_table() {
+    assert_eq!(
+        get_table_to_be_focused(&split_sqlite_statements("CREATE TABLE table1").unwrap().0[0].real_tokens),
+        Some(TableToBeFocused {
+            schema: None,
+            table: "table1".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn test_get_table_to_be_focused_insert_into() {
+    assert_eq!(
+        get_table_to_be_focused(&split_sqlite_statements("INSERT INTO table1").unwrap().0[0].real_tokens),
+        Some(TableToBeFocused {
+            schema: None,
+            table: "table1".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn test_get_table_to_be_focused_insert_into_2() {
+    assert_eq!(
+        get_table_to_be_focused(&split_sqlite_statements("INSERT INTO \"table1\"").unwrap().0[0].real_tokens),
+        Some(TableToBeFocused {
+            schema: None,
+            table: "table1".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn test_get_table_to_be_focused_insert_into_3() {
+    assert_eq!(
+        get_table_to_be_focused(&split_sqlite_statements("INSERT INTO \"table 1\"").unwrap().0[0].real_tokens),
+        Some(TableToBeFocused {
+            schema: None,
+            table: "table 1".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn test_get_table_to_be_focused_insert_schema() {
+    assert_eq!(
+        get_table_to_be_focused(&split_sqlite_statements("INSERT INTO schema1.table1").unwrap().0[0].real_tokens),
+        Some(TableToBeFocused {
+            schema: Some("schema1".to_owned()),
+            table: "table1".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn test_get_table_to_be_focused_create_table_schema() {
+    assert_eq!(
+        get_table_to_be_focused(&split_sqlite_statements("CREATE TABLE schema1.table1").unwrap().0[0].real_tokens),
+        Some(TableToBeFocused {
+            schema: Some("schema1".to_owned()),
+            table: "table1".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn test_get_table_to_be_focused_create_trigger() {
+    assert_eq!(
+        get_table_to_be_focused(
+            &split_sqlite_statements(
+                "CREATE TRIGGER trigger_insert AFTER INSERT ON t INSERT INTO table1 VALUES (1); END"
+            )
+            .unwrap()
+            .0[0]
+                .real_tokens
+        ),
+        None
     );
 }

@@ -41,7 +41,7 @@ jobs:
           rustup target add ${{ matrix.target }}
           cargo build --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/sqlite3-editor.exe sqlite3-editor-${{ matrix.vsce_target }}.exe
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: artifact-${{ matrix.vsce_target }}.exe
           path: sqlite3-editor-${{ matrix.vsce_target }}.exe
@@ -72,7 +72,7 @@ jobs:
       - name: Test
         run: target/${{ matrix.target }}/release/sqlite3-editor.exe version
         if: ${{ matrix.target == 'x86_64-win7-windows-msvc' }}
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: artifact-${{ matrix.vsce_target }}.exe
           path: sqlite3-editor-${{ matrix.vsce_target }}.exe
@@ -113,7 +113,7 @@ jobs:
           cross build --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/sqlite3-editor sqlite3-editor-${{ matrix.vsce_target }}
         shell: bash
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: artifact-${{ matrix.vsce_target }}
           path: sqlite3-editor-${{ matrix.vsce_target }}
@@ -140,7 +140,7 @@ jobs:
           cargo build --release --features sqlite --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/sqlite3-editor sqlite3-editor-${{ matrix.vsce_target }}
         shell: bash
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: artifact-${{ matrix.vsce_target }}
           path: sqlite3-editor-${{ matrix.vsce_target }}
@@ -155,7 +155,7 @@ jobs:
       - test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
       - run: |
           for i in ./artifact-*/*
             do cp -r "$i" .
