@@ -3,7 +3,6 @@ use std::{
     fs::File,
     io::{BufRead, Read, Seek, SeekFrom, Write},
     path::PathBuf,
-    str::FromStr,
     sync::{Arc, Mutex},
 };
 mod columnar_buffer;
@@ -80,27 +79,36 @@ struct Args {
     command: Commands,
 }
 
-#[derive(clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
+#[derive(ts_rs::TS, clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
+#[ts(export)]
 pub enum ImportFormat {
     #[clap(name = "csv")]
+    #[ts(rename = "csv")]
     CSV,
     #[clap(name = "tsv")]
+    #[ts(rename = "tsv")]
     TSV,
     #[clap(name = "json")]
+    #[ts(rename = "json")]
     JSON,
 }
 
-#[derive(clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
+#[derive(ts_rs::TS, clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
+#[ts(export)]
 pub enum ExportFormat {
     #[clap(name = "csv")]
+    #[ts(rename = "csv")]
     CSV,
     #[clap(name = "json")]
+    #[ts(rename = "json")]
     JSON,
     #[clap(name = "xlsx")]
+    #[ts(rename = "xlsx")]
     XLSX,
 }
 
-#[derive(Subcommand)]
+#[derive(ts_rs::TS, Subcommand)]
+#[ts(export, rename_all = "kebab-case")]
 enum Commands {
     Version {},
     FunctionList {},
@@ -158,6 +166,13 @@ enum Commands {
         #[arg(long)]
         sql_cipher_key: Option<String>,
     },
+    CopyFile {
+        #[arg(long, required = true)]
+        src: PathBuf,
+
+        #[arg(long, required = true)]
+        dst: PathBuf,
+    },
 }
 
 /// Structure representing a database query
@@ -191,33 +206,20 @@ impl From<(String, i64, i64)> for CompletionQuery {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(ts_rs::TS, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
 enum ServerCommand {
     Interrupt,
     Close,
     TryReconnect,
+    DisconnectTemporarily,
+    Resume,
     Handle,
     SemanticHighlight,
     CodeLens,
     CheckSyntax,
     Completion,
-}
-
-impl FromStr for ServerCommand {
-    type Err = ();
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s.trim() {
-            "interrupt" => Self::Interrupt,
-            "close" => Self::Close,
-            "try_reconnect" => Self::TryReconnect,
-            "handle" => Self::Handle,
-            "semantic_highlight" => Self::SemanticHighlight,
-            "code_lens" => Self::CodeLens,
-            "check_syntax" => Self::CheckSyntax,
-            "completion" => Self::Completion,
-            _ => return Err(()),
-        })
-    }
 }
 
 fn cli<F, I, O, E>(args: Args, stdin: F, mut stdout: &mut O, mut stderr: &mut E) -> i32
@@ -299,6 +301,7 @@ where
             };
 
             let (command_sender, command_receiver) = std::sync::mpsc::channel::<ServerCommand>();
+            let (resume_command_sender, resume_command_receiver) = std::sync::mpsc::channel::<()>();
             let interrupt_handle = Arc::new(Mutex::new(db.get_interrupt_handle()));
             let _thread = {
                 let interrupt_handle = Arc::clone(&interrupt_handle);
@@ -311,9 +314,15 @@ where
                             Ok(0) => return,
                             _ => {}
                         }
-                        match command_str.parse::<ServerCommand>() {
+
+                        match ServerCommand::deserialize(
+                            serde::de::value::StrDeserializer::<serde::de::value::Error>::new(command_str.trim()),
+                        ) {
                             Ok(ServerCommand::Interrupt) => {
                                 interrupt_handle.lock().unwrap().interrupt();
+                            }
+                            Ok(ServerCommand::Resume) => {
+                                resume_command_sender.send(()).unwrap();
                             }
                             Ok(command) => {
                                 if command_sender.send(command).is_err() {
@@ -384,6 +393,30 @@ where
                                 w.truncate_all();
                                 write!(w, "{err}").expect("Failed to write an error message.");
                                 finish(&mut stdout, &mut w, err.code());
+                            }
+                        }
+                    }
+
+                    ServerCommand::DisconnectTemporarily => {
+                        drop(db);
+
+                        if resume_command_receiver.recv().is_err() {
+                            return 0;
+                        }
+
+                        match sqlite3::SQLite3::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
+                            Ok(new_db) => {
+                                db = new_db;
+
+                                *interrupt_handle.lock().unwrap() = db.get_interrupt_handle();
+                                write_named(&mut w, &None::<&i64>).expect("Failed to write the result.");
+                                finish(&mut stdout, &mut w, error::ErrorCode::Success);
+                            }
+                            Err(err) => {
+                                w.truncate_all();
+                                write!(w, "{err}").expect("Failed to write an error message.");
+                                finish(&mut stdout, &mut w, err.code());
+                                return 1;
                             }
                         }
                     }
@@ -566,6 +599,22 @@ where
                 ImportFormat::JSON => import::import_json(&database_filepath, &sql_cipher_key, &table_name, input_file),
             } {
                 writeln!(&mut stderr, "{err}").expect("writeln! failed.");
+                return 1;
+            }
+        }
+        Commands::CopyFile { src, dst } => {
+            // Read
+            let data = match std::fs::read(&src) {
+                Err(err) => {
+                    writeln!(&mut stderr, "Failed to read {src:?}: {err}").unwrap();
+                    return 1;
+                }
+                Ok(data) => data,
+            };
+
+            // Write
+            if let Err(err) = std::fs::write(&dst, data) {
+                writeln!(&mut stderr, "Failed to write {src:?}: {err}").unwrap();
                 return 1;
             }
         }
