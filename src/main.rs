@@ -209,7 +209,7 @@ impl From<(String, i64, i64)> for CompletionQuery {
 #[derive(ts_rs::TS, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, rename_all = "snake_case")]
-enum ServerCommand {
+pub enum ServerCommand {
     Interrupt,
     Close,
     TryReconnect,
@@ -222,10 +222,33 @@ enum ServerCommand {
     Completion,
 }
 
+pub trait ReadCommand {
+    fn read_command(&mut self) -> Option<ServerCommand>;
+}
+
+impl<T: Read + BufRead> ReadCommand for T {
+    fn read_command(&mut self) -> Option<ServerCommand> {
+        loop {
+            let mut command_str = String::new();
+            match self.read_line(&mut command_str) {
+                Err(_) => return None,
+                Ok(0) => return None,
+                _ => {}
+            }
+
+            if let Ok(command) = ServerCommand::deserialize(
+                serde::de::value::StrDeserializer::<serde::de::value::Error>::new(command_str.trim()),
+            ) {
+                return Some(command);
+            }
+        }
+    }
+}
+
 fn cli<F, I, O, E>(args: Args, stdin: F, mut stdout: &mut O, mut stderr: &mut E) -> i32
 where
-    F: Fn() -> I + std::marker::Send + 'static,
-    I: Read + BufRead,
+    F: FnOnce() -> I + std::marker::Send + 'static,
+    I: ReadCommand,
     O: Write,
     E: Write,
 {
@@ -308,28 +331,19 @@ where
                 std::thread::spawn(move || {
                     let mut stdin = stdin();
                     loop {
-                        let mut command_str = String::new();
-                        match stdin.read_line(&mut command_str) {
-                            Err(_) => return,
-                            Ok(0) => return,
-                            _ => {}
-                        }
-
-                        match ServerCommand::deserialize(
-                            serde::de::value::StrDeserializer::<serde::de::value::Error>::new(command_str.trim()),
-                        ) {
-                            Ok(ServerCommand::Interrupt) => {
+                        match stdin.read_command() {
+                            Some(ServerCommand::Interrupt) => {
                                 interrupt_handle.lock().unwrap().interrupt();
                             }
-                            Ok(ServerCommand::Resume) => {
+                            Some(ServerCommand::Resume) => {
                                 resume_command_sender.send(()).unwrap();
                             }
-                            Ok(command) => {
+                            Some(command) => {
                                 if command_sender.send(command).is_err() {
                                     return;
                                 }
                             }
-                            _ => {}
+                            None => return,
                         }
                     }
                 })
@@ -400,6 +414,10 @@ where
                     ServerCommand::DisconnectTemporarily => {
                         drop(db);
 
+                        // Send the response to DisconnectTemporarily
+                        write_named(&mut w, &None::<&i64>).expect("Failed to write the result.");
+                        finish(&mut stdout, &mut w, error::ErrorCode::Success);
+
                         if resume_command_receiver.recv().is_err() {
                             return 0;
                         }
@@ -407,8 +425,9 @@ where
                         match sqlite3::SQLite3::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
                             Ok(new_db) => {
                                 db = new_db;
-
                                 *interrupt_handle.lock().unwrap() = db.get_interrupt_handle();
+
+                                // Send the response to Resume
                                 write_named(&mut w, &None::<&i64>).expect("Failed to write the result.");
                                 finish(&mut stdout, &mut w, error::ErrorCode::Success);
                             }

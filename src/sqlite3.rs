@@ -22,6 +22,22 @@ use std::{
     time::Duration,
 };
 
+struct SendSqliteHandle(*mut rusqlite::ffi::sqlite3);
+
+impl SendSqliteHandle {
+    #[cfg(feature = "sqlcipher")]
+    fn is_interrupted(&self) -> bool {
+        false // sqlite3_is_interrupted() is not defined under feature="sqlcipher".
+    }
+
+    #[cfg(not(feature = "sqlcipher"))]
+    fn is_interrupted(&self) -> bool {
+        unsafe { rusqlite::ffi::sqlite3_is_interrupted(self.0) != 0 }
+    }
+}
+
+unsafe impl Send for SendSqliteHandle {}
+
 #[derive(Debug, Clone)]
 struct StringError(String);
 
@@ -1373,9 +1389,22 @@ JOIN main.pragma_table_info("table_name") p"#,
                 write_editor_pragma(w, (self.load_extensions(&extensions)?, vec![]), start_time)
             }
             "EDITOR_PRAGMA add_sleep_fn" => {
+                let handle = SendSqliteHandle(unsafe { self.con.handle() });
                 self.con
-                    .create_scalar_function("sleep", 1, FunctionFlags::SQLITE_UTF8, |ms| {
-                        std::thread::sleep(Duration::from_millis(ms.get(0)?));
+                    .create_scalar_function("sleep", 1, FunctionFlags::SQLITE_UTF8, move |ms| {
+                        let total_duration = Duration::from_millis(ms.get::<i64>(0)? as u64);
+                        let start = std::time::Instant::now();
+                        while start.elapsed() < total_duration {
+                            std::thread::sleep(Duration::from_millis(1));
+
+                            // Support sqlite3_interrupt()
+                            if handle.is_interrupted() {
+                                return Err(rusqlite::Error::SqliteFailure(
+                                    rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_INTERRUPT),
+                                    Some("interrupted".to_owned()),
+                                ));
+                            }
+                        }
                         Ok(0)
                     })
                     .unwrap();
