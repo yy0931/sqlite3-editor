@@ -133,7 +133,7 @@ impl DotCommand {
             .collect::<String>();
         let value = closed.then_some(literal.clone());
         let literal = if closed {
-            format!("'{}'", literal)
+            format!("'{literal}'")
         } else {
             text.to_owned()
         };
@@ -227,7 +227,7 @@ impl DotCommand {
             .collect::<String>();
 
         let literal = if closed {
-            format!("\"{}\"", literal)
+            format!("\"{literal}\"")
         } else {
             text.to_owned()
         };

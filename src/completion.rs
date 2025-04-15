@@ -232,6 +232,7 @@ pub enum TokenType {
     Other,
 
     // Start of the statement
+    #[serde(rename = "^")]
     StartOfStatement,
 }
 

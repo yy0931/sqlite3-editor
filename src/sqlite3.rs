@@ -88,7 +88,7 @@ pub fn get_string<F: FnMut(InvalidUTF8)>(row: &Row, idx: usize, on_invalid_utf8:
         value => Err(rusqlite::Error::FromSqlConversionFailure(
             idx,
             value.data_type(),
-            Box::new(StringError(format!("Expected Text but got {:?}.", value))),
+            Box::new(StringError(format!("Expected Text but got {value:?}."))),
         )),
     }
 }
@@ -105,7 +105,7 @@ pub fn get_option_string<F: FnMut(InvalidUTF8)>(
         value => Err(rusqlite::Error::FromSqlConversionFailure(
             idx,
             value.data_type(),
-            Box::new(StringError(format!("Expected Text but got {:?}.", value))),
+            Box::new(StringError(format!("Expected Text but got {value:?}."))),
         )),
     }
 }
@@ -651,7 +651,14 @@ impl SQLite3 {
                 }
             }
 
-            tx.commit().or_else(|err| Error::new_query_error(err, query, params))?;
+            // don't commit on readonly connections
+            if read_only == ExecMode::ReadOnly {
+                tx.rollback()
+            } else {
+                tx.commit()
+            }
+            .or_else(|err| Error::new_query_error(err, query, params))?;
+
             Records::new(col_buf.finish(columns.len()), n_rows, Rc::new(columns))
         };
 

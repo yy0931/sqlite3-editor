@@ -102,9 +102,9 @@ impl Error {
 
     fn format_query(query: &str) -> String {
         if let Some(query_stripped) = query.strip_prefix("EDITOR_PRAGMA ") {
-            format!("Method: {}", query_stripped)
+            format!("Method: {query_stripped}")
         } else {
-            format!("Query: {}", query)
+            format!("Query: {query}")
         }
     }
 
@@ -128,8 +128,7 @@ impl std::fmt::Display for Error {
             } => {
                 write!(
                     f,
-                    "{}\n{}\nParameters: {}",
-                    message,
+                    "{message}\n{}\nParameters: {}",
                     Self::format_query(query),
                     Self::format_params(params)
                 )
@@ -141,9 +140,7 @@ impl std::fmt::Display for Error {
             } => {
                 write!(
                     f,
-                    "{}\nFunction: {}\nParameters: {}",
-                    message,
-                    function_name,
+                    "{message}\nFunction: {function_name}\nParameters: {}",
                     Self::format_params(params)
                 )
             }
@@ -163,9 +160,7 @@ impl std::fmt::Display for Error {
                 } else {
                     write!(
                         f,
-                        "Rolled back the transaction because an unexpected number of rows were modified: expected {} rows, actually modified {} rows.\n{}\nParameters: {}",
-                        expected,
-                        actual,
+                        "Rolled back the transaction because an unexpected number of rows were modified: expected {expected} rows, actually modified {actual} rows.\n{}\nParameters: {}",
                         Self::format_query(query),
                         Self::format_params(params),
                     )
@@ -191,8 +186,7 @@ impl std::fmt::Display for Error {
             Self::Other { message, query, params } => {
                 write!(
                     f,
-                    "{}{}{}",
-                    message,
+                    "{message}{}{}",
                     query
                         .as_ref()
                         .map(|query| Self::format_query(query))

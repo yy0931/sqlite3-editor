@@ -452,8 +452,7 @@ where
                                 }
                                 write!(
                                     w,
-                                    "Failed to parse the request body: {err} (content = {}, len = {})",
-                                    content,
+                                    "Failed to parse the request body: {err} (content = {content}, len = {})",
                                     r.metadata().unwrap().len()
                                 )
                                 .expect("Failed to write an error message.");
@@ -487,7 +486,7 @@ where
                                     ServerCommand::CheckSyntax => {
                                         write_named(&mut w, &check_syntax::check_syntax(&query)?)?
                                     }
-                                    _ => panic!("Unexpected command {:?}", command),
+                                    _ => panic!("Unexpected command {command:?}"),
                                 };
                                 Ok(())
                             },

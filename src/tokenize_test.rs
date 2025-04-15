@@ -9,7 +9,7 @@ fn test_tokenize() {
         tokenize_with_range_location(&SQLiteDialect {}, "CREATE TABLE t(c)")
             .unwrap()
             .into_iter()
-            .map(|t| format!("{:?}", t))
+            .map(|t| format!("{t:?}"))
             .collect::<Vec<_>>(),
         [
             r#"{0:0-0:6 Word(Word { value: "CREATE", quote_style: None, keyword: CREATE })}"#,
@@ -31,7 +31,7 @@ fn test_merge_whitespace() {
         tokenize_with_range_location(&SQLiteDialect {}, "SELECT   1;")
             .unwrap()
             .into_iter()
-            .map(|t| format!("{:?}", t))
+            .map(|t| format!("{t:?}"))
             .collect::<Vec<_>>(),
         [
             r#"{0:0-0:6 Word(Word { value: "SELECT", quote_style: None, keyword: SELECT })}"#,

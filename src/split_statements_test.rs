@@ -8,7 +8,7 @@ fn test_simple() {
             .unwrap()
             .0
             .into_iter()
-            .map(|t| format!("{:?}", t))
+            .map(|t| format!("{t:?}"))
             .collect::<Vec<_>>(),
         [
             r#"{
@@ -31,7 +31,7 @@ fn test_case_expression() {
             .unwrap()
             .0
             .into_iter()
-            .map(|t| format!("{:?}", t))
+            .map(|t| format!("{t:?}"))
             .collect::<Vec<_>>(),
         [
             r#"{
@@ -54,7 +54,7 @@ fn test_unmatched_end() {
             .unwrap()
             .0
             .into_iter()
-            .map(|t| format!("{:?}", t))
+            .map(|t| format!("{t:?}"))
             .collect::<Vec<_>>(),
         [
             r#"{
@@ -76,7 +76,7 @@ fn test_whitespace() {
             .unwrap()
             .0
             .into_iter()
-            .map(|t| format!("{:?}", t))
+            .map(|t| format!("{t:?}"))
             .collect::<Vec<_>>(),
         [r#"{
     raw:  0:0-0:4 "    "
@@ -97,7 +97,7 @@ SELECT 2;"#,
     assert_eq!(dot_commands, [DotCommand::new(1, r#".separator ", ""#)]);
 
     assert_eq!(
-        statements.into_iter().map(|t| format!("{:?}", t)).collect::<Vec<_>>(),
+        statements.into_iter().map(|t| format!("{t:?}")).collect::<Vec<_>>(),
         [
             r#"{
     raw:  0:0-0:9 "SELECT 1;"
