@@ -108,7 +108,7 @@ impl From<()> for Literal {
 }
 
 impl rusqlite::ToSql for Literal {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         match self {
             Literal::I64(value) => value.to_sql(),
             Literal::F64(value) => value.to_sql(),

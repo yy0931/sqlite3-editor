@@ -902,7 +902,7 @@ JOIN main.pragma_table_info("table_name") p"#,
                         escape_sql_identifier(&entry.table),
                         escape_sql_identifier(&entry.column)
                     ),
-                    &[value.clone()],
+                    std::slice::from_ref(value),
                     |row| row.get::<_, i64>(0),
                 )?
                 .first()
