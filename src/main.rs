@@ -1,113 +1,26 @@
-use rmp_serde::encode::write_named;
-use std::{
-    fs::File,
-    io::{BufRead, Read, Seek, SeekFrom, Write},
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
-mod columnar_buffer;
-mod completion;
-#[cfg(test)]
-mod completion_test;
-mod keywords;
-#[cfg(test)]
-mod keywords_test;
+//! Defines the CLI. Only this file should depend on clap.
+
+mod cli_error;
+mod cli_subcommands;
+mod cli_value;
 #[cfg(test)]
 mod main_test;
-use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
-mod column_origin;
-mod export;
-mod import;
-use crate::{request_type::Request, sqlite3::read_msgpack_into_json, tokenize::ZeroIndexedLocation};
-mod cache;
-mod check_syntax;
-#[cfg(test)]
-mod check_syntax_test;
-mod code_lens;
-#[cfg(test)]
-mod code_lens_test;
-#[cfg(test)]
-mod column_origin_test;
-mod error;
-#[cfg(test)]
-mod export_test;
-mod find;
-#[cfg(test)]
-mod import_test;
-mod list_placeholders;
-#[cfg(test)]
-mod list_placeholders_test;
-mod literal;
-#[cfg(test)]
-mod literal_test;
-mod online_backup;
-#[cfg(test)]
-mod online_backup_test;
-mod parse_cte;
-#[cfg(test)]
-mod parse_cte_test;
-mod request_type;
-#[cfg(test)]
-mod request_type_test;
-mod semantic_highlight;
-#[cfg(test)]
-mod semantic_highlight_test;
-mod split_statements;
-#[cfg(test)]
-mod split_statements_test;
-mod sqlite3;
-#[cfg(test)]
-mod sqlite3_test;
-mod tokenize;
-#[cfg(test)]
-mod tokenize_test;
-#[cfg(test)]
-mod type_test;
+mod msgpack;
+mod sqlite_escape;
+mod utf8_extractor;
 mod util;
 
-#[cfg(all(feature = "sqlite", feature = "sqlcipher"))]
-compile_error!("Cannot enable both 'sqlite' and 'sqlcipher' features.");
-
-#[cfg(not(any(feature = "sqlite", feature = "sqlcipher")))]
-compile_error!("Must use `--features sqlite` or `--features sqlcipher` command line option.");
+use std::io::Write;
+use std::path::PathBuf;
 
 /// This is the SQLite bindings for the VSCode extension "SQLite3 Editor" (https://marketplace.visualstudio.com/items?itemName=yy0931.vscode-sqlite3-editor). The source code is available at: https://github.com/yy0931/sqlite3-editor/tree/rust-backend
-#[derive(Parser)]
+#[derive(clap::Parser)]
 struct Args {
     #[command(subcommand)]
     command: Commands,
 }
 
-#[derive(ts_rs::TS, clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
-#[ts(export)]
-pub enum ImportFormat {
-    #[clap(name = "csv")]
-    #[ts(rename = "csv")]
-    CSV,
-    #[clap(name = "tsv")]
-    #[ts(rename = "tsv")]
-    TSV,
-    #[clap(name = "json")]
-    #[ts(rename = "json")]
-    JSON,
-}
-
-#[derive(ts_rs::TS, clap::ValueEnum, Clone, Debug, PartialEq, Eq)]
-#[ts(export)]
-pub enum ExportFormat {
-    #[clap(name = "csv")]
-    #[ts(rename = "csv")]
-    CSV,
-    #[clap(name = "json")]
-    #[ts(rename = "json")]
-    JSON,
-    #[clap(name = "xlsx")]
-    #[ts(rename = "xlsx")]
-    XLSX,
-}
-
-#[derive(ts_rs::TS, Subcommand)]
+#[derive(clap::Subcommand, ts_rs::TS)]
 #[ts(export, rename_all = "kebab-case")]
 enum Commands {
     Version {},
@@ -116,12 +29,9 @@ enum Commands {
         /// Path to the database file
         #[arg(long, required = true)]
         database_filepath: String,
-        /// Optional SQL Cipher key for encrypted databases
-        #[arg(long)]
-        sql_cipher_key: Option<String>,
 
         #[arg(long, required = true)]
-        format: ImportFormat,
+        format: ImportingFileFormat,
         #[arg(long, required = true)]
         table_name: String,
         #[arg(long, default_value = ",")]
@@ -133,12 +43,9 @@ enum Commands {
         /// Path to the database file
         #[arg(long, required = true)]
         database_filepath: String,
-        /// Optional SQL Cipher key for encrypted databases
-        #[arg(long)]
-        sql_cipher_key: Option<String>,
 
         #[arg(long, required = true)]
-        format: ExportFormat,
+        format: ExportingFileFormat,
         #[arg(long)]
         query: String,
         #[arg(long)]
@@ -161,10 +68,6 @@ enum Commands {
         /// Path where the response body should be written
         #[arg(long, required = true)]
         response_body_filepath: PathBuf,
-
-        /// Optional SQL Cipher key for encrypted databases
-        #[arg(long)]
-        sql_cipher_key: Option<String>,
     },
     CopyFile {
         #[arg(long, required = true)]
@@ -175,473 +78,39 @@ enum Commands {
     },
 }
 
-/// Structure representing a database query
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(from = "(String,)")]
-struct Query {
-    query: String,
+/// The values allowed for the `--format` option of the `import` subcommand.
+#[derive(Clone, Debug, Eq, PartialEq, clap::ValueEnum, ts_rs::TS)]
+#[ts(export)]
+pub enum ImportingFileFormat {
+    #[clap(name = "csv")]
+    #[ts(rename = "csv")]
+    Csv,
+    #[clap(name = "tsv")]
+    #[ts(rename = "tsv")]
+    Tsv,
+    #[clap(name = "json")]
+    #[ts(rename = "json")]
+    Json,
 }
 
-impl From<(String,)> for Query {
-    fn from(value: (String,)) -> Self {
-        Self { query: value.0 }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(from = "(String, i64, i64)")]
-struct CompletionQuery {
-    sql: String,
-    line: i64,
-    column: i64,
-}
-
-impl From<(String, i64, i64)> for CompletionQuery {
-    fn from(value: (String, i64, i64)) -> Self {
-        Self {
-            sql: value.0,
-            line: value.1,
-            column: value.2,
-        }
-    }
-}
-
-#[derive(ts_rs::TS, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[ts(export, rename_all = "snake_case")]
-pub enum ServerCommand {
-    Interrupt,
-    Close,
-    TryReconnect,
-    DisconnectTemporarily,
-    Resume,
-    Handle,
-    SemanticHighlight,
-    CodeLens,
-    CheckSyntax,
-    Completion,
-}
-
-pub trait ReadCommand {
-    fn read_command(&mut self) -> Option<ServerCommand>;
-}
-
-impl<T: Read + BufRead> ReadCommand for T {
-    fn read_command(&mut self) -> Option<ServerCommand> {
-        loop {
-            let mut command_str = String::new();
-            match self.read_line(&mut command_str) {
-                Err(_) => return None,
-                Ok(0) => return None,
-                _ => {}
-            }
-
-            if let Ok(command) = ServerCommand::deserialize(
-                serde::de::value::StrDeserializer::<serde::de::value::Error>::new(command_str.trim()),
-            ) {
-                return Some(command);
-            }
-        }
-    }
-}
-
-fn cli<F, I, O, E>(args: Args, stdin: F, mut stdout: &mut O, mut stderr: &mut E) -> i32
-where
-    F: FnOnce() -> I + std::marker::Send + 'static,
-    I: ReadCommand,
-    O: Write,
-    E: Write,
-{
-    match args.command {
-        Commands::Version {} => {
-            // health check
-            let con = rusqlite::Connection::open_in_memory().unwrap();
-            con.execute("CREATE TABLE t(v)", ()).unwrap();
-            con.execute("INSERT INTO t VALUES (?)", ["ok"]).unwrap();
-            assert_eq!(
-                con.query_row("SELECT v FROM t", [], |row| row.get::<_, String>(0))
-                    .unwrap(),
-                "ok"
-            );
-            writeln!(&mut stdout, "sqlite3-editor {}", env!("CARGO_PKG_VERSION")).expect("writeln! failed.");
-            writeln!(
-                &mut stdout,
-                "{} {}",
-                if sqlite3::is_sqlcipher(&con) {
-                    "SQLCipher"
-                } else {
-                    "SQLite"
-                },
-                rusqlite::version()
-            )
-            .expect("writeln! failed.");
-
-            let conn = rusqlite::Connection::open_in_memory().unwrap();
-
-            writeln!(
-                &mut stdout,
-                "\nCompile options:\n{}",
-                conn.prepare("PRAGMA compile_options")
-                    .unwrap()
-                    .query_map((), |row| row.get::<_, String>(0))
-                    .unwrap()
-                    .collect::<rusqlite::Result<Vec<_>>>()
-                    .unwrap()
-                    .into_iter()
-                    .map(|line| "- ".to_owned() + &line)
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            )
-            .expect("writeln! failed.");
-        }
-        Commands::FunctionList {} => {
-            let mut functions = rusqlite::Connection::open_in_memory()
-                .unwrap()
-                .prepare("SELECT DISTINCT name FROM pragma_function_list()")
-                .unwrap()
-                .query_map((), |row| row.get::<_, String>(0))
-                .unwrap()
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .unwrap();
-            functions.sort();
-            writeln!(&mut stdout, "{}", serde_json::to_string(&functions).unwrap()).expect("writeln! failed.");
-        }
-        Commands::Server {
-            database_filepath,
-            request_body_filepath,
-            sql_cipher_key,
-            response_body_filepath,
-        } => {
-            const READ_ONLY: bool = false;
-
-            // Create a server
-            let mut db = match sqlite3::SQLite3::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
-                Ok(db) => db,
-                Err(err) => {
-                    writeln!(&mut stderr, "{err}").expect("writeln! failed.");
-                    return 1;
-                }
-            };
-
-            let (command_sender, command_receiver) = std::sync::mpsc::channel::<ServerCommand>();
-            let (resume_command_sender, resume_command_receiver) = std::sync::mpsc::channel::<()>();
-            let interrupt_handle = Arc::new(Mutex::new(db.get_interrupt_handle()));
-            let _thread = {
-                let interrupt_handle = Arc::clone(&interrupt_handle);
-                std::thread::spawn(move || {
-                    let mut stdin = stdin();
-                    loop {
-                        match stdin.read_command() {
-                            Some(ServerCommand::Interrupt) => {
-                                interrupt_handle.lock().unwrap().interrupt();
-                            }
-                            Some(ServerCommand::Resume) => {
-                                resume_command_sender.send(()).unwrap();
-                            }
-                            Some(command) => {
-                                if command_sender.send(command).is_err() {
-                                    return;
-                                }
-                            }
-                            None => return,
-                        }
-                    }
-                })
-            };
-
-            // Start the main loop
-            loop {
-                let Ok(command) = command_receiver.recv() else {
-                    return 0;
-                };
-
-                // Terminate the loop before opening the files
-                if command == ServerCommand::Close {
-                    return 0;
-                }
-
-                // Open request and response files
-                let mut r = File::open(&request_body_filepath).unwrap_or_else(|err| {
-                    panic!(
-                        "unable to open database file {}: {err:?}",
-                        request_body_filepath.to_string_lossy()
-                    )
-                });
-                let mut w = match std::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .open(&response_body_filepath)
-                {
-                    Ok(w) => w,
-                    Err(err) => {
-                        // Handle `Os { code: 1224, kind: Uncategorized, message: "The requested operation cannot be performed on a file with a user-mapped section open." }`
-                        if err.kind() == std::io::ErrorKind::Other && err.raw_os_error() == Some(1224) {
-                            writeln!(&mut stderr, "Failed to create a temporary file: {err}")
-                                .expect("writeln! failed.");
-                            return 1;
-                        }
-                        panic!("{err:?}");
-                    }
-                };
-
-                fn finish<T: Write, U: Write>(mut stdout: &mut T, w: &mut U, code: error::ErrorCode) {
-                    w.write_all(b"END").expect("Failed to write the result.");
-                    w.flush().expect("Failed to flush the writer.");
-                    writeln!(&mut stdout, "{code:?}").expect("writeln! failed.");
-                    stdout.flush().unwrap();
-                }
-
-                // Handle the different commands
-                match command {
-                    ServerCommand::TryReconnect => {
-                        match sqlite3::SQLite3::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
-                            Ok(new_db) => {
-                                db = new_db;
-
-                                *interrupt_handle.lock().unwrap() = db.get_interrupt_handle();
-                                write_named(&mut w, &None::<&i64>).expect("Failed to write the result.");
-                                finish(&mut stdout, &mut w, error::ErrorCode::Success);
-                            }
-                            Err(err) => {
-                                w.truncate_all();
-                                write!(w, "{err}").expect("Failed to write an error message.");
-                                finish(&mut stdout, &mut w, err.code());
-                            }
-                        }
-                    }
-
-                    ServerCommand::DisconnectTemporarily => {
-                        drop(db);
-
-                        // Send the response to DisconnectTemporarily
-                        write_named(&mut w, &None::<&i64>).expect("Failed to write the result.");
-                        finish(&mut stdout, &mut w, error::ErrorCode::Success);
-
-                        if resume_command_receiver.recv().is_err() {
-                            return 0;
-                        }
-
-                        match sqlite3::SQLite3::connect(&database_filepath, READ_ONLY, &sql_cipher_key) {
-                            Ok(new_db) => {
-                                db = new_db;
-                                *interrupt_handle.lock().unwrap() = db.get_interrupt_handle();
-
-                                // Send the response to Resume
-                                write_named(&mut w, &None::<&i64>).expect("Failed to write the result.");
-                                finish(&mut stdout, &mut w, error::ErrorCode::Success);
-                            }
-                            Err(err) => {
-                                w.truncate_all();
-                                write!(w, "{err}").expect("Failed to write an error message.");
-                                finish(&mut stdout, &mut w, err.code());
-                                return 1;
-                            }
-                        }
-                    }
-
-                    // Handle the request
-                    ServerCommand::Handle => {
-                        // Deserialize the request
-                        let req = match rmp_serde::from_read::<_, Request>(&mut r) {
-                            Ok(req) => req,
-                            Err(err) => {
-                                let mut content = read_msgpack_into_json(&mut r);
-                                if content.len() > 5000 {
-                                    content = content[0..5000].to_owned() + "... (omitted)"
-                                }
-                                write!(
-                                    w,
-                                    "Failed to parse the request body: {err} (content = {content}, len = {})",
-                                    r.metadata().unwrap().len()
-                                )
-                                .expect("Failed to write an error message.");
-                                finish(&mut stdout, &mut w, error::ErrorCode::OtherError);
-                                continue;
-                            }
-                        };
-
-                        match db.handle(&mut w, &req.query, &req.params, req.mode, req.options) {
-                            Ok(_) => {
-                                finish(&mut stdout, &mut w, error::ErrorCode::Success);
-                            }
-                            Err(err) => {
-                                w.truncate_all();
-                                write!(w, "{err}").expect("Failed to write an error message.");
-                                finish(&mut stdout, &mut w, err.code());
-                            }
-                        }
-                    }
-
-                    // Tokenize, get code lenses, or check syntax
-                    ServerCommand::SemanticHighlight | ServerCommand::CodeLens | ServerCommand::CheckSyntax => {
-                        // Handle the command
-                        if let Err(err) = rmp_serde::from_read(r).map(
-                            |Query { query }: Query| -> std::result::Result<(), error::Error> {
-                                match command {
-                                    ServerCommand::SemanticHighlight => {
-                                        write_named(&mut w, &semantic_highlight::semantic_highlight(&query))?
-                                    }
-                                    ServerCommand::CodeLens => write_named(&mut w, &code_lens::code_lens(&query))?,
-                                    ServerCommand::CheckSyntax => {
-                                        write_named(&mut w, &check_syntax::check_syntax(&query)?)?
-                                    }
-                                    _ => panic!("Unexpected command {command:?}"),
-                                };
-                                Ok(())
-                            },
-                        ) {
-                            w.flush().unwrap();
-                            w.truncate_all();
-                            write!(w, "{err:?}").unwrap();
-                            finish(&mut stdout, &mut w, error::ErrorCode::OtherError);
-                        } else {
-                            w.flush().unwrap();
-                            finish(&mut stdout, &mut w, error::ErrorCode::Success);
-                        }
-                    }
-
-                    // Completion
-                    ServerCommand::Completion => {
-                        // Handle the command
-                        if let Err(err) =
-                            rmp_serde::from_read(r).map(|CompletionQuery { sql, line, column }: CompletionQuery| -> std::result::Result<(), error::Error> {
-                                write_named(
-                                    &mut w,
-                                    &completion::complete(
-                                        &db,
-                                        &sql,
-                                        &ZeroIndexedLocation {
-                                            line: line.try_into().unwrap(),
-                                            column: column.try_into().unwrap(),
-                                        },
-                                    ),
-                                )?;
-                                Ok(())
-                            })
-                        {
-                            w.flush().unwrap();
-                            w.truncate_all();
-                            write!(w, "{err:?}").unwrap();
-                            finish(&mut stdout, &mut w, error::ErrorCode::OtherError);
-                        } else {
-                            w.flush().unwrap();
-                            finish(&mut stdout, &mut w, error::ErrorCode::Success);
-                        }
-                    }
-
-                    // Ignore unrecognized commands
-                    _ => {}
-                }
-            }
-        }
-        Commands::Export {
-            database_filepath,
-            sql_cipher_key,
-            format,
-            query,
-            output_file,
-            csv_options,
-            xlsx_options,
-        } => {
-            if format == ExportFormat::XLSX {
-                let Some(output_file) = output_file else {
-                    writeln!(&mut stderr, "`--format xlsx` requires `--output-file <file-name>`.")
-                        .expect("writeln! failed.");
-                    return 1;
-                };
-                let options: export::XLSXExportOptions = if let Some(s) = xlsx_options {
-                    serde_json::from_str(&s).unwrap_or_default()
-                } else {
-                    export::XLSXExportOptions::default()
-                };
-                if let Err(err) =
-                    export::export_xlsx(&database_filepath, &sql_cipher_key, &query, &output_file, &options)
-                {
-                    writeln!(&mut stderr, "{err}").expect("writeln! failed.");
-                    return 1;
-                }
-            } else {
-                let mut writer: Box<dyn Write> = if let Some(output_file) = output_file {
-                    let Ok(f) = std::fs::OpenOptions::new()
-                        .truncate(true)
-                        .create(true)
-                        .write(true)
-                        .open(output_file)
-                    else {
-                        return 1;
-                    };
-                    Box::new(f)
-                } else {
-                    Box::new(stdout)
-                };
-
-                if let Err(err) = match format {
-                    ExportFormat::CSV => {
-                        let options: export::CSVExportOptions = if let Some(s) = csv_options {
-                            serde_json::from_str(&s).unwrap_or_default()
-                        } else {
-                            export::CSVExportOptions::default()
-                        };
-                        export::export_csv(&database_filepath, &sql_cipher_key, &query, &mut writer, &options)
-                    }
-                    ExportFormat::JSON => export::export_json(&database_filepath, &sql_cipher_key, &query, &mut writer),
-                    ExportFormat::XLSX => {
-                        panic!();
-                    }
-                } {
-                    writeln!(&mut stderr, "{err}").expect("writeln! failed.");
-                    return 1;
-                }
-            }
-        }
-        Commands::Import {
-            database_filepath,
-            sql_cipher_key,
-            format,
-            table_name,
-            csv_delimiter,
-            input_file,
-        } => {
-            if let Err(err) = match format {
-                ImportFormat::CSV => import::import_csv(
-                    &database_filepath,
-                    &sql_cipher_key,
-                    &table_name,
-                    &csv_delimiter,
-                    input_file,
-                ),
-                ImportFormat::TSV => {
-                    import::import_csv(&database_filepath, &sql_cipher_key, &table_name, "\t", input_file)
-                }
-                ImportFormat::JSON => import::import_json(&database_filepath, &sql_cipher_key, &table_name, input_file),
-            } {
-                writeln!(&mut stderr, "{err}").expect("writeln! failed.");
-                return 1;
-            }
-        }
-        Commands::CopyFile { src, dst } => {
-            // Read
-            let data = match std::fs::read(&src) {
-                Err(err) => {
-                    writeln!(&mut stderr, "Failed to read {src:?}: {err}").unwrap();
-                    return 1;
-                }
-                Ok(data) => data,
-            };
-
-            // Write
-            if let Err(err) = std::fs::write(&dst, data) {
-                writeln!(&mut stderr, "Failed to write {src:?}: {err}").unwrap();
-                return 1;
-            }
-        }
-    }
-
-    0
+/// The values allowed for the `--format` option of the `export` subcommand.
+#[derive(Clone, Debug, Eq, PartialEq, clap::ValueEnum, ts_rs::TS)]
+#[ts(export)]
+enum ExportingFileFormat {
+    #[clap(name = "csv")]
+    #[ts(rename = "csv")]
+    Csv,
+    #[clap(name = "json")]
+    #[ts(rename = "json")]
+    Json,
+    #[clap(name = "xlsx")]
+    #[ts(rename = "xlsx")]
+    Xlsx,
 }
 
 fn main() {
+    use clap::Parser;
+
     // Parse the command line arguments
     let code = cli(
         Args::parse(),
@@ -654,20 +123,58 @@ fn main() {
     }
 }
 
-pub trait TruncateAll {
-    fn truncate_all(&mut self);
-}
-
-impl TruncateAll for std::fs::File {
-    fn truncate_all(&mut self) {
-        self.set_len(0).expect("Failed to truncate the file.");
-        self.seek(SeekFrom::Start(0)).expect("Failed to seek the file.");
-    }
-}
-
-impl TruncateAll for std::io::Cursor<Vec<u8>> {
-    fn truncate_all(&mut self) {
-        self.get_mut().truncate(0);
-        self.seek(SeekFrom::Start(0)).expect("Failed to seek the cursor.");
+fn cli<F, I, O, E>(args: Args, stdin: F, stdout: &mut O, stderr: &mut E) -> i32
+where
+    F: FnOnce() -> I + std::marker::Send + 'static,
+    I: cli_subcommands::server::ReadCommand,
+    O: Write,
+    E: Write,
+{
+    match args.command {
+        Commands::Version {} => {
+            cli_subcommands::version::run(stdout);
+            0
+        }
+        Commands::FunctionList {} => {
+            cli_subcommands::function_list::run(stdout);
+            0
+        }
+        Commands::Server {
+            database_filepath,
+            request_body_filepath,
+            response_body_filepath,
+        } => cli_subcommands::server::run(
+            stdin,
+            stdout,
+            stderr,
+            database_filepath,
+            request_body_filepath,
+            response_body_filepath,
+        ),
+        Commands::Export {
+            database_filepath,
+            format,
+            query,
+            output_file,
+            csv_options,
+            xlsx_options,
+        } => cli_subcommands::export::run(
+            stdout,
+            stderr,
+            database_filepath,
+            format,
+            query,
+            output_file,
+            csv_options,
+            xlsx_options,
+        ),
+        Commands::Import {
+            database_filepath,
+            format,
+            table_name,
+            csv_delimiter,
+            input_file,
+        } => cli_subcommands::import::run(stderr, database_filepath, format, table_name, csv_delimiter, input_file),
+        Commands::CopyFile { src, dst } => cli_subcommands::copy_file::run(stderr, src, dst),
     }
 }

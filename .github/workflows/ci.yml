@@ -15,8 +15,7 @@ jobs:
         with:
           toolchain: nightly
       - run: sudo apt install -y libsqlite3-mod-spatialite
-      - run: cargo test --features sqlite
-      - run: cargo test --features sqlcipher
+      - run: cargo test
       - id: version
         run: |
           version=$(grep "^version" Cargo.toml | sed 's/version = "//g' | sed 's/"//g')
@@ -39,7 +38,7 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           rustup target add ${{ matrix.target }}
-          cargo build --release --features sqlite --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/sqlite3-editor.exe sqlite3-editor-${{ matrix.vsce_target }}.exe
       - uses: actions/upload-artifact@v4
         with:
@@ -67,7 +66,7 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           rustup +nightly-2024-05-16 component add rust-src
-          cargo +nightly-2024-05-16 build -Z build-std --release --features sqlite --target ${{ matrix.target }}
+          cargo +nightly-2024-05-16 build -Z build-std --release --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/sqlite3-editor.exe sqlite3-editor-${{ matrix.vsce_target }}.exe
       - name: Test
         run: target/${{ matrix.target }}/release/sqlite3-editor.exe version
@@ -110,7 +109,7 @@ jobs:
 
           rustup override set nightly
           rustup update
-          cross build --release --features sqlite --target ${{ matrix.target }}
+          cross build --release --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/sqlite3-editor sqlite3-editor-${{ matrix.vsce_target }}
         shell: bash
       - uses: actions/upload-artifact@v4
@@ -137,7 +136,7 @@ jobs:
       - run: |
           set -xEeuo pipefail
 
-          cargo build --release --features sqlite --target ${{ matrix.target }}
+          cargo build --release --target ${{ matrix.target }}
           cp target/${{ matrix.target }}/release/sqlite3-editor sqlite3-editor-${{ matrix.vsce_target }}
         shell: bash
       - uses: actions/upload-artifact@v4

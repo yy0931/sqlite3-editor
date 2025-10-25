@@ -1,28 +1,19 @@
-use std::{
-    io::{Cursor, Write},
-    sync::mpsc::{Receiver, Sender},
-    thread::JoinHandle,
-};
+use std::io::Cursor;
+use std::io::Write;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
+use std::thread::JoinHandle;
 
+use crate::Args;
 use tempfile::NamedTempFile;
 
-use crate::{
-    cli,
-    request_type::{QueryMode, Request},
-    sqlite3::QueryOptions,
-    Args, ExportFormat, Query, ReadCommand, ServerCommand,
-};
-
-#[test]
-fn test_parse_query() {
-    let q: Query = serde_json::from_str("[\"foo\"]").unwrap();
-    assert_eq!(
-        q,
-        Query {
-            query: "foo".to_owned()
-        }
-    );
-}
+use crate::cli;
+use crate::cli_subcommands::server::ReadCommand;
+use crate::cli_subcommands::server::ServerCommand;
+use crate::cli_subcommands::server::_server_commands::query::request_type::QueryCommandParams;
+use crate::cli_subcommands::server::_server_commands::query::request_type::QueryMode;
+use crate::cli_subcommands::server::_server_commands::query::request_type::QueryOptions;
+use crate::ExportingFileFormat;
 
 #[test]
 fn test_version() {
@@ -61,7 +52,7 @@ fn test_function_list() {
     assert!(json.ends_with("\"]"));
 }
 
-fn test_export_to_stdout(format: ExportFormat) -> String {
+fn test_export_to_stdout(format: ExportingFileFormat) -> String {
     let f = NamedTempFile::new().unwrap();
 
     let conn = rusqlite::Connection::open(f.path()).unwrap();
@@ -74,7 +65,6 @@ fn test_export_to_stdout(format: ExportFormat) -> String {
             Args {
                 command: crate::Commands::Export {
                     database_filepath: f.path().to_str().unwrap().to_owned(),
-                    sql_cipher_key: None,
                     format,
                     query: "SELECT * FROM t".to_owned(),
                     output_file: None,
@@ -93,13 +83,13 @@ fn test_export_to_stdout(format: ExportFormat) -> String {
 
 #[test]
 fn test_export_csv() {
-    assert_eq!(test_export_to_stdout(ExportFormat::CSV), "x,y\n1,2\n3,4\n");
+    assert_eq!(test_export_to_stdout(ExportingFileFormat::Csv), "x,y\n1,2\n3,4\n");
 }
 
 #[test]
 fn test_export_json() {
     assert_eq!(
-        test_export_to_stdout(ExportFormat::JSON),
+        test_export_to_stdout(ExportingFileFormat::Json),
         "[{\"x\":1,\"y\":2},{\"x\":3,\"y\":4}]"
     );
 }
@@ -107,18 +97,12 @@ fn test_export_json() {
 fn wait_ms(ms: u64) {
     std::thread::sleep(std::time::Duration::from_millis(ms));
 }
+
+#[derive(derive_new::new)]
 struct SenderWriter {
     sender: std::sync::mpsc::Sender<Vec<u8>>,
+    #[new(default)]
     buf: Vec<u8>,
-}
-
-impl SenderWriter {
-    fn new(sender: Sender<Vec<u8>>) -> Self {
-        Self {
-            sender,
-            buf: Vec::new(),
-        }
-    }
 }
 
 impl Write for SenderWriter {
@@ -133,14 +117,9 @@ impl Write for SenderWriter {
     }
 }
 
+#[derive(derive_new::new)]
 struct ReceiverReader {
     receiver: std::sync::mpsc::Receiver<ServerCommand>,
-}
-
-impl ReceiverReader {
-    fn new(receiver: std::sync::mpsc::Receiver<ServerCommand>) -> Self {
-        ReceiverReader { receiver }
-    }
 }
 
 impl ReadCommand for ReceiverReader {
@@ -185,7 +164,6 @@ impl ServerTestBench {
                                     database_filepath,
                                     request_body_filepath,
                                     response_body_filepath,
-                                    sql_cipher_key: None,
                                 },
                             },
                             move || { ReceiverReader::new(stdin_receiver) },
@@ -262,37 +240,36 @@ fn test_server_close() {
 #[test]
 fn test_server_handle() {
     let test_bench = ServerTestBench::new();
-    test_bench.write_request_body(&Request {
+    test_bench.write_request_body(&QueryCommandParams {
         query: "SELECT 1".to_owned(),
         params: vec![],
         mode: QueryMode::ReadOnly,
         options: QueryOptions::default(),
     });
-    test_bench.send_stdin(ServerCommand::Handle);
+    test_bench.send_stdin(ServerCommand::Query);
     assert_eq!(test_bench.recv_stdout(), "Success\n");
 }
 
 #[test]
-#[cfg(not(feature = "sqlcipher"))] // sleep() does not support interruption under feature="sqlcipher"
 fn test_server_interrupt() {
     let test_bench = ServerTestBench::new();
 
-    test_bench.write_request_body(&Request {
+    test_bench.write_request_body(&QueryCommandParams {
         query: "EDITOR_PRAGMA add_sleep_fn".to_owned(),
         params: vec![],
         mode: QueryMode::ReadOnly,
         options: QueryOptions::default(),
     });
-    test_bench.send_stdin(ServerCommand::Handle);
+    test_bench.send_stdin(ServerCommand::Query);
     assert_eq!(test_bench.recv_stdout(), "Success\n");
 
-    test_bench.write_request_body(&Request {
+    test_bench.write_request_body(&QueryCommandParams {
         query: "SELECT sleep(5000)".to_owned(),
         params: vec![],
         mode: QueryMode::ReadOnly,
         options: QueryOptions::default(),
     });
-    test_bench.send_stdin(ServerCommand::Handle);
+    test_bench.send_stdin(ServerCommand::Query);
     wait_ms(500);
     test_bench.send_stdin(ServerCommand::Interrupt);
     assert_eq!(test_bench.recv_stdout(), "OtherError\n");
@@ -312,12 +289,12 @@ fn test_server_disconnect_temporarily() {
     test_bench.send_stdin(ServerCommand::Resume);
     assert_eq!(test_bench.recv_stdout(), "Success\n");
 
-    test_bench.write_request_body(&Request {
+    test_bench.write_request_body(&QueryCommandParams {
         query: "SELECT 1".to_owned(),
         params: vec![],
         mode: QueryMode::ReadOnly,
         options: QueryOptions::default(),
     });
-    test_bench.send_stdin(ServerCommand::Handle);
+    test_bench.send_stdin(ServerCommand::Query);
     assert_eq!(test_bench.recv_stdout(), "Success\n");
 }
