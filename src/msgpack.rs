@@ -1,9 +1,11 @@
-use std::{collections::HashMap, io::Write};
+use std::collections::HashMap;
+use std::io::Write;
 
 use rusqlite::types::ValueRef;
 use serde::Serialize;
 
-use crate::utf8_extractor::{into_utf8_lossy, InvalidUTF8};
+use crate::utf8_extractor::into_utf8_lossy;
+use crate::utf8_extractor::InvalidUTF8;
 
 const ENCODING_ERROR: &str = "Failed to encode a MessagePack";
 
@@ -177,10 +179,7 @@ pub fn decode_msgpack_into_json(slice: impl AsRef<[u8]>) -> String {
 pub fn read_msgpack_into_json(r: &mut (impl std::io::Read + std::io::Seek)) -> String {
     r.rewind().expect("Failed to rewind the reader.");
     let mut json = vec![];
-    match serde_transcode::transcode(
-        &mut rmp_serde::Deserializer::new(r),
-        &mut serde_json::Serializer::new(&mut json),
-    ) {
+    match serde_transcode::transcode(&mut rmp_serde::Deserializer::new(r), &mut serde_json::Serializer::new(&mut json)) {
         Ok(_) => String::from_utf8_lossy(&json).to_string(),
         Err(_) => "<Failed to serialize as a JSON>".to_owned(),
     }
@@ -256,17 +255,17 @@ pub fn explain_msgpack(slice: impl AsRef<[u8]>) -> String {
 mod tests {
     use crate::msgpack::explain_msgpack;
 
-    use super::{decode_msgpack_into_json, MessagePackArray, MessagePackRecord};
-    use serde::{Deserialize, Serialize};
+    use super::decode_msgpack_into_json;
+    use super::MessagePackArray;
+    use super::MessagePackRecord;
+    use serde::Deserialize;
+    use serde::Serialize;
 
     #[test]
     fn test_explain_msgpack() {
         assert_eq!(explain_msgpack([0x92, 0xC0, 0xC2]), "fixarray(2) nil false");
         assert_eq!(explain_msgpack([0x01, 0x7F]), "positive_fixint(1) positive_fixint(127)");
-        assert_eq!(
-            explain_msgpack([0xE0, 0xFF]),
-            "negative_fixint(-32) negative_fixint(-1)"
-        );
+        assert_eq!(explain_msgpack([0xE0, 0xFF]), "negative_fixint(-32) negative_fixint(-1)");
         assert_eq!(explain_msgpack([0xA3, b'f', b'o', b'o']), "fixstr(3) 102 111 111");
     }
 
@@ -278,10 +277,7 @@ mod tests {
 
     #[test]
     fn test_message_pack_record_builder_1() {
-        let data = Data {
-            a: 42,
-            b: "hello".into(),
-        };
+        let data = Data { a: 42, b: "hello".into() };
         let mut map = MessagePackRecord::new();
         map.insert_value("A", &123);
         map.insert_value("B", &data);
@@ -351,10 +347,7 @@ mod tests {
             b: String,
         }
 
-        let data = Data {
-            a: 42,
-            b: "hello".into(),
-        };
+        let data = Data { a: 42, b: "hello".into() };
         let mut arr = MessagePackArray::new();
         arr.push_value(&123);
         arr.push_value(&data);
@@ -378,9 +371,6 @@ mod tests {
             regex::Regex::new(r"\s{2,}").unwrap().replace_all(expected, " ").trim()
         );
 
-        assert_eq!(
-            decode_msgpack_into_json(&buf),
-            r#"[123,{"a":42,"b":"hello"},123.0,null]"#
-        );
+        assert_eq!(decode_msgpack_into_json(&buf), r#"[123,{"a":42,"b":"hello"},123.0,null]"#);
     }
 }

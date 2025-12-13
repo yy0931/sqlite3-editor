@@ -4,11 +4,7 @@ use crate::sqlite_escape::escape_sql_identifier;
 use std::collections::HashMap;
 
 // Imports a table from a JSON file.
-pub fn import(
-    database_filepath: &str,
-    table_name: &str,
-    input_file: Option<String>,
-) -> std::result::Result<(), CLIError> {
+pub fn import(database_filepath: &str, table_name: &str, input_file: Option<String>) -> std::result::Result<(), CLIError> {
     let parsed = serde_json::from_reader::<_, Vec<HashMap<String, CLIValue>>>(super::open_reader(input_file)?)?;
 
     if parsed.is_empty() {
@@ -22,34 +18,21 @@ pub fn import(
     }
 
     let mut con = super::connect(database_filepath)?;
-    let tx = con
-        .transaction()
-        .or_else(|err| CLIError::new_query_error(err, "BEGIN;", &[]))?;
+    let tx = con.transaction().or_else(|err| CLIError::new_query_error(err, "BEGIN;", &[]))?;
     let stmt = format!(
         "CREATE TABLE {}({})",
         escape_sql_identifier(table_name),
-        columns
-            .iter()
-            .map(|v| escape_sql_identifier(v))
-            .collect::<Vec<_>>()
-            .join(", ")
+        columns.iter().map(|v| escape_sql_identifier(v)).collect::<Vec<_>>().join(", ")
     );
-    tx.execute(&stmt, [])
-        .or_else(|err| CLIError::new_query_error(err, stmt, &[]))?;
+    tx.execute(&stmt, []).or_else(|err| CLIError::new_query_error(err, stmt, &[]))?;
     {
         let stmt = format!(
             "INSERT INTO {} ({}) VALUES ({})",
             escape_sql_identifier(table_name),
-            columns
-                .iter()
-                .map(|v| escape_sql_identifier(v))
-                .collect::<Vec<_>>()
-                .join(", "),
+            columns.iter().map(|v| escape_sql_identifier(v)).collect::<Vec<_>>().join(", "),
             columns.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
         );
-        let mut insert = tx
-            .prepare(&stmt)
-            .or_else(|err| CLIError::new_query_error(err, &stmt, &[]))?;
+        let mut insert = tx.prepare(&stmt).or_else(|err| CLIError::new_query_error(err, &stmt, &[]))?;
         for (record_id, record) in parsed.iter().enumerate() {
             let mut values = Vec::<&CLIValue>::new();
             for column in &columns {
@@ -63,25 +46,16 @@ pub fn import(
                 values.push(value);
             }
             for (i, value) in values.iter().enumerate() {
-                insert.raw_bind_parameter(i + 1, value).or_else(|err| {
-                    CLIError::new_query_error(
-                        err,
-                        &stmt,
-                        &values.iter().map(|&v| v.clone()).collect::<Vec<CLIValue>>(),
-                    )
-                })?;
+                insert
+                    .raw_bind_parameter(i + 1, value)
+                    .or_else(|err| CLIError::new_query_error(err, &stmt, &values.iter().map(|&v| v.clone()).collect::<Vec<CLIValue>>()))?;
             }
-            insert.raw_execute().or_else(|err| {
-                CLIError::new_query_error(
-                    err,
-                    &stmt,
-                    &values.iter().map(|&v| v.clone()).collect::<Vec<CLIValue>>(),
-                )
-            })?;
+            insert
+                .raw_execute()
+                .or_else(|err| CLIError::new_query_error(err, &stmt, &values.iter().map(|&v| v.clone()).collect::<Vec<CLIValue>>()))?;
         }
     }
-    tx.commit()
-        .or_else(|err| CLIError::new_query_error(err, "COMMIT;", &[]))?;
+    tx.commit().or_else(|err| CLIError::new_query_error(err, "COMMIT;", &[]))?;
 
     Ok(())
 }
@@ -115,11 +89,7 @@ mod test {
                 .prepare("SELECT name, age, optional FROM test")
                 .unwrap()
                 .query_map([], |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, i32>(1)?,
-                        row.get::<_, Option<i32>>(2)?,
-                    ))
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?, row.get::<_, Option<i32>>(2)?))
                 })
                 .unwrap()
                 .collect::<Result<Vec<_>, _>>()

@@ -30,21 +30,13 @@ impl ZeroIndexedRange {
             // If start and end are on different lines
             let mut result: Vec<Cow<str>> = vec![];
             // Add the rest of the first line
-            result.push(Cow::Owned(slice_unicode_str(
-                lines[self.start.line],
-                Some(self.start.column),
-                None,
-            )));
+            result.push(Cow::Owned(slice_unicode_str(lines[self.start.line], Some(self.start.column), None)));
             // Add the complete lines between start and end
             for line in &lines[self.start.line + 1..self.end.line] {
                 result.push(Cow::Borrowed(line));
             }
             // Add the part of the last line
-            result.push(Cow::Owned(slice_unicode_str(
-                lines[self.end.line],
-                None,
-                Some(self.end.column),
-            )));
+            result.push(Cow::Owned(slice_unicode_str(lines[self.end.line], None, Some(self.end.column))));
             result.join("\n")
         }
     }

@@ -29,22 +29,18 @@ pub fn run(
 
 fn connect(database_filepath: &str) -> std::result::Result<rusqlite::Connection, CLIError> {
     // Connect to the database
-    let con = rusqlite::Connection::open(database_filepath).or_else(|err| {
-        CLIError::new_other_error(
-            format!("Failed to open the database {database_filepath:?}: {err}"),
-            None,
-            None,
-        )
-    })?;
+    let con = rusqlite::Connection::open(database_filepath)
+        .or_else(|err| CLIError::new_other_error(format!("Failed to open the database {database_filepath:?}: {err}"), None, None))?;
 
     Ok(con)
 }
 
 fn open_reader(input_file: Option<String>) -> std::result::Result<Box<dyn Read>, CLIError> {
     Ok(if let Some(input_file) = input_file {
-        Box::new(std::fs::File::open(&input_file).or_else(|err| {
-            CLIError::new_other_error(format!("Failed to open the database {input_file:?}: {err}"), None, None)
-        })?)
+        Box::new(
+            std::fs::File::open(&input_file)
+                .or_else(|err| CLIError::new_other_error(format!("Failed to open the database {input_file:?}: {err}"), None, None))?,
+        )
     } else {
         // expected `File`, found `Stdin`
         Box::new(std::io::stdin())

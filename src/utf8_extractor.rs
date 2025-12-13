@@ -35,11 +35,7 @@ pub fn get_utf8_string<F: FnMut(InvalidUTF8)>(row: &Row, idx: usize, on_invalid_
 }
 
 /// Extracts an optional UTF-8 string (`Option<String>`) value from a `rusqlite::Row`, invoking a callback on invalid UTF-8 sequences.
-pub fn get_utf8_string_optional<F: FnMut(InvalidUTF8)>(
-    row: &Row,
-    idx: usize,
-    on_invalid_utf8: F,
-) -> rusqlite::Result<Option<String>> {
+pub fn get_utf8_string_optional<F: FnMut(InvalidUTF8)>(row: &Row, idx: usize, on_invalid_utf8: F) -> rusqlite::Result<Option<String>> {
     let value = row.get_ref(idx)?;
     match value {
         ValueRef::Null => Ok(None),
@@ -86,10 +82,7 @@ mod test {
     #[test]
     fn test_from_utf8_lossy() {
         let mut warnings = vec![];
-        assert_eq!(
-            super::into_utf8_lossy(&[b'a', 255], |err| warnings.push(err)),
-            "a\u{FFFD}"
-        );
+        assert_eq!(super::into_utf8_lossy(&[b'a', 255], |err| warnings.push(err)), "a\u{FFFD}");
         assert_eq!(
             warnings,
             vec![super::InvalidUTF8 {

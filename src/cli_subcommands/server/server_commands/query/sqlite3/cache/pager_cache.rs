@@ -49,12 +49,7 @@ impl PagerCache {
 
     /// Removes the least recently used entry from the cache.
     pub(super) fn dequeue(&mut self) {
-        if let Some((index, _)) = self
-            .cache
-            .iter()
-            .enumerate()
-            .min_by_key(|(_, e)| e.borrow().last_accessed())
-        {
+        if let Some((index, _)) = self.cache.iter().enumerate().min_by_key(|(_, e)| e.borrow().last_accessed()) {
             self.cache.remove(index);
         }
     }

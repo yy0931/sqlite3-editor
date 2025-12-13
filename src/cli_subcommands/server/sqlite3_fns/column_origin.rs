@@ -69,14 +69,7 @@ pub fn column_origin(db: *mut sqlite3, query: &str) -> Result<HashMap<String, Co
         if table.to_lowercase().starts_with("pragma_") {
             continue;
         }
-        result.insert(
-            column_name,
-            ColumnOrigin {
-                database,
-                table,
-                column,
-            },
-        );
+        result.insert(column_name, ColumnOrigin { database, table, column });
     }
 
     // Finalize the statement and close the database connection
@@ -114,10 +107,7 @@ CREATE VIEW v1 AS SELECT c1 as c3, c2 FROM t1;
             ]))
         );
 
-        assert_eq!(
-            column_origin(unsafe { con.handle() }, "SELECT 1, 2"),
-            Ok(HashMap::new()),
-        );
+        assert_eq!(column_origin(unsafe { con.handle() }, "SELECT 1, 2"), Ok(HashMap::new()),);
     }
 
     #[test]

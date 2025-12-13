@@ -37,8 +37,7 @@ pub fn is_rowid(
     // - column_origin.column is "_rowid_" and there isn't a user-defined column named "_rowid_".
     // - column_origin.column is "oid" and there isn't a user-defined column named "oid".
     if column_origin.column.to_lowercase() == "rowid" && table_xinfo.iter().all(|v| v.name.to_lowercase() != "rowid")
-        || column_origin.column.to_lowercase() == "_rowid_"
-            && table_xinfo.iter().all(|v| v.name.to_lowercase() != "_rowid_")
+        || column_origin.column.to_lowercase() == "_rowid_" && table_xinfo.iter().all(|v| v.name.to_lowercase() != "_rowid_")
         || column_origin.column.to_lowercase() == "oid" && table_xinfo.iter().all(|v| v.name.to_lowercase() != "oid")
     {
         return Ok(true);

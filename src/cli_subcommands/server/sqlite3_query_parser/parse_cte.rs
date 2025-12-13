@@ -1,3 +1,5 @@
+use crate::cli_subcommands::server::sqlite3_query_parser::paren_aware_token_scanner::SQLite3ParenAwareTokenScanner;
+use crate::cli_subcommands::server::sqlite3_query_parser::paren_aware_token_scanner::SQLite3TokenScannerOutput;
 use crate::cli_subcommands::server::sqlite3_query_parser::split_statements::SingleStatement;
 use crate::cli_subcommands::server::sqlite3_query_parser::token::SQLite3Keyword;
 use crate::cli_subcommands::server::sqlite3_query_parser::token::SQLite3Token;
@@ -17,73 +19,57 @@ pub fn parse_cte(stmt: &SingleStatement) -> Option<CommonTableExpression> {
     }
 
     let mut entries = Vec::<CTEEntry>::new();
-
-    let mut paren_depth: i64 = 0;
     let mut current_entry: Option<CTEEntry> = None;
 
     // Search forward
     // -------------->
     // WITH name1(x) AS (SELECT ...), name2 AS (SELECT ...) SELECT ...
-    for (i, token) in stmt.real_tokens.iter().enumerate() {
-        // Update paren_depth
-        match &token.value {
-            SQLite3Token::LParen => {
-                paren_depth += 1;
-            }
-            SQLite3Token::RParen => {
-                paren_depth = (paren_depth - 1).max(0);
-            }
-            _ => {}
-        }
+    let grouped_tokens = SQLite3ParenAwareTokenScanner::new(&stmt.real_tokens).collect::<Vec<_>>();
+    for (i, output) in grouped_tokens.iter().enumerate() {
+        match output {
+            SQLite3TokenScannerOutput::StartOfInput => {}
+            SQLite3TokenScannerOutput::EndOfInput => {}
 
-        if let Some(current_entry_inner) = &mut current_entry {
-            // Find the subquery
-            match &token.value {
-                SQLite3Token::LParen if paren_depth == 1 => {
-                    current_entry_inner.query_range.start = token.range.end.clone();
-                    current_entry_inner.query_range.end = token.range.end.clone(); // placeholder
-                    continue;
+            // subquery
+            SQLite3TokenScannerOutput::Group(tokens) if current_entry.is_some() => {
+                if let (Some(first_token), Some(last_token)) = (tokens.first(), tokens.last()) {
+                    let inner = &mut current_entry.unwrap();
+                    inner.query_range.start = first_token.range.start.clone();
+                    inner.query_range.end = last_token.range.end.clone();
+                    entries.push(inner.to_owned());
                 }
-                SQLite3Token::RParen if paren_depth == 0 => {
-                    current_entry_inner.query_range.end = token.range.start.clone();
-                    entries.push(current_entry_inner.to_owned());
-                    current_entry = None;
-                }
-                _ => {}
+                current_entry = None;
             }
-        } else if paren_depth == 0 {
-            // Find AS and the end of the WITH clause
-            if let SQLite3Token::Keyword(kwd) = &token.value {
-                match kwd {
-                    SQLite3Keyword::AS => {
-                        //      Search backward
-                        //      <--------
-                        // WITH name1(x) AS (SELECT ...), name2 AS (SELECT ...) SELECT ...
 
-                        // Find the last identifier
-                        let mut paren_depth2 = 0;
-                        for j in (0..(i.saturating_sub(1))).rev() {
-                            match stmt.real_tokens[j].value {
-                                SQLite3Token::Whitespace(_) => {}
-                                SQLite3Token::LParen => { paren_depth2 -= 1;}
-                                SQLite3Token::RParen => { paren_depth2 += 1;}
-                                _ if paren_depth2 == 0 => {
-                                    if let SQLite3Token::Identifier(word, _) = &stmt.real_tokens[j].value {
-                                        current_entry = Some(CTEEntry {
-                                            ident: WithZeroIndexedRange {
-                                                range: stmt.real_tokens[j].range.clone(),
-                                                value: word.clone(),
-                                            },
-                                            query_range: ZeroIndexedRange::new(token.range.end.clone(), token.range.end.clone()), // placeholder
-                                        });
-                                    }  // else => syntax error
-                                    break;
-                                }
-                                _ => {}
-                            }
-                        }
+            // AS
+            SQLite3TokenScannerOutput::SingleToken(WithZeroIndexedRange {
+                value: SQLite3Token::Keyword(SQLite3Keyword::AS),
+                range,
+            }) => {
+                //      Search backward
+                //      <--------
+                // WITH name1(x) AS (SELECT ...), name2 AS (SELECT ...) SELECT ...
+
+                // Find the last identifier
+                for grouped_token in grouped_tokens[0..(i.saturating_sub(1))].iter().rev() {
+                    if let SQLite3TokenScannerOutput::SingleToken(token) = grouped_token {
+                        if let SQLite3Token::Identifier(word, _) = &token.value {
+                            current_entry = Some(CTEEntry {
+                                ident: WithZeroIndexedRange {
+                                    range: token.range.clone(),
+                                    value: word.clone(),
+                                },
+                                query_range: ZeroIndexedRange::new(range.end.clone(), range.end.clone()), // placeholder
+                            });
+                        } // else => syntax error
+                        break;
                     }
+                }
+            }
 
+            // the end of a WITH clause
+            SQLite3TokenScannerOutput::SingleToken(WithZeroIndexedRange {
+                value: SQLite3Token::Keyword(
                     // > All common table expressions (ordinary and recursive) are created by prepending a WITH clause in front of a SELECT, INSERT, DELETE, or UPDATE statement.
                     // https://www.sqlite.org/lang_with.html
                     | SQLite3Keyword::SELECT
@@ -96,15 +82,17 @@ pub fn parse_cte(stmt: &SingleStatement) -> Option<CommonTableExpression> {
                     // in case
                     | SQLite3Keyword::CREATE
                     | SQLite3Keyword::ALTER
-                    | SQLite3Keyword::DROP => {
-                        return Some(CommonTableExpression {
-                            entries,
-                            body_range: ZeroIndexedRange::new(token.range.start.clone(), stmt.real_text.range.end.clone()),
-                        })
-                    },
-                    _ => {}
-                }
+                    | SQLite3Keyword::DROP
+                ),
+                range,
+            }) => {
+                return Some(CommonTableExpression {
+                    entries,
+                    body_range: ZeroIndexedRange::new(range.start.clone(), stmt.real_text.range.end.clone()),
+                })
             }
+
+            _ => {}
         }
     }
 
@@ -167,10 +155,7 @@ mod test {
         assert_eq!(
             parse_cte_then_slice_string("WITH ident1 AS (SELECT 1), ident2 AS (SELECT 2) SELECT 3;"),
             CTEString::new(
-                vec![
-                    CTEEntryString::new("ident1", "SELECT 1"),
-                    CTEEntryString::new("ident2", "SELECT 2"),
-                ],
+                vec![CTEEntryString::new("ident1", "SELECT 1"), CTEEntryString::new("ident2", "SELECT 2"),],
                 "SELECT 3;"
             ),
         );
@@ -195,14 +180,9 @@ mod test {
     fn test_materialized() {
         // Test "MATERIALIZED" and "NOT MATERIALIZED"
         assert_eq!(
-            parse_cte_then_slice_string(
-                "WITH ident1 AS MATERIALIZED (SELECT 1), ident2 AS NOT MATERIALIZED (SELECT 2) SELECT 3;"
-            ),
+            parse_cte_then_slice_string("WITH ident1 AS MATERIALIZED (SELECT 1), ident2 AS NOT MATERIALIZED (SELECT 2) SELECT 3;"),
             CTEString::new(
-                vec![
-                    CTEEntryString::new("ident1", "SELECT 1"),
-                    CTEEntryString::new("ident2", "SELECT 2"),
-                ],
+                vec![CTEEntryString::new("ident1", "SELECT 1"), CTEEntryString::new("ident2", "SELECT 2"),],
                 "SELECT 3;"
             ),
         );

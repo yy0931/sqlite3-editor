@@ -22,17 +22,10 @@ pub fn list_tables(conn: &rusqlite::Connection) -> std::result::Result<(TableLis
         &[],
         |row| {
             Ok(TableNameAndColumns {
-                database: Rc::new(get_utf8_string(row, 0, |err| {
-                    warnings.push(err.with("pragma_table_list.schema"))
-                })?),
-                name: Rc::new(get_utf8_string(row, 1, |err| {
-                    warnings.push(err.with("pragma_table_list.name"))
-                })?),
+                database: Rc::new(get_utf8_string(row, 0, |err| warnings.push(err.with("pragma_table_list.schema")))?),
+                name: Rc::new(get_utf8_string(row, 1, |err| warnings.push(err.with("pragma_table_list.name")))?),
                 type_: TableType::from(
-                    get_utf8_string(row, 2, |err| {
-                        warnings.push(err.with("pragma_table_list.type (list_tables)"))
-                    })?
-                    .as_str(),
+                    get_utf8_string(row, 2, |err| warnings.push(err.with("pragma_table_list.type (list_tables)")))?.as_str(),
                 ),
                 column_names: vec![],
             })
@@ -57,13 +50,9 @@ JOIN main.pragma_table_info("table_name") p"#,
             &[],
             |row| {
                 column_names_map
-                    .entry(get_utf8_string(row, 0, |err| {
-                        warnings.push(err.with("list_columns.table_name"))
-                    })?)
+                    .entry(get_utf8_string(row, 0, |err| warnings.push(err.with("list_columns.table_name")))?)
                     .or_default()
-                    .push(get_utf8_string(row, 1, |err| {
-                        warnings.push(err.with("list_columns.column_name"))
-                    })?);
+                    .push(get_utf8_string(row, 1, |err| warnings.push(err.with("list_columns.column_name")))?);
                 Ok(0)
             },
         );
@@ -245,12 +234,7 @@ CREATE TABLE v(x INTEGER NOT NULL REFERENCES t);",
         )
         .unwrap();
         assert_eq!(
-            list_tables(&db)
-                .unwrap()
-                .0
-                .views
-                .into_iter()
-                .collect::<HashSet<(String, String)>>(),
+            list_tables(&db).unwrap().0.views.into_iter().collect::<HashSet<(String, String)>>(),
             HashSet::from([
                 ("v1".to_owned(), "CREATE VIEW v1 AS SELECT 1".to_owned()),
                 ("v2".to_owned(), "CREATE VIEW v2 AS SELECT 2".to_owned()),

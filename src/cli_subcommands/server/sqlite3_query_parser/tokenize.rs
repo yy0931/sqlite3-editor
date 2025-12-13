@@ -19,10 +19,8 @@ use sqlparser::tokenizer::TokenizerError;
 use sqlparser::tokenizer::Whitespace;
 
 static HEXADECIMAL_NUMERIC_LITERAL: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r#"^\d+(_\d+)*$"#).unwrap());
-static NUMERIC_LITERAL_CONTINUATION: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r#"^(_\d+)+([eE](\d+(_\d+)*)?)?$"#).unwrap());
-static HEXADECIMAL_LITERAL_CONTINUATION: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r#"^X\d+(_\d+)*$"#).unwrap());
+static NUMERIC_LITERAL_CONTINUATION: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r#"^(_\d+)+([eE](\d+(_\d+)*)?)?$"#).unwrap());
+static HEXADECIMAL_LITERAL_CONTINUATION: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r#"^X\d+(_\d+)*$"#).unwrap());
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ZeroIndexedTokenizerError {
@@ -31,9 +29,7 @@ pub struct ZeroIndexedTokenizerError {
 }
 
 /// Tokenizes the given SQL input string and appends the end location to each token.
-pub fn tokenize_with_range_location(
-    sql: &str,
-) -> Result<Vec<WithZeroIndexedRange<SQLite3Token>>, ZeroIndexedTokenizerError> {
+pub fn tokenize_with_range_location(sql: &str) -> Result<Vec<WithZeroIndexedRange<SQLite3Token>>, ZeroIndexedTokenizerError> {
     let raw_tokens = match tokenize_with_range_location_raw_sqlparser(sql) {
         Ok(v) => v,
         Err(TokenizerError { line, col, message }) => {
@@ -69,9 +65,7 @@ pub fn tokenize_with_range_location(
             value: match raw_token.value {
                 Token::Number(s, /* "L" suffix */ false) => SQLite3Token::NumericLiteral(s),
                 Token::Number(_, /* "L" suffix */ true) => SQLite3Token::InvalidNumericLiteral,
-                Token::HexStringLiteral(s) if HEXADECIMAL_NUMERIC_LITERAL.is_match(&s) => {
-                    SQLite3Token::NumericLiteral(format!("0x{s}"))
-                }
+                Token::HexStringLiteral(s) if HEXADECIMAL_NUMERIC_LITERAL.is_match(&s) => SQLite3Token::NumericLiteral(format!("0x{s}")),
                 Token::Word(w) => {
                     if w.quote_style.is_some() {
                         // "quoted"
@@ -118,8 +112,9 @@ pub fn tokenize_with_range_location(
                 | Token::EscapedStringLiteral(_) => SQLite3Token::InvalidStringLiteral,
 
                 Token::DoubleQuotedString(s) => SQLite3Token::Identifier(s, None),
-                Token::Whitespace(Whitespace::SingleLineComment { .. })
-                | Token::Whitespace(Whitespace::MultiLineComment { .. }) => SQLite3Token::Whitespace(true),
+                Token::Whitespace(Whitespace::SingleLineComment { .. }) | Token::Whitespace(Whitespace::MultiLineComment { .. }) => {
+                    SQLite3Token::Whitespace(true)
+                }
 
                 Token::DoubleEq => SQLite3Token::Operator(SQLite3Operator::DoubleEq),
                 Token::Eq => SQLite3Token::Operator(SQLite3Operator::Eq),
@@ -177,9 +172,7 @@ pub fn tokenize_with_range_location(
                 Token::Period => SQLite3Token::Period,
                 Token::SemiColon => SQLite3Token::SemiColon,
 
-                Token::Whitespace(Whitespace::Newline | Whitespace::Space | Whitespace::Tab) => {
-                    SQLite3Token::Whitespace(false)
-                }
+                Token::Whitespace(Whitespace::Newline | Whitespace::Space | Whitespace::Tab) => SQLite3Token::Whitespace(false),
 
                 Token::EOF => continue,
             },
@@ -190,10 +183,7 @@ pub fn tokenize_with_range_location(
 
 /// Checks whether `raw_token`, which immediately follows `last_token`, should be merged into `last_token`.
 /// Returns the merged token if the tokens should be merged, otherwise returns `None`.
-fn merge_tokens(
-    last_token: &WithZeroIndexedRange<SQLite3Token>,
-    raw_token: &WithZeroIndexedRange<Token>,
-) -> Option<SQLite3Token> {
+fn merge_tokens(last_token: &WithZeroIndexedRange<SQLite3Token>, raw_token: &WithZeroIndexedRange<Token>) -> Option<SQLite3Token> {
     if last_token.range.end != raw_token.range.start {
         return None;
     }

@@ -60,12 +60,8 @@ impl ForeignKeyListCache {
                         table: get_utf8_string(row, 2, |err| warnings.push(err.with("foreign_key_list.table")))?,
                         from: get_utf8_string(row, 3, |err| warnings.push(err.with("foreign_key_list.from")))?,
                         to: get_utf8_string_optional(row, 4, |err| warnings.push(err.with("foreign_key_list.to")))?,
-                        on_update: get_utf8_string(row, 5, |err| {
-                            warnings.push(err.with("foreign_key_list.on_update"))
-                        })?,
-                        on_delete: get_utf8_string(row, 6, |err| {
-                            warnings.push(err.with("foreign_key_list.on_delete"))
-                        })?,
+                        on_update: get_utf8_string(row, 5, |err| warnings.push(err.with("foreign_key_list.on_update")))?,
+                        on_delete: get_utf8_string(row, 6, |err| warnings.push(err.with("foreign_key_list.on_delete")))?,
                         match_: get_utf8_string(row, 7, |err| warnings.push(err.with("foreign_key_list.match")))?,
                     })
                 },

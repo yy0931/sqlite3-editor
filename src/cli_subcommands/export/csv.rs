@@ -17,9 +17,7 @@ pub fn export<W: Write>(
 ) -> std::result::Result<(), CLIError> {
     // Query
     let con = super::connect(database_filepath)?;
-    let mut stmt = con
-        .prepare(query)
-        .or_else(|err| CLIError::new_query_error(err, query, &[]))?;
+    let mut stmt = con.prepare(query).or_else(|err| CLIError::new_query_error(err, query, &[]))?;
 
     if options.delimiter.len() != 1 {
         CLIError::new_other_error("The delimiter needs to be a single-byte character.", None, None)?;
@@ -27,11 +25,7 @@ pub fn export<W: Write>(
 
     // TODO: `stmt.column_count()` and `stmt.column_names()` should be called after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53).
     let column_count = stmt.column_count();
-    let column_names = stmt
-        .column_names()
-        .into_iter()
-        .map(|v| v.to_owned())
-        .collect::<Vec<_>>();
+    let column_names = stmt.column_names().into_iter().map(|v| v.to_owned()).collect::<Vec<_>>();
 
     let mut w = csv::WriterBuilder::new()
         .delimiter(options.delimiter.as_bytes()[0])
@@ -43,9 +37,7 @@ pub fn export<W: Write>(
     }
     w.write_record(None::<&[u8]>)?;
 
-    let mut rows = stmt
-        .query([])
-        .or_else(|err| CLIError::new_query_error(err, query, &[]))?;
+    let mut rows = stmt.query([]).or_else(|err| CLIError::new_query_error(err, query, &[]))?;
     while let Some(row) = rows.next().or_else(|err| CLIError::new_query_error(err, query, &[]))? {
         for col_id in 0..column_count {
             match row.get_ref_unwrap(col_id) {

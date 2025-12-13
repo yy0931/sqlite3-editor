@@ -78,11 +78,7 @@ impl SQLite3Connection {
     ) -> std::result::Result<(), CLIError> {
         let start_time = std::time::Instant::now();
 
-        fn write_editor_pragma<T: Serialize>(
-            w: &mut (impl Write + ?Sized),
-            data: (T, Vec<InvalidUTF8>),
-            start_time: std::time::Instant,
-        ) {
+        fn write_editor_pragma<T: Serialize>(w: &mut (impl Write + ?Sized), data: (T, Vec<InvalidUTF8>), start_time: std::time::Instant) {
             w.write_all(
                 &rmp_serde::to_vec_named(&EditorPragmaResponse {
                     data: data.0,
@@ -101,45 +97,25 @@ impl SQLite3Connection {
                 let (Some(CLIValue::String(table_name)), Some(CLIValue::String(column_name)), Some(value)) =
                     (params.first(), params.get(1), params.get(2))
                 else {
-                    return CLIError::new_other_error(
-                        "invalid arguments for list_references",
-                        Some(query.to_owned()),
-                        Some(params),
-                    );
+                    return CLIError::new_other_error("invalid arguments for list_references", Some(query.to_owned()), Some(params));
                 };
 
-                write_editor_pragma(
-                    w,
-                    list_references(&self.con, table_name, column_name, value)?,
-                    start_time,
-                )
+                write_editor_pragma(w, list_references(&self.con, table_name, column_name, value)?, start_time)
             }
             "EDITOR_PRAGMA table_schema" => {
-                let (Some(CLIValue::String(database)), Some(CLIValue::String(table_name))) =
-                    (params.first(), params.get(1))
-                else {
-                    return CLIError::new_other_error(
-                        "invalid arguments table_schema",
-                        Some(query.to_owned()),
-                        Some(params),
-                    );
+                let (Some(CLIValue::String(database)), Some(CLIValue::String(table_name))) = (params.first(), params.get(1)) else {
+                    return CLIError::new_other_error("invalid arguments table_schema", Some(query.to_owned()), Some(params));
                 };
                 write_editor_pragma(w, table_schema(&self.con, database, table_name)?, start_time)
             }
             "EDITOR_PRAGMA query_schema" => {
                 let Some(CLIValue::String(query)) = params.first() else {
-                    return CLIError::new_other_error(
-                        "invalid argument for query_schema",
-                        Some(query.to_owned()),
-                        Some(params),
-                    );
+                    return CLIError::new_other_error("invalid argument for query_schema", Some(query.to_owned()), Some(params));
                 };
 
                 write_editor_pragma(w, query_schema(&self.con, query)?, start_time)
             }
-            "EDITOR_PRAGMA total_cache_size_bytes" => {
-                write_editor_pragma(w, (self.pager.total_cache_size_bytes(), vec![]), start_time)
-            }
+            "EDITOR_PRAGMA total_cache_size_bytes" => write_editor_pragma(w, (self.pager.total_cache_size_bytes(), vec![]), start_time),
             "EDITOR_PRAGMA load_extensions" => {
                 let mut extensions = vec![];
                 for param in params {
@@ -246,9 +222,7 @@ impl SQLite3Connection {
                     .or_else(|err| CLIError::new_query_error(err, &pre_stmt_str, params))?;
             }
 
-            let mut stmt = tx
-                .prepare(query)
-                .or_else(|err| CLIError::new_query_error(err, query, params))?;
+            let mut stmt = tx.prepare(query).or_else(|err| CLIError::new_query_error(err, query, params))?;
 
             // Bind parameters
             if params.len() != stmt.parameter_count() {
@@ -267,9 +241,7 @@ impl SQLite3Connection {
                     return CLIError::new_other_error(
                         format!(
                             "Failed to parse the SQL statement: {placeholders:?} != {:?}",
-                            (0..placeholders.len())
-                                .map(|i| stmt.parameter_name(i + 1))
-                                .collect::<Vec<_>>()
+                            (0..placeholders.len()).map(|i| stmt.parameter_name(i + 1)).collect::<Vec<_>>()
                         ),
                         Some(query.to_owned()),
                         Some(params),
@@ -296,9 +268,7 @@ impl SQLite3Connection {
                                 Ok(value) => {
                                     col_buf
                                         .get_column(i)
-                                        .push_message_pack(encode_value_ref_into_msgpack(value, |err| {
-                                            warnings.push(err.with(query))
-                                        }));
+                                        .push_message_pack(encode_value_ref_into_msgpack(value, |err| warnings.push(err.with(query))));
                                 }
                                 Err(rusqlite::Error::InvalidColumnIndex(_)) => break,
                                 Err(err) => return CLIError::new_query_error(err, query, params),
@@ -313,11 +283,7 @@ impl SQLite3Connection {
             drop(rows);
 
             // NOTE: We need to call `stmt.column_names()` after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53)
-            let columns = stmt
-                .column_names()
-                .into_iter()
-                .map(|v| v.to_owned())
-                .collect::<Vec<_>>();
+            let columns = stmt.column_names().into_iter().map(|v| v.to_owned()).collect::<Vec<_>>();
 
             drop(stmt);
 
@@ -328,8 +294,7 @@ impl SQLite3Connection {
                 } else {
                     actual_changes == changes
                 } {
-                    tx.rollback()
-                        .or_else(|err| CLIError::new_query_error(err, query, params))?;
+                    tx.rollback().or_else(|err| CLIError::new_query_error(err, query, params))?;
                     return Err(CLIError::UnexpectedChanges {
                         expected: changes,
                         actual: actual_changes,

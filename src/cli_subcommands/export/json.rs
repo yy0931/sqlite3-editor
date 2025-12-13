@@ -9,21 +9,13 @@ use std::io::Write;
 pub fn export<W: Write>(database_filepath: &str, query: &str, mut writer: &mut W) -> std::result::Result<(), CLIError> {
     // Query
     let con = super::connect(database_filepath)?;
-    let mut stmt = con
-        .prepare(query)
-        .or_else(|err| CLIError::new_query_error(err, query, &[]))?;
+    let mut stmt = con.prepare(query).or_else(|err| CLIError::new_query_error(err, query, &[]))?;
 
     // TODO: `stmt.column_names()` should be called after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53).
-    let column_names = stmt
-        .column_names()
-        .into_iter()
-        .map(|v| v.to_owned())
-        .collect::<Vec<_>>();
+    let column_names = stmt.column_names().into_iter().map(|v| v.to_owned()).collect::<Vec<_>>();
 
     writer.write_all(b"[")?;
-    let mut rows = stmt
-        .query([])
-        .or_else(|err| CLIError::new_query_error(err, query, &[]))?;
+    let mut rows = stmt.query([]).or_else(|err| CLIError::new_query_error(err, query, &[]))?;
     let mut first_entry = true;
     while let Some(row) = rows.next().or_else(|err| CLIError::new_query_error(err, query, &[]))? {
         if !first_entry {

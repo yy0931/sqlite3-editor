@@ -12,9 +12,7 @@ pub fn select_all<F: FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>, T>(
     assert_readonly_query(query, &None)?;
 
     // Prepare the statement
-    let mut stmt = conn
-        .prepare(query)
-        .or_else(|err| CLIError::new_query_error(err, query, params))?;
+    let mut stmt = conn.prepare(query).or_else(|err| CLIError::new_query_error(err, query, params))?;
 
     // Bind parameters
     for (i, param) in params.iter().enumerate() {
@@ -221,10 +219,7 @@ INSERT INTO t VALUES (1);
         )
         .unwrap();
 
-        assert_eq!(
-            select_all(db.con(), "SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(),
-            0
-        );
+        assert_eq!(select_all(db.con(), "SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(), 0);
 
         assert_eq!(
             db._execute(
@@ -245,10 +240,7 @@ INSERT INTO t VALUES (1);
             }),
         );
 
-        assert_eq!(
-            select_all(db.con(), "SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(),
-            0
-        );
+        assert_eq!(select_all(db.con(), "SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(), 0);
 
         db._execute(
             "INSERT INTO t DEFAULT VALUES",
@@ -259,10 +251,7 @@ INSERT INTO t VALUES (1);
         )
         .unwrap();
 
-        assert_eq!(
-            select_all(db.con(), "SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(),
-            1
-        );
+        assert_eq!(select_all(db.con(), "SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(), 1);
 
         db._execute(
             "INSERT INTO t DEFAULT VALUES",
@@ -276,10 +265,7 @@ INSERT INTO t VALUES (1);
         )
         .unwrap();
 
-        assert_eq!(
-            select_all(db.con(), "SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(),
-            2
-        );
+        assert_eq!(select_all(db.con(), "SELECT * FROM t", &[], |_| Ok(1)).unwrap().len(), 2);
     }
 
     #[test]

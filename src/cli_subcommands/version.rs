@@ -10,11 +10,7 @@ pub fn run(mut writer: &mut impl Write) {
     let con = rusqlite::Connection::open_in_memory().unwrap();
     con.execute("CREATE TABLE t(v)", ()).unwrap();
     con.execute("INSERT INTO t VALUES (?)", ["ok"]).unwrap();
-    assert_eq!(
-        con.query_row("SELECT v FROM t", [], |row| row.get::<_, String>(0))
-            .unwrap(),
-        "ok"
-    );
+    assert_eq!(con.query_row("SELECT v FROM t", [], |row| row.get::<_, String>(0)).unwrap(), "ok");
 
     writeln!(&mut writer, "sqlite3-editor {}", env!("CARGO_PKG_VERSION")).expect("writeln! failed.");
     writeln!(&mut writer, "SQLite {}", rusqlite::version()).expect("writeln! failed.");

@@ -70,13 +70,8 @@ pub fn run(
 
 fn connect(database_filepath: &str) -> std::result::Result<rusqlite::Connection, CLIError> {
     // Connect to the database
-    let con = rusqlite::Connection::open(database_filepath).or_else(|err| {
-        CLIError::new_other_error(
-            format!("Failed to open the database {database_filepath:?}: {err}"),
-            None,
-            None,
-        )
-    })?;
+    let con = rusqlite::Connection::open(database_filepath)
+        .or_else(|err| CLIError::new_other_error(format!("Failed to open the database {database_filepath:?}: {err}"), None, None))?;
 
     Ok(con)
 }

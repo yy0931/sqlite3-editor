@@ -102,10 +102,7 @@ mod test {
                 Placeholder::new(Some("?1".to_owned()), vec![ZeroIndexedRange::new4(0, 7, 0, 9)]),
                 Placeholder::new(
                     Some("$a".to_owned()),
-                    vec![
-                        ZeroIndexedRange::new4(0, 11, 0, 13),
-                        ZeroIndexedRange::new4(0, 19, 0, 21)
-                    ]
+                    vec![ZeroIndexedRange::new4(0, 11, 0, 13), ZeroIndexedRange::new4(0, 19, 0, 21)]
                 ),
                 Placeholder::new(None, vec![]),
                 Placeholder::new(None, vec![]),

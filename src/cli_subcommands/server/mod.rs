@@ -84,12 +84,8 @@ where
         }
 
         // Open request and response files
-        let mut r = File::open(&request_body_filepath).unwrap_or_else(|err| {
-            panic!(
-                "unable to open database file {}: {err:?}",
-                request_body_filepath.to_string_lossy()
-            )
-        });
+        let mut r = File::open(&request_body_filepath)
+            .unwrap_or_else(|err| panic!("unable to open database file {}: {err:?}", request_body_filepath.to_string_lossy()));
         let mut w = match std::fs::OpenOptions::new()
             .write(true)
             .create(true)
@@ -203,9 +199,9 @@ impl<T: Read + BufRead> ReadCommand for T {
                 _ => {}
             }
 
-            if let Ok(command) = ServerCommand::deserialize(
-                serde::de::value::StrDeserializer::<serde::de::value::Error>::new(command_str.trim()),
-            ) {
+            if let Ok(command) = ServerCommand::deserialize(serde::de::value::StrDeserializer::<serde::de::value::Error>::new(
+                command_str.trim(),
+            )) {
                 return Some(command);
             }
         }

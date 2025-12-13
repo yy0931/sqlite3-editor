@@ -10,8 +10,7 @@ use crate::cli_subcommands::server::sqlite3_query_parser::types::WithZeroIndexed
 
 pub fn get_table_to_be_modified(real_tokens: &[WithZeroIndexedRange<SQLite3Token>]) -> Option<TableToBeModified> {
     // Filter out whitespace tokens.
-    let non_whitespace_tokens: Vec<&WithZeroIndexedRange<SQLite3Token>> =
-        real_tokens.iter().filter(|t| !t.value.is_whitespace()).collect();
+    let non_whitespace_tokens: Vec<&WithZeroIndexedRange<SQLite3Token>> = real_tokens.iter().filter(|t| !t.value.is_whitespace()).collect();
 
     for (i, token) in non_whitespace_tokens.iter().enumerate() {
         if let SQLite3Token::Keyword(k) = &token.value {
@@ -89,10 +88,7 @@ static PATTERN_MAP: Lazy<HashMap<SQLite3Keyword, Vec<Vec<PatternItem>>>> = Lazy:
     map
 });
 
-fn match_pattern(
-    tokens: &[&WithZeroIndexedRange<SQLite3Token>],
-    pattern: &[PatternItem],
-) -> Option<Option<TableToBeModified>> {
+fn match_pattern(tokens: &[&WithZeroIndexedRange<SQLite3Token>], pattern: &[PatternItem]) -> Option<Option<TableToBeModified>> {
     let mut schema: Option<String> = None;
     let mut table: Option<String> = None;
 
@@ -224,11 +220,9 @@ mod test {
     fn test_get_table_to_be_modified_create_trigger() {
         assert_eq!(
             get_table_to_be_modified(
-                &split_sqlite_statements(
-                    "CREATE TRIGGER trigger_insert AFTER INSERT ON t INSERT INTO table1 VALUES (1); END"
-                )
-                .unwrap()
-                .0[0]
+                &split_sqlite_statements("CREATE TRIGGER trigger_insert AFTER INSERT ON t INSERT INTO table1 VALUES (1); END")
+                    .unwrap()
+                    .0[0]
                     .real_tokens
             ),
             None

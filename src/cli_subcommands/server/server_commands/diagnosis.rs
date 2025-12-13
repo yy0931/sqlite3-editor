@@ -59,18 +59,12 @@ fn diagnose(sql: &str) -> std::result::Result<Vec<Diagnostic>, CLIError> {
             }
             Ok(errors)
         }
-        Err(ZeroIndexedTokenizerError { location, message }) => {
-            Ok(vec![Diagnostic::error(location.offset_at(sql), message)])
-        }
+        Err(ZeroIndexedTokenizerError { location, message }) => Ok(vec![Diagnostic::error(location.offset_at(sql), message)]),
     }
 }
 
 /// Checks the syntax of a single SQL statement using a SQLite connection.
-pub fn diagnose_single_statement(
-    conn: &mut rusqlite::Connection,
-    stmt_str: &str,
-    offset_start: usize,
-) -> Option<Diagnostic> {
+pub fn diagnose_single_statement(conn: &mut rusqlite::Connection, stmt_str: &str, offset_start: usize) -> Option<Diagnostic> {
     // Ignore empty statements
     if stmt_str.trim().is_empty() || stmt_str.trim() == ";" {
         return None;
@@ -86,8 +80,7 @@ pub fn diagnose_single_statement(
         // syntax error, unrecognized token, incomplete input
         Err(rusqlite::Error::SqlInputError { sql, offset, msg, .. }) if SQL_INPUT_ERROR_SYNTAX_ERROR.is_match(&msg) => {
             Some(Diagnostic::error(
-                (offset_start + loose_byte_to_code_point_index(&sql, offset.try_into().unwrap()))
-                    .saturating_sub("EXPLAIN ".len()),
+                (offset_start + loose_byte_to_code_point_index(&sql, offset.try_into().unwrap())).saturating_sub("EXPLAIN ".len()),
                 msg,
             ))
         }
@@ -106,8 +99,7 @@ static EXPLAIN: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)(?s).*\bEXPLAIN[^_a-
 
 static SQL_INPUT_ERROR_SYNTAX_ERROR: Lazy<Regex> =
     Lazy::new(|| Regex::new(r#"(?i)(?s)^(?:near .*: syntax error|unrecognized token:|incomplete input)"#).unwrap());
-static SQLITE_FAILURE_SYNTAX_ERROR: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"(?i)(?s)^(?:unknown table option)"#).unwrap());
+static SQLITE_FAILURE_SYNTAX_ERROR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"(?i)(?s)^(?:unknown table option)"#).unwrap());
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize, ts_rs::TS)]
 #[ts(export)]
@@ -175,10 +167,7 @@ mod test {
 
     #[test]
     fn test_syntax_error() {
-        assert_eq!(
-            diagnose("DELETE t"),
-            Ok(vec![Diagnostic::error(7, "near \"t\": syntax error")]),
-        );
+        assert_eq!(diagnose("DELETE t"), Ok(vec![Diagnostic::error(7, "near \"t\": syntax error")]),);
     }
 
     #[test]

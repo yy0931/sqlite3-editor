@@ -24,9 +24,7 @@ pub fn import(
     }
 
     let mut con = super::connect(database_filepath)?;
-    let tx = con
-        .transaction()
-        .or_else(|err| CLIError::new_query_error(err, "BEGIN;", &[]))?;
+    let tx = con.transaction().or_else(|err| CLIError::new_query_error(err, "BEGIN;", &[]))?;
     let stmt = format!(
         "CREATE TABLE {}({})",
         escape_sql_identifier(table_name),
@@ -36,31 +34,27 @@ pub fn import(
             .collect::<Vec<_>>()
             .join(", ")
     );
-    tx.execute(&stmt, [])
-        .or_else(|err| CLIError::new_query_error(err, stmt, &[]))?;
+    tx.execute(&stmt, []).or_else(|err| CLIError::new_query_error(err, stmt, &[]))?;
     {
         let stmt = format!(
             "INSERT INTO {} VALUES ({})",
             escape_sql_identifier(table_name),
             columns.iter().map(|_| "?").collect::<Vec<_>>().join(", ")
         );
-        let mut insert = tx
-            .prepare(&stmt)
-            .or_else(|err| CLIError::new_query_error(err, &stmt, &[]))?;
+        let mut insert = tx.prepare(&stmt).or_else(|err| CLIError::new_query_error(err, &stmt, &[]))?;
         for record in r.records() {
             let values = record?.iter().map(|v| v.to_owned()).collect::<Vec<_>>();
             for (i, value) in values.iter().enumerate() {
-                insert.raw_bind_parameter(i + 1, value).or_else(|err| {
-                    CLIError::new_query_error(err, &stmt, &values.iter().map(|v| v.into()).collect::<Vec<CLIValue>>())
-                })?;
+                insert
+                    .raw_bind_parameter(i + 1, value)
+                    .or_else(|err| CLIError::new_query_error(err, &stmt, &values.iter().map(|v| v.into()).collect::<Vec<CLIValue>>()))?;
             }
-            insert.raw_execute().or_else(|err| {
-                CLIError::new_query_error(err, &stmt, &values.iter().map(|v| v.into()).collect::<Vec<CLIValue>>())
-            })?;
+            insert
+                .raw_execute()
+                .or_else(|err| CLIError::new_query_error(err, &stmt, &values.iter().map(|v| v.into()).collect::<Vec<CLIValue>>()))?;
         }
     }
-    tx.commit()
-        .or_else(|err| CLIError::new_query_error(err, "COMMIT;", &[]))?;
+    tx.commit().or_else(|err| CLIError::new_query_error(err, "COMMIT;", &[]))?;
 
     Ok(())
 }
@@ -93,10 +87,7 @@ mod test {
                     .unwrap()
                     .prepare("SELECT * FROM test")
                     .unwrap()
-                    .query_map([], |row| Ok((
-                        get_utf8_string(row, 0, |_| {})?,
-                        get_utf8_string(row, 1, |_| {})?
-                    )))
+                    .query_map([], |row| Ok((get_utf8_string(row, 0, |_| {})?, get_utf8_string(row, 1, |_| {})?)))
                     .unwrap()
                     .collect::<Result<Vec<_>, _>>()
                     .unwrap()
@@ -127,10 +118,7 @@ mod test {
                     .unwrap()
                     .prepare("SELECT * FROM test")
                     .unwrap()
-                    .query_map([], |row| Ok((
-                        get_utf8_string(row, 0, |_| {})?,
-                        get_utf8_string(row, 1, |_| {})?
-                    )))
+                    .query_map([], |row| Ok((get_utf8_string(row, 0, |_| {})?, get_utf8_string(row, 1, |_| {})?)))
                     .unwrap()
                     .collect::<Result<Vec<_>, _>>()
                     .unwrap()
@@ -152,7 +140,15 @@ mod test {
         writeln!(tmp_csv_file, "name,age\nAlice,20\nBob,25,30").unwrap();
 
         // Import the CSV file.
-        assert_eq!(super::import(tmp_db_filepath, "test", ",", Some(tmp_csv_file_path.to_string())), Err(CLIError::Other { message: "CSV error: record 2 (line: 3, byte: 18): found record with 3 fields, but the previous record has 2 fields".to_owned(), query: None, params: None }));
+        assert_eq!(
+            super::import(tmp_db_filepath, "test", ",", Some(tmp_csv_file_path.to_string())),
+            Err(CLIError::Other {
+                message: "CSV error: record 2 (line: 3, byte: 18): found record with 3 fields, but the previous record has 2 fields"
+                    .to_owned(),
+                query: None,
+                params: None
+            })
+        );
     }
 
     #[test]
@@ -176,10 +172,7 @@ mod test {
                     .unwrap()
                     .prepare("SELECT * FROM test")
                     .unwrap()
-                    .query_map([], |row| Ok((
-                        get_utf8_string(row, 0, |_| {})?,
-                        get_utf8_string(row, 1, |_| {})?
-                    )))
+                    .query_map([], |row| Ok((get_utf8_string(row, 0, |_| {})?, get_utf8_string(row, 1, |_| {})?)))
                     .unwrap()
                     .collect::<Result<Vec<_>, _>>()
                     .unwrap()

@@ -67,9 +67,7 @@ pub fn code_lens(sql: &str) -> Vec<CodeLens> {
         let mut cte_end = ZeroIndexedLocation::new(0, 0);
         if let Some(cte) = cte {
             for entry in cte.entries {
-                let with_clause =
-                    ZeroIndexedRange::new(stmt.real_text.range.start.clone(), cte.body_range.start.clone())
-                        .get_text(&lines);
+                let with_clause = ZeroIndexedRange::new(stmt.real_text.range.start.clone(), cte.body_range.start.clone()).get_text(&lines);
                 let cte_ident = escape_sql_identifier(&entry.ident.range.get_text(&lines));
                 let select_stmt = format!(
                     "{}SELECT * FROM {}",

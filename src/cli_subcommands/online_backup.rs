@@ -44,9 +44,7 @@ impl OnlineBackup {
 }
 
 fn sqlite3_errmsg_as_string(handle: *mut sqlite3) -> String {
-    unsafe { CStr::from_ptr(sqlite3_errmsg(handle)) }
-        .to_string_lossy()
-        .to_string()
+    unsafe { CStr::from_ptr(sqlite3_errmsg(handle)) }.to_string_lossy().to_string()
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

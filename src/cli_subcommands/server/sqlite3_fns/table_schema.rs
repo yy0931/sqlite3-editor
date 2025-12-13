@@ -32,18 +32,16 @@ pub fn table_schema(
     let (table_type, wr, strict) = {
         let all = select_all(
             conn,
-                "SELECT type, wr, strict FROM pragma_table_list WHERE schema = ? COLLATE NOCASE AND name = ? COLLATE NOCASE",
-                &[database.into(), table_name.into()],
-                |row| {
-                    Ok((
-                        get_utf8_string(row, 0, |err| {
-                            warnings.push(err.with("pragma_table_list.type (table_schema)"))
-                        })?,
-                        row.get::<_, i64>(1)? != 0,
-                        row.get::<_, i64>(2)? != 0,
-                    ))
-                },
-            )?;
+            "SELECT type, wr, strict FROM pragma_table_list WHERE schema = ? COLLATE NOCASE AND name = ? COLLATE NOCASE",
+            &[database.into(), table_name.into()],
+            |row| {
+                Ok((
+                    get_utf8_string(row, 0, |err| warnings.push(err.with("pragma_table_list.type (table_schema)")))?,
+                    row.get::<_, i64>(1)? != 0,
+                    row.get::<_, i64>(2)? != 0,
+                ))
+            },
+        )?;
         let Some(one) = all.first() else {
             return Ok((None, warnings));
         };
@@ -58,59 +56,51 @@ pub fn table_schema(
     // Select pragma_foreign_key_list
     let mut foreign_key_list_cache = ForeignKeyListCache::default();
 
-    let (column_origins, foreign_keys): (Option<HashMap<String, ColumnOriginAndIsRowId>>, ForeignKeyList) =
-        if table_type == TableType::View {
-            let column_origins = column_origin(
-                unsafe { conn.handle() },
-                &format!("SELECT * FROM {} LIMIT 0", escape_sql_identifier(table_name)),
-            )
-            .unwrap_or_default();
+    let (column_origins, foreign_keys): (Option<HashMap<String, ColumnOriginAndIsRowId>>, ForeignKeyList) = if table_type == TableType::View
+    {
+        let column_origins = column_origin(
+            unsafe { conn.handle() },
+            &format!("SELECT * FROM {} LIMIT 0", escape_sql_identifier(table_name)),
+        )
+        .unwrap_or_default();
 
-            // In this case:
-            // ```
-            // CREATE TABLE t1(x INTEGER PRIMARY KEY);
-            // CREATE TABLE t2(y INTEGER REFERENCES t1(x));
-            // CREATE VIEW table_name AS SELECT y as z FROM t2;
-            // ```
-            // column_origins = {"z": ("main", "t2", "y")}
-            // origin_fk = { from: "y", to: "x", table: "t1" }
-            let mut foreign_keys = HashMap::<String, Vec<TableSchemaColumnForeignKey>>::new();
-            for (from, to) in &column_origins {
-                if let Some(origin_fk) = foreign_key_list_cache
-                    .get(conn, &to.database, &to.table, &mut warnings)?
-                    .get(&to.column)
-                {
-                    let vec = foreign_keys.entry(from.to_owned()).or_default();
-                    for item in origin_fk.iter() {
-                        vec.push(item.to_owned());
-                    }
+        // In this case:
+        // ```
+        // CREATE TABLE t1(x INTEGER PRIMARY KEY);
+        // CREATE TABLE t2(y INTEGER REFERENCES t1(x));
+        // CREATE VIEW table_name AS SELECT y as z FROM t2;
+        // ```
+        // column_origins = {"z": ("main", "t2", "y")}
+        // origin_fk = { from: "y", to: "x", table: "t1" }
+        let mut foreign_keys = HashMap::<String, Vec<TableSchemaColumnForeignKey>>::new();
+        for (from, to) in &column_origins {
+            if let Some(origin_fk) = foreign_key_list_cache
+                .get(conn, &to.database, &to.table, &mut warnings)?
+                .get(&to.column)
+            {
+                let vec = foreign_keys.entry(from.to_owned()).or_default();
+                for item in origin_fk.iter() {
+                    vec.push(item.to_owned());
                 }
             }
-            (
-                Some(
-                    column_origins
-                        .into_iter()
-                        .map(|(k, v)| {
-                            (
-                                k,
-                                ColumnOriginAndIsRowId::new(
-                                    is_rowid(conn, &v, &mut warnings).unwrap_or(false /* TODO: error handling */),
-                                    v,
-                                ),
-                            )
-                        })
-                        .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
-                ),
-                foreign_keys,
-            )
-        } else {
-            (
-                None,
-                foreign_key_list_cache
-                    .get(conn, database, table_name, &mut warnings)?
-                    .clone(),
-            )
-        };
+        }
+        (
+            Some(
+                column_origins
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            k,
+                            ColumnOriginAndIsRowId::new(is_rowid(conn, &v, &mut warnings).unwrap_or(false /* TODO: error handling */), v),
+                        )
+                    })
+                    .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),
+            ),
+            foreign_keys,
+        )
+    } else {
+        (None, foreign_key_list_cache.get(conn, database, table_name, &mut warnings)?.clone())
+    };
 
     // Select sqlite_sequence
     // NOTE: There is no way to check if an empty table has an autoincrement column.
@@ -294,8 +284,7 @@ mod test_table_schema {
     fn test_table() {
         let db = rusqlite::Connection::open_in_memory().unwrap();
 
-        db.execute_batch("CREATE TABLE t(x INTEGER PRIMARY KEY NOT NULL) STRICT")
-            .unwrap();
+        db.execute_batch("CREATE TABLE t(x INTEGER PRIMARY KEY NOT NULL) STRICT").unwrap();
 
         assert_eq!(
             table_schema(&db, "main", "t").unwrap().0.unwrap(),
@@ -473,7 +462,8 @@ mod test_table_schema {
     #[test]
     fn test_default_value() {
         let db = rusqlite::Connection::open_in_memory().unwrap();
-        db.execute_batch("CREATE TABLE t(a DEFAULT NULL, b DEFAULT 1, c DEFAULT 1.2, d DEFAULT 'a', e DEFAULT x'1234', f DEFAULT (1 + 2))").unwrap();
+        db.execute_batch("CREATE TABLE t(a DEFAULT NULL, b DEFAULT 1, c DEFAULT 1.2, d DEFAULT 'a', e DEFAULT x'1234', f DEFAULT (1 + 2))")
+            .unwrap();
         assert_eq!(
             table_schema(&db, "main", "t")
                 .unwrap()
@@ -728,8 +718,7 @@ mod test_table_schema {
         }
 
         fn check_is_alias_to_rowid(db: &rusqlite::Connection, table: &str, column: &str, yes: bool) {
-            db.execute_batch(&format!("INSERT INTO {table} DEFAULT VALUES"))
-                .unwrap();
+            db.execute_batch(&format!("INSERT INTO {table} DEFAULT VALUES")).unwrap();
             assert_eq!(
                 select_all(
                     db,
@@ -760,8 +749,7 @@ mod test_table_schema {
         #[test]
         fn test_single_integer_not_null_pk() {
             let db = rusqlite::Connection::open_in_memory().unwrap();
-            db.execute_batch("CREATE TABLE t(x INTEGER NOT NULL PRIMARY KEY)")
-                .unwrap();
+            db.execute_batch("CREATE TABLE t(x INTEGER NOT NULL PRIMARY KEY)").unwrap();
             check_is_rowid(&db, "t", "x", true);
             check_is_rowid(&db, "t", "rowid", true);
             check_is_alias_to_rowid(&db, "t", "x", true);
@@ -770,8 +758,7 @@ mod test_table_schema {
         #[test]
         fn test_integer_unique_pk() {
             let db = rusqlite::Connection::open_in_memory().unwrap();
-            db.execute_batch("CREATE TABLE t(x INTEGER UNIQUE PRIMARY KEY)")
-                .unwrap();
+            db.execute_batch("CREATE TABLE t(x INTEGER UNIQUE PRIMARY KEY)").unwrap();
             check_is_rowid(&db, "t", "x", true);
             check_is_rowid(&db, "t", "rowid", true);
             check_is_alias_to_rowid(&db, "t", "x", true);

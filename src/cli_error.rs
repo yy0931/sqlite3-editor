@@ -51,11 +51,7 @@ pub enum CLIError {
 }
 
 impl CLIError {
-    pub fn new_query_error<T, U: Into<String>>(
-        err: rusqlite::Error,
-        query: U,
-        params: &[CLIValue],
-    ) -> std::result::Result<T, Self> {
+    pub fn new_query_error<T, U: Into<String>>(err: rusqlite::Error, query: U, params: &[CLIValue]) -> std::result::Result<T, Self> {
         Err(Self::Query {
             message: format!("{err}"),
             query: query.into(),
@@ -77,11 +73,7 @@ impl CLIError {
         })
     }
 
-    pub fn new_ffi_error<T, U: Into<String>>(
-        err: rusqlite::Error,
-        function_name: U,
-        params: &[CLIValue],
-    ) -> std::result::Result<T, Self> {
+    pub fn new_ffi_error<T, U: Into<String>>(err: rusqlite::Error, function_name: U, params: &[CLIValue]) -> std::result::Result<T, Self> {
         Err(Self::FFI {
             message: format!("{err}"),
             function_name: function_name.into(),
@@ -89,11 +81,7 @@ impl CLIError {
         })
     }
 
-    pub fn new_other_error<T, U: Into<String>>(
-        msg: U,
-        query: Option<String>,
-        params: Option<&[CLIValue]>,
-    ) -> std::result::Result<T, Self> {
+    pub fn new_other_error<T, U: Into<String>>(msg: U, query: Option<String>, params: Option<&[CLIValue]>) -> std::result::Result<T, Self> {
         Err(Self::Other {
             message: msg.into(),
             query,
@@ -188,14 +176,8 @@ impl std::fmt::Display for CLIError {
                 write!(
                     f,
                     "{message}{}{}",
-                    query
-                        .as_ref()
-                        .map(|query| Self::format_query(query))
-                        .unwrap_or_default(),
-                    params
-                        .as_ref()
-                        .map(|params| Self::format_params(params))
-                        .unwrap_or_default()
+                    query.as_ref().map(|query| Self::format_query(query)).unwrap_or_default(),
+                    params.as_ref().map(|params| Self::format_params(params)).unwrap_or_default()
                 )
             }
         }

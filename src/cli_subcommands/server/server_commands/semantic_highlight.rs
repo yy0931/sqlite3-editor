@@ -13,10 +13,12 @@ use std::io::Write;
 
 pub fn run(r: &mut File, w: &mut File) -> CLIErrorCode {
     // Handle the command
-    if let Err(err) = rmp_serde::from_read(r).map(|SemanticHighlightCommandParams { query }: SemanticHighlightCommandParams| -> std::result::Result<(), CLIError> {
-        write_named(w, &semantic_highlight(&query))?;
-        Ok(())
-    }) {
+    if let Err(err) = rmp_serde::from_read(r).map(
+        |SemanticHighlightCommandParams { query }: SemanticHighlightCommandParams| -> std::result::Result<(), CLIError> {
+            write_named(w, &semantic_highlight(&query))?;
+            Ok(())
+        },
+    ) {
         w.flush().unwrap();
         w.truncate_all();
         write!(w, "{err:?}").unwrap();
@@ -174,10 +176,7 @@ mod test {
     #[test]
     fn test_quoted_identifier() {
         assert_eq!(
-            semantic_highlight("\"a\"")
-                .into_iter()
-                .map(|t| t.kind)
-                .collect::<Vec<_>>(),
+            semantic_highlight("\"a\"").into_iter().map(|t| t.kind).collect::<Vec<_>>(),
             [SemanticTokenKind::Variable]
         )
     }
@@ -200,10 +199,7 @@ mod test {
     #[test]
     fn test_blob_literal() {
         assert_eq!(
-            semantic_highlight("SELECT x'ff'")
-                .into_iter()
-                .map(|t| t.kind)
-                .collect::<Vec<_>>(),
+            semantic_highlight("SELECT x'ff'").into_iter().map(|t| t.kind).collect::<Vec<_>>(),
             [
                 SemanticTokenKind::Keyword, // "SELECT"
                 SemanticTokenKind::Other,   // " "
@@ -214,21 +210,12 @@ mod test {
 
     #[test]
     fn test_tokenizer_error() {
-        assert_eq!(
-            semantic_highlight("'aa")
-                .into_iter()
-                .map(|t| t.kind)
-                .collect::<Vec<_>>(),
-            []
-        );
+        assert_eq!(semantic_highlight("'aa").into_iter().map(|t| t.kind).collect::<Vec<_>>(), []);
     }
 
     fn assert_all_tokens_are_number(expr: &str) {
         let tokens = semantic_highlight(expr).into_iter().map(|t| t.kind).collect::<Vec<_>>();
-        assert_eq!(
-            tokens,
-            tokens.iter().map(|_| SemanticTokenKind::Number).collect::<Vec<_>>()
-        );
+        assert_eq!(tokens, tokens.iter().map(|_| SemanticTokenKind::Number).collect::<Vec<_>>());
     }
 
     #[test]

@@ -10,10 +10,7 @@ use crate::cli_subcommands::server::sqlite3_fns::schema_types::TableSchemaColumn
 use crate::cli_subcommands::server::sqlite3_fns::schema_types::TableType;
 use crate::utf8_extractor::InvalidUTF8;
 
-pub fn query_schema(
-    conn: &rusqlite::Connection,
-    query: &str,
-) -> std::result::Result<(TableSchema, Vec<InvalidUTF8>), CLIError> {
+pub fn query_schema(conn: &rusqlite::Connection, query: &str) -> std::result::Result<(TableSchema, Vec<InvalidUTF8>), CLIError> {
     let mut warnings = vec![];
 
     let column_origins = column_origin(
@@ -30,11 +27,7 @@ pub fn query_schema(
 
     // NOTE: We need to call `stmt.column_names()` after `.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53)
     let _ = stmt.raw_query().next();
-    let column_names = stmt
-        .column_names()
-        .into_iter()
-        .map(|v| v.to_owned())
-        .collect::<Vec<_>>();
+    let column_names = stmt.column_names().into_iter().map(|v| v.to_owned()).collect::<Vec<_>>();
 
     let mut foreign_key_list_cache = ForeignKeyListCache::default();
 
@@ -77,10 +70,7 @@ pub fn query_schema(
                     .map(|(k, v)| {
                         (
                             k,
-                            ColumnOriginAndIsRowId::new(
-                                is_rowid(conn, &v, &mut warnings).unwrap_or(false /* TODO: error handling */),
-                                v,
-                            ),
+                            ColumnOriginAndIsRowId::new(is_rowid(conn, &v, &mut warnings).unwrap_or(false /* TODO: error handling */), v),
                         )
                     })
                     .collect::<HashMap<String, ColumnOriginAndIsRowId>>(),

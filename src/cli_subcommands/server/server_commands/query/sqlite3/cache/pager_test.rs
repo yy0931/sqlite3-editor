@@ -15,8 +15,7 @@ fn test_repeat_same_query() {
     // Setup
     let mut conn = rusqlite::Connection::open_in_memory().unwrap();
     conn.execute("CREATE TABLE t(x, y)", ()).unwrap();
-    conn.execute("INSERT INTO t VALUES (?, ?), (?, ?)", ("a", "b", "c", "d"))
-        .unwrap();
+    conn.execute("INSERT INTO t VALUES (?, ?), (?, ?)", ("a", "b", "c", "d")).unwrap();
     let mut pager = Pager::new();
     pager.config.slow_query_threshold = Duration::ZERO;
     pager.config.cache_time_limit_relative_to_queried_range = f64::MAX;
@@ -63,17 +62,11 @@ fn test_backward_cache() {
     let query = "SELECT * FROM t LIMIT ? OFFSET ?";
 
     // Select 1
-    pager
-        .query(&mut conn, query, &[3.into(), 3.into()], |_| {})
-        .unwrap()
-        .unwrap();
+    pager.query(&mut conn, query, &[3.into(), 3.into()], |_| {}).unwrap().unwrap();
     assert_eq!(pager.cache_hit_count, 0);
 
     // Select 2
-    let result2 = pager
-        .query(&mut conn, query, &[3.into(), 0.into()], |_| {})
-        .unwrap()
-        .unwrap();
+    let result2 = pager.query(&mut conn, query, &[3.into(), 0.into()], |_| {}).unwrap().unwrap();
     assert_eq!(pager.cache_hit_count, 1);
 
     let mut arr1 = MessagePackArray::new();
@@ -84,10 +77,7 @@ fn test_backward_cache() {
     arr2.push_message_pack(vec![1]);
     arr2.push_message_pack(vec![3]);
     arr2.push_message_pack(vec![5]);
-    assert_eq!(
-        result2,
-        Records::new(vec![arr1, arr2], Rc::new(vec!["x".into(), "y".into()]))
-    );
+    assert_eq!(result2, Records::new(vec![arr1, arr2], Rc::new(vec!["x".into(), "y".into()])));
 }
 
 #[test]
@@ -106,17 +96,11 @@ fn test_cache_limit_bytes() {
     let query = "SELECT * FROM t LIMIT ? OFFSET ?";
 
     // Select 1
-    pager
-        .query(&mut conn, query, &[3.into(), 3.into()], |_| {})
-        .unwrap()
-        .unwrap();
+    pager.query(&mut conn, query, &[3.into(), 3.into()], |_| {}).unwrap().unwrap();
     assert_eq!(pager.dequeue_count, 0);
 
     // Select 2
-    pager
-        .query(&mut conn, query, &[3.into(), 0.into()], |_| {})
-        .unwrap()
-        .unwrap();
+    pager.query(&mut conn, query, &[3.into(), 0.into()], |_| {}).unwrap().unwrap();
     assert_eq!(pager.dequeue_count, 1);
 }
 
@@ -126,8 +110,7 @@ fn test_data_version() {
 
     let mut conn = rusqlite::Connection::open(f.path()).unwrap();
     conn.execute("CREATE TABLE t(x, y)", ()).unwrap();
-    conn.execute("INSERT INTO t VALUES (?, ?), (?, ?)", (1, 2, 3, 4))
-        .unwrap();
+    conn.execute("INSERT INTO t VALUES (?, ?), (?, ?)", (1, 2, 3, 4)).unwrap();
 
     let mut pager = Pager::new();
     pager.config.slow_query_threshold = Duration::ZERO;
@@ -175,16 +158,10 @@ fn test_cache_hit_with_unknown_num_records() {
 
     let query = "SELECT * FROM t LIMIT ? OFFSET ?";
     let params = &[3.into(), 1.into()];
-    assert_eq!(
-        get_num_rows(&pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap()),
-        3
-    );
+    assert_eq!(get_num_rows(&pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap()), 3);
 
     // cache hit
-    assert_eq!(
-        get_num_rows(&pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap()),
-        3
-    );
+    assert_eq!(get_num_rows(&pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap()), 3);
 }
 
 #[test]
@@ -201,24 +178,15 @@ fn test_out_of_bounds() {
 
     let query = "SELECT * FROM t LIMIT ? OFFSET ?";
     let params = &[10.into(), 0.into()];
-    assert_eq!(
-        get_num_rows(&pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap()),
-        5
-    );
+    assert_eq!(get_num_rows(&pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap()), 5);
 
     let query = "SELECT * FROM t LIMIT ? OFFSET ?";
     let params = &[10.into(), 10.into()];
-    assert_eq!(
-        get_num_rows(&pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap()),
-        0
-    );
+    assert_eq!(get_num_rows(&pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap()), 0);
 
     let query = "SELECT * FROM t LIMIT ? OFFSET ?";
     let params = &[10.into(), 3.into()];
-    assert_eq!(
-        get_num_rows(&pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap()),
-        2
-    );
+    assert_eq!(get_num_rows(&pager.query(&mut conn, query, params, |_| {}).unwrap().unwrap()), 2);
 }
 
 #[test]

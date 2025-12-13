@@ -14,12 +14,7 @@ use std::collections::HashSet;
 /// - Integer values between i32::MIN and i32::MAX are encoded as i32. Values outside this range are rounded to the nearest f64 values because Excel does not support 64-bit integers.
 /// - NULL is encoded as an empty string.
 /// - BLOB values are encoded as BASE64 strings.
-pub fn export(
-    database_filepath: &str,
-    query: &str,
-    output_file: &str,
-    options: &XLSXExportOptions,
-) -> std::result::Result<(), CLIError> {
+pub fn export(database_filepath: &str, query: &str, output_file: &str, options: &XLSXExportOptions) -> std::result::Result<(), CLIError> {
     // Query
     let mut con = super::connect(database_filepath)?;
 
@@ -60,10 +55,7 @@ pub fn export(
                 suffix_count += 1;
                 sheet_name_with_suffix = format!(
                     "{}_{suffix_count}",
-                    sheet_name
-                        .chars()
-                        .take(31 - 1 - suffix_count.to_string().len())
-                        .collect::<String>()
+                    sheet_name.chars().take(31 - 1 - suffix_count.to_string().len()).collect::<String>()
                 );
             }
 
@@ -121,17 +113,11 @@ fn write_table_data(
     worksheet: &mut rust_xlsxwriter::Worksheet,
     wrap_text: bool,
 ) -> std::result::Result<(), CLIError> {
-    let mut stmt = con
-        .prepare(query)
-        .or_else(|err| CLIError::new_query_error(err, query, &[]))?;
+    let mut stmt = con.prepare(query).or_else(|err| CLIError::new_query_error(err, query, &[]))?;
 
     // TODO: `stmt.column_count()` and `stmt.column_names()` should be called after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53).
     let column_count = stmt.column_count();
-    let column_names = stmt
-        .column_names()
-        .into_iter()
-        .map(|v| v.to_owned())
-        .collect::<Vec<_>>();
+    let column_names = stmt.column_names().into_iter().map(|v| v.to_owned()).collect::<Vec<_>>();
 
     let mut row_id = 0u32;
     for (col_id, name) in column_names.iter().enumerate() {
@@ -143,17 +129,13 @@ fn write_table_data(
     }
     row_id += 1;
 
-    let mut rows = stmt
-        .query([])
-        .or_else(|err| CLIError::new_query_error(err, query, &[]))?;
+    let mut rows = stmt.query([]).or_else(|err| CLIError::new_query_error(err, query, &[]))?;
     while let Some(row) = rows.next().or_else(|err| CLIError::new_query_error(err, query, &[]))? {
         for col_id in 0..column_count {
             match row.get_ref_unwrap(col_id) {
                 ValueRef::Null => worksheet.write(row_id, col_id.try_into().unwrap(), "")?,
                 ValueRef::Real(v) => worksheet.write(row_id, col_id.try_into().unwrap(), v)?,
-                ValueRef::Blob(v) => {
-                    worksheet.write(row_id, col_id.try_into().unwrap(), general_purpose::STANDARD.encode(v))?
-                }
+                ValueRef::Blob(v) => worksheet.write(row_id, col_id.try_into().unwrap(), general_purpose::STANDARD.encode(v))?,
                 ValueRef::Integer(v) if i32::MIN as i64 <= v && v <= i32::MAX as i64 => {
                     worksheet.write(row_id, col_id.try_into().unwrap(), TryInto::<i32>::try_into(v).unwrap())?
                 }
@@ -186,13 +168,7 @@ mod test {
 
         super::super::setup_test_db(&tmp_db_filepath);
 
-        super::export(
-            &tmp_db_filepath,
-            "SELECT * FROM test",
-            &tmp_out_path,
-            &XLSXExportOptions::default(),
-        )
-        .unwrap();
+        super::export(&tmp_db_filepath, "SELECT * FROM test", &tmp_out_path, &XLSXExportOptions::default()).unwrap();
 
         dbg!(tmp_out.as_file().metadata().unwrap().len());
     }

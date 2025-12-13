@@ -30,9 +30,7 @@ pub enum SQLite3Token {
 /// This enum classifies such identifiers.
 #[allow(clippy::upper_case_acronyms)]
 #[allow(non_camel_case_types)]
-#[derive(
-    Clone, Debug, Eq, PartialEq, Hash, Copy, strum_macros::EnumString, strum_macros::EnumIter, strum_macros::AsRefStr,
-)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Copy, strum_macros::EnumString, strum_macros::EnumIter, strum_macros::AsRefStr)]
 pub enum SQLite3KeywordLikeIdentifier {
     TRUE,
     FALSE,
@@ -95,9 +93,7 @@ pub enum SQLite3Operator {
 
 #[allow(clippy::upper_case_acronyms)]
 #[allow(non_camel_case_types)]
-#[derive(
-    Clone, Debug, Eq, PartialEq, Hash, Copy, strum_macros::EnumString, strum_macros::EnumIter, strum_macros::AsRefStr,
-)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Copy, strum_macros::EnumString, strum_macros::EnumIter, strum_macros::AsRefStr)]
 pub enum SQLite3Keyword {
     ABORT,
     ACTION,
@@ -261,10 +257,7 @@ mod test {
 
     #[test]
     fn test_keyword_like_identifier_from_str() {
-        assert_eq!(
-            Ok(SQLite3KeywordLikeIdentifier::NEW),
-            SQLite3KeywordLikeIdentifier::from_str("NEW")
-        );
+        assert_eq!(Ok(SQLite3KeywordLikeIdentifier::NEW), SQLite3KeywordLikeIdentifier::from_str("NEW"));
         assert_eq!(
             Ok(SQLite3KeywordLikeIdentifier::STRICT),
             SQLite3KeywordLikeIdentifier::from_str("STRICT")
@@ -274,29 +267,14 @@ mod test {
     #[test]
     fn test_keyword_from_str() {
         assert_eq!(Ok(SQLite3Keyword::ABORT), SQLite3Keyword::from_str("ABORT"));
-        assert_eq!(
-            Ok(SQLite3Keyword::CURRENT_DATE),
-            SQLite3Keyword::from_str("CURRENT_DATE")
-        );
+        assert_eq!(Ok(SQLite3Keyword::CURRENT_DATE), SQLite3Keyword::from_str("CURRENT_DATE"));
         assert_eq!(Ok(SQLite3Keyword::WITHOUT), SQLite3Keyword::from_str("WITHOUT"));
 
-        assert_eq!(
-            Err(strum::ParseError::VariantNotFound),
-            SQLite3Keyword::from_str("abort")
-        );
-        assert_eq!(
-            Err(strum::ParseError::VariantNotFound),
-            SQLite3Keyword::from_str("current_date")
-        );
+        assert_eq!(Err(strum::ParseError::VariantNotFound), SQLite3Keyword::from_str("abort"));
+        assert_eq!(Err(strum::ParseError::VariantNotFound), SQLite3Keyword::from_str("current_date"));
 
-        assert_eq!(
-            Err(strum::ParseError::VariantNotFound),
-            SQLite3Keyword::from_str(" ABORT")
-        );
-        assert_eq!(
-            Err(strum::ParseError::VariantNotFound),
-            SQLite3Keyword::from_str("ABORT ")
-        );
+        assert_eq!(Err(strum::ParseError::VariantNotFound), SQLite3Keyword::from_str(" ABORT"));
+        assert_eq!(Err(strum::ParseError::VariantNotFound), SQLite3Keyword::from_str("ABORT "));
     }
 
     #[test]

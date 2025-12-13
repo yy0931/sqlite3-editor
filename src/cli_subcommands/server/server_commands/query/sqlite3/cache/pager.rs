@@ -4,7 +4,8 @@ use std::time::Duration;
 use crate::cli_error::CLIError;
 use crate::cli_subcommands::server::server_commands::query::sqlite3::columnar_buffer::ColumnarBuffer;
 use crate::cli_value::CLIValue;
-use crate::msgpack::{encode_value_ref_into_msgpack, MessagePackArray};
+use crate::msgpack::encode_value_ref_into_msgpack;
+use crate::msgpack::MessagePackArray;
 use crate::utf8_extractor::InvalidUTF8;
 
 use super::cache_entry::Records;
@@ -92,9 +93,7 @@ impl Pager {
     ) -> std::result::Result<Option<Records>, CLIError> {
         let mut params = params.to_vec();
 
-        let tx = conn
-            .transaction()
-            .or_else(|err| CLIError::new_query_error(err, "BEGIN;", &[]))?;
+        let tx = conn.transaction().or_else(|err| CLIError::new_query_error(err, "BEGIN;", &[]))?;
         let data_version = Some(pragma_data_version(&tx)?);
         if self.data_version != data_version {
             self.clear_cache();
@@ -117,8 +116,7 @@ impl Pager {
         let (CLIValue::I64(limit), CLIValue::I64(offset)) = (&params[len - 2], &params[len - 1]) else {
             return Ok(None);
         };
-        let (Ok(limit), Ok(offset)): (Result<u64, _>, Result<u64, _>) = ((*limit).try_into(), (*offset).try_into())
-        else {
+        let (Ok(limit), Ok(offset)): (Result<u64, _>, Result<u64, _>) = ((*limit).try_into(), (*offset).try_into()) else {
             // Negative limits and negative offsets are not supported
             return Ok(None);
         };
@@ -147,9 +145,7 @@ impl Pager {
         let mut end_margin_size = 0;
         {
             // Prepare
-            let mut stmt = tx
-                .prepare(query)
-                .or_else(|err| CLIError::new_query_error(err, query, &params))?;
+            let mut stmt = tx.prepare(query).or_else(|err| CLIError::new_query_error(err, query, &params))?;
 
             // Bind parameters
             for (i, param) in params.iter().enumerate() {
@@ -225,11 +221,7 @@ impl Pager {
             drop(rows);
 
             // NOTE: We need to call `stmt.column_names()` after `rows.next()` (see https://github.com/rusqlite/rusqlite/blob/b7309f2dca70716fee44c85082c585b330edb073/src/column.rs#L51-L53)
-            columns = stmt
-                .column_names()
-                .into_iter()
-                .map(|v| v.to_owned())
-                .collect::<Vec<_>>();
+            columns = stmt.column_names().into_iter().map(|v| v.to_owned()).collect::<Vec<_>>();
             cache_entry.set_columns_if_not_set_yet(columns.clone());
         }
 
@@ -243,9 +235,7 @@ impl Pager {
             let mut current_offset = backward_offset;
             if !cache_entry.has_range(backward_offset, backward_limit) {
                 // Prepare
-                let mut stmt = tx
-                    .prepare(query)
-                    .or_else(|err| CLIError::new_query_error(err, query, &params))?;
+                let mut stmt = tx.prepare(query).or_else(|err| CLIError::new_query_error(err, query, &params))?;
 
                 // Bind parametersnew_other_error
                 for (i, param) in params.iter().enumerate() {

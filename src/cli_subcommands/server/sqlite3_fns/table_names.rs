@@ -11,27 +11,15 @@ pub fn table_names(conn: &rusqlite::Connection) -> std::result::Result<(Vec<Tabl
     let mut warnings = vec![];
 
     // list tables in all databases including sqlite_ tables
-    let tables = select_all(
-        conn,
-        r#"SELECT schema, name, type FROM pragma_table_list"#,
-        &[],
-        |row| {
-            Ok(TableName {
-                database: Rc::new(get_utf8_string(row, 0, |err| {
-                    warnings.push(err.with("pragma_table_list.schema"))
-                })?),
-                name: Rc::new(get_utf8_string(row, 1, |err| {
-                    warnings.push(err.with("pragma_table_list.name"))
-                })?),
-                type_: TableType::from(
-                    get_utf8_string(row, 2, |err| {
-                        warnings.push(err.with("pragma_table_list.type (list_tables)"))
-                    })?
-                    .as_str(),
-                ),
-            })
-        },
-    )?;
+    let tables = select_all(conn, r#"SELECT schema, name, type FROM pragma_table_list"#, &[], |row| {
+        Ok(TableName {
+            database: Rc::new(get_utf8_string(row, 0, |err| warnings.push(err.with("pragma_table_list.schema")))?),
+            name: Rc::new(get_utf8_string(row, 1, |err| warnings.push(err.with("pragma_table_list.name")))?),
+            type_: TableType::from(
+                get_utf8_string(row, 2, |err| warnings.push(err.with("pragma_table_list.type (list_tables)")))?.as_str(),
+            ),
+        })
+    })?;
 
     Ok((tables, warnings))
 }

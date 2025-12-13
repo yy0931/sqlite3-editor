@@ -4,6 +4,8 @@ use crate::cli_subcommands::server::sqlite3_fns::schema_types::TableName;
 use crate::cli_subcommands::server::sqlite3_fns::schema_types::TableType;
 use crate::cli_subcommands::server::sqlite3_fns::table_names::table_names;
 use crate::cli_subcommands::server::sqlite3_fns::table_schema::table_schema;
+use crate::cli_subcommands::server::sqlite3_query_parser::paren_aware_token_scanner::SQLite3ParenAwareTokenScanner;
+use crate::cli_subcommands::server::sqlite3_query_parser::paren_aware_token_scanner::SQLite3TokenScannerOutput;
 use crate::cli_subcommands::server::sqlite3_query_parser::parse_cte::parse_cte;
 use crate::cli_subcommands::server::sqlite3_query_parser::split_statements::split_sqlite_statements;
 use crate::cli_subcommands::server::sqlite3_query_parser::token::SQLite3Keyword;
@@ -128,13 +130,16 @@ enum AliasableToken {
 
 fn can_alias_follow(token: &SQLite3Token, previous: Option<AliasableToken>) -> Option<AliasableToken> {
     match token {
-        // <name> <alias>
+        // SELECT column alias
+        //        ^token
         SQLite3Token::Identifier(value, _) => Some(AliasableToken::Ident(value.to_owned())),
 
-        // ... AS <alias>
+        // SELECT column AS alias
+        //               ^token
         SQLite3Token::Keyword(SQLite3Keyword::AS) => previous.or(Some(AliasableToken::Other)),
 
-        // <literal> <alias>
+        // SELECT 123 alias
+        //        ^token
         SQLite3Token::NumericLiteral(_)
         | SQLite3Token::StringLiteral(_)
         | SQLite3Token::BlobLiteral(_)
@@ -222,6 +227,50 @@ pub enum TokenType {
     StartOfStatement,
 }
 
+impl From<&SQLite3Token> for TokenType {
+    fn from(value: &SQLite3Token) -> Self {
+        match value {
+            SQLite3Token::Keyword(SQLite3Keyword::PRAGMA) => TokenType::PRAGMA,
+            SQLite3Token::Keyword(SQLite3Keyword::JOIN) => TokenType::JOIN,
+            SQLite3Token::Keyword(SQLite3Keyword::FROM) => TokenType::FROM,
+            SQLite3Token::Keyword(SQLite3Keyword::INSERT) => TokenType::INSERT,
+            SQLite3Token::Keyword(SQLite3Keyword::INTO) => TokenType::INTO,
+            SQLite3Token::Keyword(SQLite3Keyword::DROP) => TokenType::DROP,
+            SQLite3Token::Keyword(SQLite3Keyword::TABLE) => TokenType::TABLE,
+            SQLite3Token::Keyword(SQLite3Keyword::VIEW) => TokenType::VIEW,
+            SQLite3Token::Keyword(SQLite3Keyword::AS) => TokenType::AS,
+            SQLite3Token::Keyword(SQLite3Keyword::IF) => TokenType::IF,
+            SQLite3Token::Keyword(SQLite3Keyword::NOT) => TokenType::NOTE,
+            SQLite3Token::Keyword(SQLite3Keyword::EXISTS) => TokenType::EXISTS,
+            SQLite3Token::Keyword(SQLite3Keyword::REPLACE) => TokenType::REPLACE,
+            SQLite3Token::Keyword(SQLite3Keyword::OR) => TokenType::OR,
+            SQLite3Token::Keyword(SQLite3Keyword::DELETE) => TokenType::DELETE,
+            SQLite3Token::Keyword(SQLite3Keyword::ALTER) => TokenType::ALTER,
+            SQLite3Token::Keyword(SQLite3Keyword::RENAME) => TokenType::RENAME,
+            SQLite3Token::Keyword(SQLite3Keyword::COLUMN) => TokenType::COLUMN,
+            SQLite3Token::Keyword(SQLite3Keyword::SELECT) => TokenType::SELECT,
+            SQLite3Token::Keyword(SQLite3Keyword::WHERE) => TokenType::WHERE,
+            SQLite3Token::Keyword(SQLite3Keyword::DISTINCT) => TokenType::DISTINCT,
+
+            SQLite3Token::Identifier(_, Some(SQLite3KeywordLikeIdentifier::NEW)) => TokenType::NEW,
+            SQLite3Token::Identifier(_, Some(SQLite3KeywordLikeIdentifier::OLD)) => TokenType::OLD,
+            SQLite3Token::Identifier(_, Some(SQLite3KeywordLikeIdentifier::TRUE)) => TokenType::Value,
+            SQLite3Token::Identifier(_, Some(SQLite3KeywordLikeIdentifier::FALSE)) => TokenType::Value,
+
+            // TODO: NULL is not literal when in "column NOT NULL"
+            SQLite3Token::LParen => TokenType::LParen,
+            SQLite3Token::Period => TokenType::Period,
+            SQLite3Token::Operator(SQLite3Operator::Eq) => TokenType::Equal,
+            SQLite3Token::NumericLiteral(_)
+            | SQLite3Token::StringLiteral(_)
+            | SQLite3Token::BlobLiteral(_)
+            | SQLite3Token::InvalidStringLiteral
+            | SQLite3Token::InvalidNumericLiteral => TokenType::Value,
+            _ => TokenType::Other,
+        }
+    }
+}
+
 pub fn complete(conn: &rusqlite::Connection, sql: &str, position: &ZeroIndexedLocation) -> Completions {
     // TODO: cache list_tables and table_schema if they are slow
 
@@ -241,10 +290,7 @@ pub fn complete(conn: &rusqlite::Connection, sql: &str, position: &ZeroIndexedLo
     // table.name -> table
     let mut table_name_lowered_to_info = HashMap::<String, Vec<&TableName>>::new();
     for t in &table_list {
-        table_name_lowered_to_info
-            .entry(t.name.to_lowercase())
-            .or_default()
-            .push(t);
+        table_name_lowered_to_info.entry(t.name.to_lowercase()).or_default().push(t);
     }
 
     let schema_names = table_list.iter().map(|t| &t.database).cloned().collect::<HashSet<_>>();
@@ -274,10 +320,7 @@ pub fn complete(conn: &rusqlite::Connection, sql: &str, position: &ZeroIndexedLo
                         expect_followed_by_alias = None;
                     }
 
-                    if let Some(t) = table_name_lowered_to_info
-                        .get(&value.to_lowercase())
-                        .and_then(|v| v.first())
-                    {
+                    if let Some(t) = table_name_lowered_to_info.get(&value.to_lowercase()).and_then(|v| v.first()) {
                         referenced_tables.insert(&t.name);
                     }
                 }
@@ -314,112 +357,60 @@ pub fn complete(conn: &rusqlite::Connection, sql: &str, position: &ZeroIndexedLo
 
         if let Some(last_token_before_position) = last_token_before_position {
             // Categorize tokens backward until taking an unsupported token or consuming 7 non-whitespace tokens
-            let mut depth = 0;
-            for i in (0..=last_token_before_position).rev() {
-                let token = &stmt.real_tokens[i];
-
-                if depth > 0 {
-                    match &token.value {
-                        SQLite3Token::RParen => {
-                            depth += 1;
-                        }
-                        SQLite3Token::LParen => {
-                            depth -= 1;
-                        }
-                        _ => {}
+            for output in SQLite3ParenAwareTokenScanner::new(&stmt.real_tokens[0..=last_token_before_position]).rev() {
+                match output {
+                    SQLite3TokenScannerOutput::StartOfInput => {
+                        last_tokens.push_front(TokenType::StartOfStatement);
                     }
-                    continue;
-                }
-
-                match &token.value {
-                    SQLite3Token::Whitespace(_) => {}
-                    _ => {
-                        last_tokens.push_front(match &token.value {
-                            SQLite3Token::Keyword(SQLite3Keyword::PRAGMA) => TokenType::PRAGMA,
-                            SQLite3Token::Keyword(SQLite3Keyword::JOIN) => TokenType::JOIN,
-                            SQLite3Token::Keyword(SQLite3Keyword::FROM) => TokenType::FROM,
-                            SQLite3Token::Keyword(SQLite3Keyword::INSERT) => TokenType::INSERT,
-                            SQLite3Token::Keyword(SQLite3Keyword::INTO) => TokenType::INTO,
-                            SQLite3Token::Keyword(SQLite3Keyword::DROP) => TokenType::DROP,
-                            SQLite3Token::Keyword(SQLite3Keyword::TABLE) => TokenType::TABLE,
-                            SQLite3Token::Keyword(SQLite3Keyword::VIEW) => TokenType::VIEW,
-                            SQLite3Token::Keyword(SQLite3Keyword::AS) => TokenType::AS,
-                            SQLite3Token::Keyword(SQLite3Keyword::IF) => TokenType::IF,
-                            SQLite3Token::Keyword(SQLite3Keyword::NOT) => TokenType::NOTE,
-                            SQLite3Token::Keyword(SQLite3Keyword::EXISTS) => TokenType::EXISTS,
-                            SQLite3Token::Keyword(SQLite3Keyword::REPLACE) => TokenType::REPLACE,
-                            SQLite3Token::Keyword(SQLite3Keyword::OR) => TokenType::OR,
-                            SQLite3Token::Keyword(SQLite3Keyword::DELETE) => TokenType::DELETE,
-                            SQLite3Token::Keyword(SQLite3Keyword::ALTER) => TokenType::ALTER,
-                            SQLite3Token::Keyword(SQLite3Keyword::RENAME) => TokenType::RENAME,
-                            SQLite3Token::Keyword(SQLite3Keyword::COLUMN) => TokenType::COLUMN,
-                            SQLite3Token::Keyword(SQLite3Keyword::SELECT) => TokenType::SELECT,
-                            SQLite3Token::Keyword(SQLite3Keyword::WHERE) => TokenType::WHERE,
-                            SQLite3Token::Keyword(SQLite3Keyword::DISTINCT) => TokenType::DISTINCT,
-
+                    SQLite3TokenScannerOutput::EndOfInput => {}
+                    SQLite3TokenScannerOutput::Group(_) => {
+                        last_tokens.push_front(TokenType::Group);
+                    }
+                    SQLite3TokenScannerOutput::SingleToken(token) => {
+                        match &token.value {
+                            SQLite3Token::Whitespace(_) => {}
                             // TEMP is a keyword but "TEMP" in "TEMP." is a schema name
-                            SQLite3Token::Keyword(SQLite3Keyword::TEMP)
-                                if last_tokens.back() == Some(&TokenType::Period) =>
-                            {
+                            SQLite3Token::Keyword(SQLite3Keyword::TEMP) if last_tokens.back() == Some(&TokenType::Period) => {
                                 if last_schema.is_none() {
                                     last_schema = Some("temp".to_owned());
                                 }
-                                TokenType::SchemaIdent
+                                last_tokens.push_front(TokenType::SchemaIdent);
                             }
-
-                            // TODO: NULL is not literal when in "column NOT NULL"
-                            SQLite3Token::Identifier(_, Some(SQLite3KeywordLikeIdentifier::NEW)) => TokenType::NEW,
-                            SQLite3Token::Identifier(_, Some(SQLite3KeywordLikeIdentifier::OLD)) => TokenType::OLD,
-                            SQLite3Token::Identifier(_, Some(SQLite3KeywordLikeIdentifier::TRUE)) => TokenType::Value,
-                            SQLite3Token::Identifier(_, Some(SQLite3KeywordLikeIdentifier::FALSE)) => TokenType::Value,
                             SQLite3Token::Identifier(value, None) => {
                                 let value_lower = value.to_lowercase();
                                 if schema_names_lowered.contains(&value_lower) {
                                     if last_schema.is_none() {
                                         last_schema = Some(value.to_owned());
                                     }
-                                    TokenType::SchemaIdent
+                                    last_tokens.push_front(TokenType::SchemaIdent);
                                 } else {
                                     if last_table.is_none() {
-                                        last_table =
-                                            Some(if let Some((_, target)) = as_clauses_lower.get(&value_lower) {
-                                                match target {
-                                                    AliasableToken::Ident(ident)
-                                                        if table_name_lowered_to_info
-                                                            .contains_key(&ident.to_lowercase()) =>
-                                                    {
-                                                        Some(ident.to_owned())
-                                                    }
-                                                    _ => None,
+                                        last_table = Some(if let Some((_, target)) = as_clauses_lower.get(&value_lower) {
+                                            match target {
+                                                AliasableToken::Ident(ident)
+                                                    if table_name_lowered_to_info.contains_key(&ident.to_lowercase()) =>
+                                                {
+                                                    Some(ident.to_owned())
                                                 }
-                                            } else if cte_names.iter().any(|c| c.to_lowercase() == value_lower) {
-                                                None
-                                            } else {
-                                                Some(value.to_owned())
-                                            });
+                                                _ => None,
+                                            }
+                                        } else if cte_names.iter().any(|c| c.to_lowercase() == value_lower) {
+                                            None
+                                        } else {
+                                            Some(value.to_owned())
+                                        });
                                     }
-                                    TokenType::TableIdent
+                                    last_tokens.push_front(TokenType::TableIdent);
                                 }
                             }
-                            SQLite3Token::LParen => TokenType::LParen,
-                            SQLite3Token::RParen => {
-                                depth += 1;
-                                TokenType::Group
+                            t => {
+                                // TODO: NULL is not a literal when in "column NOT NULL"
+                                last_tokens.push_front(t.into());
                             }
-                            SQLite3Token::Period => TokenType::Period,
-                            SQLite3Token::Operator(SQLite3Operator::Eq) => TokenType::Equal,
-                            SQLite3Token::NumericLiteral(_)
-                            | SQLite3Token::StringLiteral(_)
-                            | SQLite3Token::BlobLiteral(_)
-                            | SQLite3Token::InvalidStringLiteral
-                            | SQLite3Token::InvalidNumericLiteral => TokenType::Value,
-                            _ => TokenType::Other,
-                        });
+                        }
                     }
                 }
-                if i == 0 {
-                    last_tokens.push_front(TokenType::StartOfStatement);
-                }
+
                 if last_tokens.len() >= 7 {
                     break;
                 }
@@ -461,10 +452,7 @@ pub fn complete(conn: &rusqlite::Connection, sql: &str, position: &ZeroIndexedLo
         schema_names,
         columns_in_tables_that_are_referenced_in_source,
         cte_names,
-        as_clauses: as_clauses_lower
-            .into_iter()
-            .map(|(_, (v, _))| v)
-            .collect::<HashSet<_>>(),
+        as_clauses: as_clauses_lower.into_iter().map(|(_, (v, _))| v).collect::<HashSet<_>>(),
         last_tokens,
         last_schema,
         last_table: last_table.flatten(),
@@ -725,8 +713,7 @@ SELECT
     #[test]
     fn test_nocase() {
         assert_eq!(
-            complete(&setup(), r#"SELECT "Table_name". FROM "Table_name""#, &loc(0, 20))
-                .columns_in_tables_that_are_referenced_in_source,
+            complete(&setup(), r#"SELECT "Table_name". FROM "Table_name""#, &loc(0, 20)).columns_in_tables_that_are_referenced_in_source,
             HashSet::from([ColumnCompletion {
                 schema: Rc::new("main".to_owned()),
                 table: Rc::new("table_name".to_owned()),
@@ -779,11 +766,7 @@ SELECT
     #[test]
     fn test_last_create_trigger_table() {
         let db = setup();
-        let result = complete(
-            &db,
-            r#"CREATE TRIGGER trigger1 BEFORE INSERT ON "table1" BEGIN"#,
-            &loc(0, 46),
-        );
+        let result = complete(&db, r#"CREATE TRIGGER trigger1 BEFORE INSERT ON "table1" BEGIN"#, &loc(0, 46));
         assert_eq!(result.last_create_trigger_table, Some("table1".to_owned()));
     }
 

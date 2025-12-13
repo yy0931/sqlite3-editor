@@ -7,9 +7,7 @@ use crate::cli_subcommands::server::sqlite3_query_parser::types::ZeroIndexedLoca
 use crate::cli_subcommands::server::sqlite3_query_parser::types::ZeroIndexedRange;
 
 /// Splits the input SQL string into a vector of `SingleStatement`.
-pub fn split_sqlite_statements(
-    sql: &str,
-) -> Result<(Vec<SingleStatement>, Vec<DotCommand>), ZeroIndexedTokenizerError> {
+pub fn split_sqlite_statements(sql: &str) -> Result<(Vec<SingleStatement>, Vec<DotCommand>), ZeroIndexedTokenizerError> {
     let lines = sql.lines().collect::<Vec<_>>();
 
     // Tokenize the query
@@ -160,10 +158,7 @@ impl SingleStatement {
             .map(|i| tokens.len() - 1 - i);
 
         if let (Some(real_start_i), Some(real_end_i)) = (real_start_i, real_end_i) {
-            let real_range = ZeroIndexedRange::new(
-                tokens[real_start_i].range.start.to_owned(),
-                tokens[real_end_i].range.end.to_owned(),
-            );
+            let real_range = ZeroIndexedRange::new(tokens[real_start_i].range.start.to_owned(), tokens[real_end_i].range.end.to_owned());
             Self {
                 all_text: range.get_text_with_range(lines),
                 real_text: real_range.get_text_with_range(lines),
@@ -218,11 +213,7 @@ impl DotCommand {
             })
             .collect::<String>();
         let value = closed.then_some(literal.clone());
-        let literal = if closed {
-            format!("'{literal}'")
-        } else {
-            text.to_owned()
-        };
+        let literal = if closed { format!("'{literal}'") } else { text.to_owned() };
         (literal, value)
     }
 
@@ -312,11 +303,7 @@ impl DotCommand {
             })
             .collect::<String>();
 
-        let literal = if closed {
-            format!("\"{literal}\"")
-        } else {
-            text.to_owned()
-        };
+        let literal = if closed { format!("\"{literal}\"") } else { text.to_owned() };
         let value = closed.then_some(arg_value_chars);
         (literal, value)
     }
@@ -546,10 +533,7 @@ SELECT 2;"#,
 
     #[test]
     fn test_unclosed_single_quote_string() {
-        assert_eq!(
-            DotCommand::scan_single_quote_string_literal("'a b"),
-            ("'a b".to_owned(), None)
-        );
+        assert_eq!(DotCommand::scan_single_quote_string_literal("'a b"), ("'a b".to_owned(), None));
     }
 
     #[test]
@@ -604,10 +588,7 @@ SELECT 2;"#,
     fn test_hex_escape_sequence() {
         assert_eq!(
             DotCommand::scan_double_quote_string_literal(r#""\x48\x65\x6C\x6C\x6F\x7\x""#),
-            (
-                r#""\x48\x65\x6C\x6C\x6F\x7\x""#.to_owned(),
-                Some("Hello\u{7}\0".to_owned())
-            )
+            (r#""\x48\x65\x6C\x6C\x6F\x7\x""#.to_owned(), Some("Hello\u{7}\0".to_owned()))
         );
     }
 

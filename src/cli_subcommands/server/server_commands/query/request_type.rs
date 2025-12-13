@@ -98,8 +98,7 @@ mod test {
     #[test]
     fn test_parse_query() {
         let q: QueryCommandParams =
-            serde_json::from_str(r#"["foo", [1, 2], "read_only", {"changes": null, "allow_fewer_changes": false}]"#)
-                .unwrap();
+            serde_json::from_str(r#"["foo", [1, 2], "read_only", {"changes": null, "allow_fewer_changes": false}]"#).unwrap();
         assert_eq!(
             q,
             QueryCommandParams {
@@ -114,8 +113,7 @@ mod test {
     #[test]
     fn test_parse_query_with_changes() {
         let q: QueryCommandParams =
-            serde_json::from_str(r#"["foo", [1, 2], "read_only", {"changes": 10, "allow_fewer_changes": true}]"#)
-                .unwrap();
+            serde_json::from_str(r#"["foo", [1, 2], "read_only", {"changes": 10, "allow_fewer_changes": true}]"#).unwrap();
         assert_eq!(
             q,
             QueryCommandParams {

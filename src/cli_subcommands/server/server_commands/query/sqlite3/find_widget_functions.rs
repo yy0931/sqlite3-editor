@@ -107,8 +107,7 @@ fn find_widget_compare_w(ctx: &rusqlite::functions::Context) -> i64 {
 
 /// whole_word = false, case_sensitive = true, regex = false
 fn find_widget_compare_c(ctx: &rusqlite::functions::Context) -> i64 {
-    ctx.get::<String>(1)
-        .is_ok_and(|r| get_find_widget_input(ctx).contains(&r)) as i64
+    ctx.get::<String>(1).is_ok_and(|r| get_find_widget_input(ctx).contains(&r)) as i64
 }
 
 /// whole_word = false, case_sensitive = false, regex = false
@@ -136,16 +135,15 @@ fn regex_match(text: &str, pattern: String) -> bool {
 
 // whole_word = true, case_sensitive = true, regex = true
 fn find_widget_compare_r_w_c(ctx: &rusqlite::functions::Context) -> i64 {
-    ctx.get::<String>(1).is_ok_and(|pattern| {
-        !pattern.is_empty() && regex_match(&get_find_widget_input(ctx), format!("(?s)\\b(?:{pattern})\\b"))
-    }) as i64
+    ctx.get::<String>(1)
+        .is_ok_and(|pattern| !pattern.is_empty() && regex_match(&get_find_widget_input(ctx), format!("(?s)\\b(?:{pattern})\\b"))) as i64
 }
 
 /// whole_word = true, case_sensitive = false, regex = true
 fn find_widget_compare_r_w(ctx: &rusqlite::functions::Context) -> i64 {
-    ctx.get::<String>(1).is_ok_and(|pattern| {
-        !pattern.is_empty() && regex_match(&get_find_widget_input(ctx), format!("(?i)(?s)\\b(?:{pattern})\\b"))
-    }) as i64
+    ctx.get::<String>(1)
+        .is_ok_and(|pattern| !pattern.is_empty() && regex_match(&get_find_widget_input(ctx), format!("(?i)(?s)\\b(?:{pattern})\\b")))
+        as i64
 }
 
 /// whole_word = false, case_sensitive = true, regex = true
