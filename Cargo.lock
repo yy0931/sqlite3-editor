@@ -331,7 +331,7 @@ checksum = "875b3680cb2f8f71bdcf9a30f38d48282f5d3c95cbf9b3fa57269bb5d5c06828"
 [[package]]
 name = "libsqlite3-sys"
 version = "0.26.0"
-source = "git+https://github.com/yy0931/rusqlite.git?branch=master#5981c40132b2990d31b1d4095bc9681858d7836a"
+source = "git+https://github.com/yy0931/rusqlite.git?branch=master#3cdf058b6d8f06ee17d1a41d0fd992dca80d1e8a"
 dependencies = [
  "cc",
  "pkg-config",
@@ -470,7 +470,7 @@ dependencies = [
 [[package]]
 name = "rusqlite"
 version = "0.29.0"
-source = "git+https://github.com/yy0931/rusqlite.git?branch=master#5981c40132b2990d31b1d4095bc9681858d7836a"
+source = "git+https://github.com/yy0931/rusqlite.git?branch=master#3cdf058b6d8f06ee17d1a41d0fd992dca80d1e8a"
 dependencies = [
  "bitflags",
  "fallible-iterator",
@@ -565,7 +565,7 @@ checksum = "7fcf8323ef1faaee30a44a340193b1ac6814fd9b7b4e88e9d4519a3e4abe1cfd"
 
 [[package]]
 name = "sqlite3-editor"
-version = "1.0.211"
+version = "1.0.212"
 dependencies = [
  "base64",
  "clap",
